@@ -3430,7 +3430,7 @@ const server = http.createServer(async (req, res) => {
                     return;
                 }
                 // Busca lead para calcular TMA
-                const { data: lead } = await db.from('leads').select('atendimento_inicio, atendimento_fim').eq('id', lead_id).single();
+                const { data: lead } = await db.from('leads').select('atendimento_inicio, atendimento_fim, atendente_nome, departamento, nome, numero, instance_name').eq('id', lead_id).single();
                 if (!lead) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ ok: false, error: 'Lead não encontrado' }));
@@ -3451,6 +3451,35 @@ const server = http.createServer(async (req, res) => {
                     tma_segundos:   tmaSegs,
                     updated_at:     agora,
                 }).eq('id', lead_id);
+
+                // Gravar/atualizar na tabela atendimentos para histórico confiável
+                try {
+                    // Tenta atualizar atendimento ativo existente (criado pela fila)
+                    const { data: atExist } = await db.from('atendimentos')
+                        .select('id').eq('lead_id', lead_id).eq('status', 'ativo').limit(1);
+                    if (atExist && atExist.length > 0) {
+                        await db.from('atendimentos').update({
+                            fim: agora, tma_segundos: tmaSegs, status: 'encerrado',
+                        }).eq('id', atExist[0].id);
+                    } else if (lead.atendente_nome) {
+                        // Não veio pela fila — insere registro novo para manter histórico
+                        const crypto = require('crypto');
+                        await db.from('atendimentos').insert({
+                            id: crypto.randomUUID(),
+                            instance_name: instBody,
+                            lead_id: lead_id,
+                            departamento: lead.departamento || 'ADM Principal',
+                            agente_nome: lead.atendente_nome,
+                            numero: lead.numero,
+                            nome: lead.nome,
+                            inicio: lead.atendimento_inicio,
+                            fim: agora,
+                            tma_segundos: tmaSegs,
+                            status: 'encerrado',
+                        });
+                    }
+                } catch(e2) { /* tabela pode não existir, segue */ }
+
                 log(instBody, 'ok', `[TMA] Atendimento encerrado — lead ${lead_id} | tma=${tmaSegs}s`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ ok: true, tma_segundos: tmaSegs }));
@@ -3674,10 +3703,13 @@ const server = http.createServer(async (req, res) => {
             let atendimentos7d = [];
             try {
                 const { data: at } = await db.from('atendimentos')
-                    .select('departamento, agente_nome, tma_segundos, tme_segundos, status, inicio, fim')
+                    .select('departamento, agente_nome, tma_segundos, tme_segundos, status, inicio, fim, lead_id, numero, nome')
                     .eq('instance_name', inst).gte('inicio', desde7);
                 atendimentos7d = at || [];
             } catch(e) {}
+
+            // Atendimentos encerrados HOJE (da tabela atendimentos — fonte confiável)
+            const atendimentosHoje = atendimentos7d.filter(a => a.fim && new Date(a.fim) >= hoje);
 
             const result = depts.map(dept => {
                 const deptName = dept.name;
@@ -3694,11 +3726,15 @@ const server = http.createServer(async (req, res) => {
                 })).sort((a,b) => a.posicao - b.posicao);
 
                 // Stats por atendente
+                const deptAtendHoje = atendimentosHoje.filter(a => a.departamento === deptName);
                 const atendentesStats = deptAtendentes.map(at => {
                     const meusLeads = deptLeads.filter(l => l.atendente_nome === at.nome);
                     const ativos = meusLeads.filter(l => l.atendimento_inicio && !l.atendimento_fim);
-                    const encerradosHoje = meusLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje);
-                    const tmasHoje = encerradosHoje.map(l => l.tma_segundos).filter(Boolean);
+
+                    // Encerrados hoje: usar tabela atendimentos (confiável mesmo após reatribuição)
+                    const meusAtendHoje = deptAtendHoje.filter(a => a.agente_nome === at.nome);
+                    const tmasHoje = meusAtendHoje.map(a => a.tma_segundos).filter(Boolean);
+
                     const meusAtend = deptAtend7d.filter(a => a.agente_nome === at.nome);
                     const tmas7d = meusAtend.map(a => a.tma_segundos).filter(Boolean);
                     const tmes7d = meusAtend.map(a => a.tme_segundos).filter(Boolean);
@@ -3710,15 +3746,15 @@ const server = http.createServer(async (req, res) => {
                         duracao_seg: Math.round((agora - new Date(l.atendimento_inicio).getTime()) / 1000),
                         last_interaction: l.last_interaction
                     }));
-                    // Leads encerrados hoje (resumo)
-                    const leadsEncerradosHoje = encerradosHoje.slice(0, 20).map(l => ({
-                        id: l.id, nome: l.nome, numero: l.numero,
-                        tma: l.tma_segundos, fim: l.atendimento_fim
+                    // Leads encerrados hoje (da tabela atendimentos)
+                    const leadsEncerradosHoje = meusAtendHoje.slice(0, 20).map(a => ({
+                        id: a.lead_id, nome: a.nome, numero: a.numero,
+                        tma: a.tma_segundos, fim: a.fim
                     }));
                     return {
                         id: at.id, nome: at.nome,
                         ativos: ativos.length,
-                        encerradosHoje: encerradosHoje.length,
+                        encerradosHoje: meusAtendHoje.length,
                         tmaHoje: tmasHoje.length ? Math.round(tmasHoje.reduce((a,b)=>a+b,0)/tmasHoje.length) : 0,
                         total7d: meusAtend.length,
                         encerrados7d: meusAtend.filter(a => a.status === 'encerrado').length,
@@ -3729,10 +3765,11 @@ const server = http.createServer(async (req, res) => {
                     };
                 });
 
-                // Totais do departamento
+                // Totais do departamento (também usar tabela atendimentos para encerrados)
                 const totalAtivos = deptLeads.filter(l => l.atendimento_inicio && !l.atendimento_fim).length;
-                const totalEncerradosHoje = deptLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje).length;
-                const allTmasHoje = deptLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje).map(l => l.tma_segundos).filter(Boolean);
+                const deptEncerradosHojeAtend = deptAtendHoje.length;
+                const totalEncerradosHoje = deptEncerradosHojeAtend || deptLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje).length;
+                const allTmasHoje = deptAtendHoje.map(a => a.tma_segundos).filter(Boolean);
                 const tmaMedHoje = allTmasHoje.length ? Math.round(allTmasHoje.reduce((a,b)=>a+b,0)/allTmasHoje.length) : 0;
                 const tmeAtual = deptFila.length ? Math.round(deptFila.map(f => (agora - new Date(f.entrada_em || f.created_at).getTime())/1000).reduce((a,b)=>a+b,0)/deptFila.length) : 0;
 
