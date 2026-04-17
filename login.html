@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Login — Estima Food</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0f1117;--s1:#181b24;--s2:#1e2130;--border:rgba(255,255,255,.07);--accent:#3b82f6;--danger:#ef4444;--success:#22c55e;--text:#f1f5f9;--muted:#64748b}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center}
+
+.card{background:rgba(24,27,36,.95);border:1px solid var(--border);border-radius:20px;padding:40px;width:400px;max-width:94vw;backdrop-filter:blur(20px);box-shadow:0 24px 80px rgba(0,0,0,.6);animation:fadeUp .4s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+.logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:24px}
+.logo-icon{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 16px rgba(59,130,246,.4)}
+.logo-text{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.5px}
+.logo-sub{font-size:12px;color:var(--muted)}
+
+.title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;text-align:center;margin-bottom:4px}
+.subtitle{font-size:13px;color:var(--muted);text-align:center;margin-bottom:28px}
+
+label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.4px}
+input{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:10px;padding:11px 14px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13.5px;outline:none;transition:all .18s;margin-bottom:14px}
+input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+input::placeholder{color:var(--muted)}
+
+.btn{width:100%;padding:13px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;font-family:'Syne',sans-serif;font-size:14px;font-weight:700;transition:all .2s;box-shadow:0 4px 16px rgba(59,130,246,.35);margin-top:4px}
+.btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 24px rgba(59,130,246,.5)}
+.btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+
+.err{display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:10px 14px;font-size:12.5px;color:#fca5a5;margin-bottom:14px}
+.err.on{display:block}
+
+.divider{text-align:center;font-size:12px;color:var(--muted);margin:20px 0 16px;position:relative}
+.divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:var(--border)}
+.divider::before{left:0}.divider::after{right:0}
+
+.link-admin{text-align:center;margin-top:16px;font-size:12px;color:var(--muted)}
+.link-admin a{color:var(--accent);text-decoration:none}
+.link-admin a:hover{text-decoration:underline}
+
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.alert-expiry{display:none;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:8px;padding:10px 14px;font-size:12.5px;color:#fdba74;margin-bottom:14px}
+.alert-expiry.on{display:block}
+</style>
+<script src="/api-client.js"></script>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">🍽️</div>
+    <div>
+      <div class="logo-text">Estima Food</div>
+      <div class="logo-sub">Sistema de Gestão</div>
+    </div>
+  </div>
+
+  <div class="title">Bem-vindo de volta</div>
+  <div class="subtitle">Acesse o painel do seu restaurante</div>
+
+  <div class="err" id="lg-err"></div>
+  <div class="alert-expiry" id="lg-expiry"></div>
+
+  <label>Email</label>
+  <input id="lg-email" type="email" placeholder="seu@email.com" autocomplete="email" onkeydown="if(event.key==='Enter')doLogin()">
+  <label>Senha</label>
+  <input id="lg-senha" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+
+  <button class="btn" id="btn-login" onclick="doLogin()">Entrar</button>
+
+  <div class="divider">acesso restrito</div>
+  <div class="link-admin">
+    Administrador do sistema? <a href="admin.html">Painel Admin →</a>
+  </div>
+</div>
+
+<script>
+const sb = window.AppAPI;
+
+// Se já tem sessão válida, redireciona direto
+(function(){
+  try {
+    const s = JSON.parse(sessionStorage.getItem('sys_session') || 'null');
+    if (s && s.tenant_id && Date.now() - s.ts < 8*60*60*1000) {
+      window.location.href = 'gestor.html';
+    }
+  } catch(e) {}
+})();
+
+async function sha256(text) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function doLogin() {
+  const email = document.getElementById('lg-email').value.trim().toLowerCase();
+  const senha = document.getElementById('lg-senha').value;
+  const errEl   = document.getElementById('lg-err');
+  const expiryEl= document.getElementById('lg-expiry');
+  const btn     = document.getElementById('btn-login');
+
+  errEl.classList.remove('on');
+  expiryEl.classList.remove('on');
+
+  if (!email || !senha) {
+    errEl.textContent = 'Preencha email e senha.';
+    errEl.classList.add('on');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Entrando...';
+
+  try {
+    const hash = await sha256(senha);
+
+    // Busca usuário + tenant
+    const { data: u, error } = await sb
+      .from('sys_users')
+      .select('id,nome,email,role,ativo,tenant_id,dept_id,tenants(nome,ativo,expires_at,plano)')
+      .eq('email', email)
+      .eq('senha_hash', hash)
+      .single();
+
+    if (error || !u) {
+      errEl.textContent = 'Email ou senha incorretos.';
+      errEl.classList.add('on');
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+      return;
+    }
+
+    if (!u.ativo) {
+      errEl.textContent = 'Sua conta está desativada. Fale com o administrador.';
+      errEl.classList.add('on');
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+      return;
+    }
+
+    const tenant = u.tenants;
+
+    // Verifica se o tenant está ativo
+    if (tenant && !tenant.ativo) {
+      errEl.textContent = 'Acesso suspenso. Entre em contato com o suporte.';
+      errEl.classList.add('on');
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+      return;
+    }
+
+    // Avisa se o acesso está perto de expirar ou já expirou
+    if (tenant?.expires_at) {
+      const exp     = new Date(tenant.expires_at);
+      const agora   = new Date();
+      const diffDias= Math.ceil((exp - agora) / (1000*60*60*24));
+      if (diffDias < 0) {
+        errEl.textContent = `Acesso expirado em ${exp.toLocaleDateString('pt-BR')}. Renove com o administrador.`;
+        errEl.classList.add('on');
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+        return;
+      }
+      if (diffDias <= 7) {
+        expiryEl.textContent = `⚠️ Seu acesso expira em ${diffDias} dia(s) (${exp.toLocaleDateString('pt-BR')}). Renove com o administrador.`;
+        expiryEl.classList.add('on');
+      }
+    }
+
+    // Salva sessão no formato esperado pelo gestor.html e api-client.js
+    sessionStorage.setItem('sys_session', JSON.stringify({
+      id:        u.id,
+      nome:      u.nome,
+      email:     u.email,
+      role:      u.role,
+      tenant_id: u.tenant_id,
+      dept_id:   u.dept_id || null,
+      plano:     tenant?.plano || 'pro',
+      ts:        Date.now()
+    }));
+
+    // Atualiza último acesso
+    await sb.from('sys_users').update({ ultimo_acesso: new Date().toISOString() }).eq('id', u.id);
+
+    window.location.href = 'gestor.html';
+
+  } catch(e) {
+    errEl.textContent = 'Erro de conexão. Tente novamente.';
+    errEl.classList.add('on');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+}
+</script>
+</body>
+</html>

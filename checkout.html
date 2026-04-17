@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="pt-br" x-data="checkoutApp()" x-init="init()">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EvoCRM Pro | O CRM Mais Poderoso para WhatsApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
+    <style>
+        [x-cloak]{display:none!important}
+        *{box-sizing:border-box;margin:0;padding:0}
+
+        :root {
+            --bg: #04060e;
+            --bg2: #080b18;
+            --surface: rgba(255,255,255,.035);
+            --surface2: rgba(255,255,255,.055);
+            --border: rgba(255,255,255,.07);
+            --border-hover: rgba(255,255,255,.14);
+            --indigo: #5b5ef4;
+            --indigo-light: #7b7ff5;
+            --violet: #8b5cf6;
+            --cyan: #06b6d4;
+            --emerald: #10b981;
+            --amber: #f59e0b;
+            --text: #eef0f8;
+            --muted: #6b728a;
+            --dimmed: #2e3348;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── NOISE + GRID ── */
+        body::after {
+            content: '';
+            position: fixed; inset: 0; pointer-events: none; z-index: 0;
+            opacity: .018;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        .grid-bg {
+            position: fixed; inset: 0; pointer-events: none; z-index: 0;
+            background-image:
+                linear-gradient(rgba(91,94,244,.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(91,94,244,.04) 1px, transparent 1px);
+            background-size: 72px 72px;
+        }
+
+        /* ── ORBS ── */
+        .orb1 { position: fixed; width: 900px; height: 900px; background: radial-gradient(circle, rgba(91,94,244,.07) 0%, transparent 65%); top: -350px; left: -350px; pointer-events: none; z-index: 0; animation: orb-drift 20s ease-in-out infinite alternate; }
+        .orb2 { position: fixed; width: 700px; height: 700px; background: radial-gradient(circle, rgba(139,92,246,.05) 0%, transparent 65%); bottom: -250px; right: -250px; pointer-events: none; z-index: 0; animation: orb-drift 16s ease-in-out infinite alternate-reverse; }
+        .orb3 { position: fixed; width: 500px; height: 500px; background: radial-gradient(circle, rgba(6,182,212,.035) 0%, transparent 65%); top: 45%; right: 5%; pointer-events: none; z-index: 0; }
+        @keyframes orb-drift { from { transform: translate(0,0) scale(1); } to { transform: translate(40px,30px) scale(1.05); } }
+
+        /* ── NAVBAR ── */
+        .navbar {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+            background: rgba(4,6,14,.88);
+            backdrop-filter: blur(28px) saturate(1.4);
+            border-bottom: 1px solid var(--border);
+            height: 70px; display: flex; align-items: center;
+            transition: all .3s;
+        }
+        .navbar.scrolled { background: rgba(4,6,14,.96); box-shadow: 0 4px 40px rgba(0,0,0,.6); }
+        .navbar-inner { width: 100%; max-width: 1200px; margin: 0 auto; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .nav-logo { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+        .nav-logo-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #4338ca, #5b5ef4); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 18px rgba(91,94,244,.4); }
+        .nav-logo-text { font-family: 'Syne', sans-serif; font-size: 19px; font-weight: 800; color: #fff; letter-spacing: -.02em; }
+        .nav-logo-text span { color: #7b7ff5; }
+        .nav-links { display: flex; align-items: center; gap: 2px; }
+        .nav-link { padding: 7px 14px; font-size: 13.5px; font-weight: 500; color: var(--muted); border-radius: 9px; cursor: pointer; transition: all .2s; background: transparent; border: none; text-decoration: none; }
+        .nav-link:hover { color: var(--text); background: rgba(255,255,255,.055); }
+        .nav-cta { background: linear-gradient(135deg, #4338ca, #5b5ef4); color: #fff; border: none; cursor: pointer; border-radius: 11px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; padding: 10px 22px; transition: all .2s; box-shadow: 0 4px 20px rgba(91,94,244,.35); letter-spacing: .01em; }
+        .nav-cta:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(91,94,244,.5); }
+
+        /* ── BADGES ── */
+        .pill { display: inline-flex; align-items: center; gap: 7px; background: rgba(91,94,244,.1); border: 1px solid rgba(91,94,244,.22); border-radius: 999px; padding: 5px 16px; font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #9da4f7; }
+        .pill.green { background: rgba(16,185,129,.09); border-color: rgba(16,185,129,.22); color: #34d399; }
+        .pill.amber { background: rgba(245,158,11,.09); border-color: rgba(245,158,11,.22); color: #fbbf24; }
+        .pulse { width: 7px; height: 7px; background: currentColor; border-radius: 50%; animation: pulse 2s ease infinite; }
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.75)} }
+
+        /* ── GRAD TEXT ── */
+        .grad { background: linear-gradient(135deg, #a5a8fb 0%, #c4b5fd 40%, #7b7ff5 80%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: grad-shift 5s linear infinite; }
+        .grad-cyan { background: linear-gradient(135deg, #06b6d4, #7b7ff5, #a5a8fb); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: grad-shift 5s linear infinite; }
+        @keyframes grad-shift { 0%{background-position:0%} 100%{background-position:200%} }
+
+        /* ── SECTIONS ── */
+        .section { position: relative; z-index: 1; }
+
+        /* ── HERO ── */
+        .hero { padding: 160px 28px 110px; text-align: center; max-width: 880px; margin: 0 auto; }
+        .hero h1 { font-family: 'Syne', sans-serif; font-size: clamp(40px, 6.5vw, 76px); font-weight: 800; line-height: 1.04; letter-spacing: -.035em; margin-bottom: 24px; }
+        .hero p { font-size: 18px; line-height: 1.8; color: var(--muted); max-width: 520px; margin: 0 auto 44px; }
+
+        /* ── STATS ── */
+        .stats-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 2px; margin-bottom: 52px; }
+        .stat-item { display: flex; flex-direction: column; align-items: center; padding: 22px 40px; background: var(--surface); border: 1px solid var(--border); min-width: 150px; }
+        .stat-item:first-child { border-radius: 20px 6px 6px 20px; }
+        .stat-item:last-child { border-radius: 6px 20px 20px 6px; }
+        .stat-num { font-family: 'Syne', sans-serif; font-size: 34px; font-weight: 800; color: #fff; line-height: 1; }
+        .stat-label { font-size: 10.5px; font-weight: 600; color: var(--muted); margin-top: 5px; text-transform: uppercase; letter-spacing: .07em; }
+
+        /* ── HERO CTAS ── */
+        .hero-ctas { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+        .btn-primary { background: linear-gradient(135deg, #4338ca, #5b5ef4); color: #fff; border: none; cursor: pointer; border-radius: 14px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; padding: 17px 38px; transition: all .22s; box-shadow: 0 8px 32px rgba(91,94,244,.38); display: inline-flex; align-items: center; gap: 9px; letter-spacing: .01em; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 50px rgba(91,94,244,.55); }
+        .btn-secondary { background: transparent; color: var(--text); border: 1px solid var(--border-hover); cursor: pointer; border-radius: 14px; font-size: 15px; font-weight: 500; padding: 17px 34px; transition: all .2s; display: inline-flex; align-items: center; gap: 9px; }
+        .btn-secondary:hover { background: var(--surface2); border-color: rgba(255,255,255,.2); }
+        .btn-pix { background: linear-gradient(135deg, #4338ca, #5b5ef4); color: #fff; border: none; cursor: pointer; border-radius: 14px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; padding: 15px 28px; transition: all .2s; box-shadow: 0 6px 24px rgba(91,94,244,.3); display: inline-flex; align-items: center; gap: 8px; }
+        .btn-pix:hover { transform: translateY(-2px); box-shadow: 0 12px 36px rgba(91,94,244,.45); }
+        .btn-pix:disabled { opacity: .6; cursor: default; transform: none; }
+
+        /* ── STRIP (social proof) ── */
+        .strip { position: relative; z-index: 1; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: rgba(255,255,255,.012); padding: 18px 28px; display: flex; justify-content: center; align-items: center; gap: 42px; flex-wrap: wrap; }
+        .strip-item { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+
+        /* ── VIDEO SECTION ── */
+        .video-hero-section { padding: 80px 28px 0; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+        .video-hero-wrap { position: relative; border-radius: 28px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 40px 100px rgba(0,0,0,.7), 0 0 0 1px rgba(91,94,244,.12), inset 0 1px 0 rgba(255,255,255,.08); background: #0a0c1a; }
+        .video-hero-wrap::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 60%, rgba(4,6,14,.8) 100%); z-index: 1; pointer-events: none; }
+        .video-hero-wrap iframe, .video-hero-wrap video { width: 100%; aspect-ratio: 16/9; display: block; border: none; }
+        .video-hero-placeholder { width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg, #0d1126 0%, #11163c 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; cursor: pointer; }
+        .video-play-btn { width: 80px; height: 80px; background: linear-gradient(135deg, rgba(91,94,244,.3), rgba(91,94,244,.15)); border: 2px solid rgba(91,94,244,.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all .3s; }
+        .video-play-btn:hover { background: linear-gradient(135deg, rgba(91,94,244,.5), rgba(91,94,244,.3)); transform: scale(1.08); }
+        .video-label-overlay { position: absolute; bottom: 24px; left: 28px; z-index: 2; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: rgba(255,255,255,.7); letter-spacing: .04em; text-transform: uppercase; }
+
+        /* ── FEATURES ── */
+        .features-section { padding: 110px 28px; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+        .section-label { font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--indigo-light); margin-bottom: 16px; display: block; }
+        .section-title { font-family: 'Syne', sans-serif; font-size: clamp(28px, 4vw, 46px); font-weight: 800; letter-spacing: -.025em; margin-bottom: 16px; line-height: 1.1; }
+        .section-sub { font-size: 15.5px; line-height: 1.75; color: var(--muted); max-width: 500px; }
+        .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 22px; margin-top: 64px; }
+        .feature-card { background: var(--surface); border: 1px solid var(--border); border-radius: 26px; padding: 34px; transition: all .35s cubic-bezier(.4,0,.2,1); position: relative; overflow: hidden; }
+        .feature-card::before { content: ''; position: absolute; inset: 0; border-radius: 26px; background: linear-gradient(135deg, rgba(255,255,255,.045) 0%, transparent 55%); opacity: 0; transition: opacity .3s; }
+        .feature-card:hover { border-color: rgba(91,94,244,.25); transform: translateY(-5px); box-shadow: 0 28px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(91,94,244,.1); }
+        .feature-card:hover::before { opacity: 1; }
+        .feature-icon-wrap { width: 54px; height: 54px; border-radius: 17px; display: flex; align-items: center; justify-content: center; margin-bottom: 22px; }
+        .feature-card h3 { font-family: 'Syne', sans-serif; font-size: 18.5px; font-weight: 800; margin-bottom: 11px; letter-spacing: -.01em; }
+        .feature-card p { font-size: 14px; line-height: 1.72; color: var(--muted); }
+
+        /* ── VIDEO DEMOS SECTION ── */
+        .demos-section { padding: 100px 28px; position: relative; z-index: 1; }
+        .demos-inner { max-width: 1100px; margin: 0 auto; }
+        .demos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 24px; margin-top: 64px; }
+        .demo-card { background: var(--surface); border: 1px solid var(--border); border-radius: 26px; overflow: hidden; transition: all .3s; }
+        .demo-card:hover { border-color: rgba(91,94,244,.22); transform: translateY(-4px); box-shadow: 0 24px 56px rgba(0,0,0,.5); }
+        .demo-video-wrap { position: relative; aspect-ratio: 16/9; background: #090c1f; overflow: hidden; }
+        .demo-video-wrap iframe, .demo-video-wrap video { width: 100%; height: 100%; object-fit: cover; border: none; }
+        .demo-video-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #0d1126, #151a3a); cursor: pointer; position: relative; }
+        .demo-video-placeholder:hover .demo-play-btn { transform: scale(1.1); }
+        .demo-play-btn { width: 56px; height: 56px; background: rgba(91,94,244,.25); border: 2px solid rgba(91,94,244,.4); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all .3s; z-index: 2; position: relative; }
+        .demo-video-bg { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(91,94,244,.15), transparent 60%); }
+        .demo-card-body { padding: 26px; }
+        .demo-tag { display: inline-flex; align-items: center; gap: 5px; background: rgba(91,94,244,.1); border: 1px solid rgba(91,94,244,.18); border-radius: 999px; padding: 3px 11px; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #9da4f7; margin-bottom: 12px; }
+        .demo-card-body h3 { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 800; margin-bottom: 9px; letter-spacing: -.01em; }
+        .demo-card-body p { font-size: 13.5px; line-height: 1.7; color: var(--muted); }
+
+        /* ── SPOTLIGHT VIDEO SECTION ── */
+        .spotlight-section { padding: 80px 28px 100px; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+        .spotlight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: center; margin-top: 64px; }
+        @media(max-width:768px){ .spotlight-grid { grid-template-columns: 1fr; } }
+        .spotlight-video-wrap { position: relative; border-radius: 24px; overflow: hidden; border: 1px solid var(--border); box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+        .spotlight-video-wrap iframe, .spotlight-video-wrap video { width: 100%; aspect-ratio: 16/9; display: block; border: none; }
+        .spotlight-placeholder { width: 100%; aspect-ratio: 16/9; background: linear-gradient(135deg, #0c1022, #14193a); display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; overflow: hidden; }
+        .spotlight-placeholder .bg-glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, rgba(91,94,244,.2), transparent 60%); }
+        .spotlight-play { width: 72px; height: 72px; background: linear-gradient(135deg, rgba(91,94,244,.35), rgba(91,94,244,.15)); border: 2px solid rgba(91,94,244,.45); border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: all .3s; z-index: 1; }
+        .spotlight-placeholder:hover .spotlight-play { transform: scale(1.1); background: linear-gradient(135deg, rgba(91,94,244,.5), rgba(91,94,244,.3)); }
+        .spotlight-text { display: flex; flex-direction: column; gap: 20px; }
+        .spotlight-text h2 { font-family: 'Syne', sans-serif; font-size: clamp(26px, 3.5vw, 38px); font-weight: 800; letter-spacing: -.025em; line-height: 1.15; }
+        .spotlight-text p { font-size: 15px; line-height: 1.78; color: var(--muted); }
+        .spotlight-points { display: flex; flex-direction: column; gap: 12px; }
+        .spotlight-point { display: flex; align-items: flex-start; gap: 12px; }
+        .sp-icon { width: 28px; height: 28px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+        .spotlight-point p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+        .spotlight-point strong { color: var(--text); }
+
+        /* ── HOW IT WORKS ── */
+        .how-section { padding: 80px 28px 110px; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+        .steps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px; margin-top: 64px; }
+        .step-card { background: var(--surface); border: 1px solid var(--border); border-radius: 26px; padding: 30px; display: flex; flex-direction: column; gap: 18px; transition: all .3s; position: relative; overflow: hidden; }
+        .step-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #4338ca, #5b5ef4, #8b5cf6); opacity: 0; transition: opacity .3s; }
+        .step-card:hover { border-color: rgba(91,94,244,.2); transform: translateY(-4px); }
+        .step-card:hover::after { opacity: 1; }
+        .step-num { font-family: 'Syne', sans-serif; font-size: 10.5px; font-weight: 800; letter-spacing: .14em; color: var(--indigo-light); text-transform: uppercase; }
+        .step-card h3 { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; letter-spacing: -.01em; }
+        .step-card p { font-size: 13.5px; color: var(--muted); line-height: 1.68; }
+
+        /* ── PLANS ── */
+        .plans-section { padding: 100px 28px; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+        .plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; }
+        .plan-card { background: var(--surface); border: 1px solid var(--border); border-radius: 30px; padding: 34px; transition: all .35s cubic-bezier(.4,0,.2,1); position: relative; overflow: hidden; cursor: pointer; display: flex; flex-direction: column; }
+        .plan-card::before { content: ''; position: absolute; inset: 0; border-radius: 30px; background: linear-gradient(135deg, rgba(255,255,255,.045) 0%, transparent 55%); opacity: 0; transition: opacity .3s; }
+        .plan-card:hover { border-color: var(--border-hover); transform: translateY(-7px); box-shadow: 0 32px 64px rgba(0,0,0,.5); }
+        .plan-card:hover::before { opacity: 1; }
+        .plan-card.popular { border-color: rgba(91,94,244,.3); background: rgba(91,94,244,.04); }
+        .plan-card.popular:hover { border-color: rgba(91,94,244,.55); box-shadow: 0 32px 80px rgba(91,94,244,.18); }
+        .popular-badge { position: absolute; top: 24px; right: 24px; background: linear-gradient(135deg, #4338ca, #7c3aed); font-family: 'Syne', sans-serif; font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #fff; padding: 5px 14px; border-radius: 999px; display: flex; align-items: center; gap: 5px; box-shadow: 0 4px 18px rgba(91,94,244,.4); }
+        .plan-color-bar { height: 3px; border-radius: 2px; width: 38px; margin-bottom: 26px; }
+        .plan-header h3 { font-family: 'Syne', sans-serif; font-size: 23px; font-weight: 800; margin-bottom: 7px; letter-spacing: -.02em; }
+        .plan-header p { font-size: 13px; color: var(--muted); }
+        .plan-price { margin: 26px 0; }
+        .plan-price-row { display: flex; align-items: baseline; gap: 5px; }
+        .plan-price-curr { font-size: 14px; color: var(--muted); font-weight: 500; }
+        .plan-price-num { font-family: 'Syne', sans-serif; font-size: 56px; font-weight: 800; line-height: 1; }
+        .plan-price-period { font-size: 13px; color: var(--dimmed); }
+        .plan-divider { border: none; border-top: 1px solid var(--border); margin: 26px 0; }
+        .plan-features { display: flex; flex-direction: column; gap: 13px; flex: 1; margin-bottom: 30px; }
+        .feature-row { display: flex; align-items: center; gap: 11px; font-size: 13.5px; }
+        .feature-row.on { color: #d1d5db; }
+        .feature-row.off { opacity: .3; }
+        .check-wrap { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .check-wrap.on { background: rgba(91,94,244,.18); }
+        .check-wrap.off { background: rgba(255,255,255,.05); }
+        .btn-plan { width: 100%; padding: 16px; border: none; cursor: pointer; border-radius: 15px; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: .02em; transition: all .22s; display: flex; align-items: center; justify-content: center; gap: 9px; }
+        .btn-plan.primary { background: linear-gradient(135deg, #4338ca, #5b5ef4); color: #fff; box-shadow: 0 8px 30px rgba(91,94,244,.3); }
+        .btn-plan.primary:hover { transform: translateY(-2px); box-shadow: 0 14px 44px rgba(91,94,244,.48); }
+        .btn-plan.outline { background: transparent; color: var(--text); border: 1px solid var(--border-hover); }
+        .btn-plan.outline:hover { background: rgba(255,255,255,.045); }
+
+        /* ── COMPARISON TABLE ── */
+        .compare-section { padding: 40px 28px 100px; max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+        .compare-table { width: 100%; border-collapse: collapse; }
+        .compare-table th { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); padding: 13px 17px; text-align: center; border-bottom: 1px solid var(--border); }
+        .compare-table th:first-child { text-align: left; }
+        .compare-table td { padding: 15px 17px; border-bottom: 1px solid rgba(255,255,255,.03); font-size: 13.5px; text-align: center; }
+        .compare-table td:first-child { text-align: left; color: var(--text); font-weight: 500; }
+        .compare-table tr:last-child td { border-bottom: none; }
+        .compare-table tr:hover td { background: rgba(255,255,255,.012); }
+        .compare-check { color: var(--indigo-light); display: flex; justify-content: center; }
+        .compare-x { color: var(--dimmed); display: flex; justify-content: center; }
+        .compare-plan-head { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 800; color: var(--text); }
+
+        /* ── FAQ ── */
+        .faq-section { padding: 40px 28px 100px; max-width: 740px; margin: 0 auto; position: relative; z-index: 1; }
+        .faq-item { border: 1px solid var(--border); border-radius: 18px; margin-bottom: 11px; overflow: hidden; transition: border-color .2s; }
+        .faq-item:hover { border-color: rgba(91,94,244,.22); }
+        .faq-question { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 21px 26px; background: transparent; border: none; color: var(--text); font-size: 14.5px; font-weight: 600; cursor: pointer; text-align: left; }
+        .faq-icon { flex-shrink: 0; color: var(--muted); transition: transform .3s; }
+        .faq-icon.open { transform: rotate(45deg); }
+        .faq-answer { padding: 0 26px 22px; font-size: 13.5px; line-height: 1.78; color: var(--muted); }
+
+        /* ── TESTIMONIALS ── */
+        .testimonials-section { padding: 100px 28px; position: relative; z-index: 1; }
+        .testi-inner { max-width: 1100px; margin: 0 auto; }
+        .testi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 22px; margin-top: 64px; }
+        .testi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 26px; padding: 32px; display: flex; flex-direction: column; gap: 20px; transition: all .3s; }
+        .testi-card:hover { border-color: rgba(91,94,244,.2); transform: translateY(-4px); }
+        .testi-stars { display: flex; gap: 3px; }
+        .testi-text { font-size: 14.5px; line-height: 1.75; color: #cbd5e1; font-style: italic; }
+        .testi-author { display: flex; align-items: center; gap: 13px; }
+        .testi-avatar { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #4338ca, #8b5cf6); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; color: #fff; flex-shrink: 0; }
+        .testi-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px; }
+        .testi-role { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+        /* ── CTA FINAL ── */
+        .cta-section { padding: 60px 28px 130px; max-width: 850px; margin: 0 auto; text-align: center; position: relative; z-index: 1; }
+        .cta-box { background: linear-gradient(135deg, rgba(67,56,202,.14) 0%, rgba(139,92,246,.09) 100%); border: 1px solid rgba(91,94,244,.22); border-radius: 36px; padding: 72px 44px; position: relative; overflow: hidden; }
+        .cta-box::before { content: ''; position: absolute; top: -100px; right: -100px; width: 340px; height: 340px; background: radial-gradient(circle, rgba(91,94,244,.18), transparent 70%); pointer-events: none; }
+        .cta-box::after { content: ''; position: absolute; bottom: -80px; left: -80px; width: 260px; height: 260px; background: radial-gradient(circle, rgba(139,92,246,.1), transparent 70%); pointer-events: none; }
+        .cta-box h2 { font-family: 'Syne', sans-serif; font-size: clamp(28px, 4.5vw, 44px); font-weight: 800; letter-spacing: -.025em; margin-bottom: 16px; position: relative; z-index: 1; }
+        .cta-box p { font-size: 16px; color: var(--muted); max-width: 420px; margin: 0 auto 40px; line-height: 1.75; position: relative; z-index: 1; }
+
+        /* ── TRUST + FOOTER ── */
+        .trust-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 26px; padding: 30px 28px; border-top: 1px solid var(--border); position: relative; z-index: 1; }
+        .trust-item { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dimmed); }
+        .footer { border-top: 1px solid var(--border); padding: 26px; position: relative; z-index: 1; display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; }
+        .footer p { font-size: 12.5px; color: var(--dimmed); }
+        .mp-badge { display: flex; align-items: center; gap: 7px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 7px 13px; font-size: 11px; font-weight: 600; color: var(--muted); }
+
+        /* ── SPINNER ── */
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.2); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── INPUT FIELD ── */
+        .input-field { width: 100%; background: rgba(255,255,255,.04); border: 1px solid var(--border-hover); border-radius: 12px; padding: 13px 15px; font-size: 14px; color: var(--text); outline: none; font-family: 'DM Sans', sans-serif; transition: all .2s; }
+        .input-field:focus { border-color: rgba(91,94,244,.5); background: rgba(91,94,244,.05); box-shadow: 0 0 0 3px rgba(91,94,244,.12); }
+        .input-field::placeholder { color: var(--muted); }
+
+        /* ── MODAL ── */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(8px); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .modal-box { background: #0a0d1e; border: 1px solid rgba(91,94,244,.2); border-radius: 28px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; box-shadow: 0 40px 100px rgba(0,0,0,.8); scrollbar-width: none; }
+        .modal-box::-webkit-scrollbar { display: none; }
+        .modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 24px; }
+        .modal-close { width: 34px; height: 34px; background: rgba(255,255,255,.06); border: none; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--muted); transition: all .2s; }
+        .modal-close:hover { background: rgba(255,255,255,.1); color: var(--text); }
+
+        /* ── SUCCESS RING ── */
+        @keyframes success-ring { from { transform: scale(.6); opacity: 0; } to { transform: scale(1.1); opacity: 1; } }
+        .success-ring { animation: success-ring .4s cubic-bezier(.34,1.56,.64,1) forwards; }
+        @keyframes progress-bar { from { width: 0; } to { width: 100%; } }
+
+        /* ── BILLING TOGGLE ── */
+        .billing-toggle { display: flex; justify-content: center; margin: 42px 0 58px; }
+        .toggle-inner { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 15px; padding: 4px; }
+        .toggle-btn { flex: 1; padding: 11px 26px; border: none; background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; border-radius: 11px; cursor: pointer; transition: all .2s; white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+        .toggle-btn.active { background: rgba(91,94,244,.18); color: #a5a8fb; }
+        .save-badge { background: rgba(34,197,94,.14); color: #4ade80; font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 7px; border: 1px solid rgba(34,197,94,.22); }
+
+        /* ── LOADING PLANS ── */
+        .plans-loading { text-align: center; padding: 60px 0; color: var(--muted); }
+
+        /* ── RESPONSIVE ── */
+        @media(max-width:768px){
+            .hero { padding: 130px 20px 80px; }
+            .features-grid, .demos-grid, .steps-grid, .testi-grid { grid-template-columns: 1fr; }
+            .nav-links { display: none; }
+            .stat-item { padding: 18px 26px; min-width: 110px; }
+            .stat-num { font-size: 26px; }
+        }
+
+        /* ── SCROLL ANIMATIONS ── */
+        .fade-in { opacity: 0; transform: translateY(24px); transition: opacity .6s ease, transform .6s ease; }
+        .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+        /* ── LOGO STRIP ── */
+        .logo-strip { padding: 40px 28px; position: relative; z-index: 1; }
+        .logo-strip-inner { max-width: 900px; margin: 0 auto; text-align: center; }
+        .logo-strip-label { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 28px; }
+        .logos-row { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 32px; }
+        .logo-item { display: flex; align-items: center; gap: 9px; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 15px; color: var(--dimmed); letter-spacing: -.01em; transition: color .2s; }
+        .logo-item:hover { color: var(--muted); }
+        .logo-item-icon { width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="orb1"></div>
+<div class="orb2"></div>
+<div class="orb3"></div>
+
+<!-- ═══ NAVBAR ═══ -->
+<nav class="navbar" id="navbar">
+    <div class="navbar-inner">
+        <a class="nav-logo" href="#">
+            <div class="nav-logo-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            </div>
+            <span class="nav-logo-text" x-html="siteContent.logo_text || 'Evo<span>CRM</span> Pro'"></span>
+        </a>
+        <div class="nav-links">
+            <a class="nav-link" href="#recursos" x-show="!modoRenovacao">Recursos</a>
+            <a class="nav-link" href="#demos" x-show="!modoRenovacao">Demonstrações</a>
+            <a class="nav-link" href="#planos">Planos</a>
+            <a class="nav-link" href="#faq" x-show="!modoRenovacao">FAQ</a>
+        </div>
+        <button class="nav-cta" onclick="document.getElementById('planos').scrollIntoView({behavior:'smooth'})">
+            <span x-text="modoRenovacao ? 'Renovar Plano' : 'Assinar Agora'"></span>
+        </button>
+    </div>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<section class="section" x-show="!modoRenovacao" x-cloak>
+    <div class="hero">
+        <div class="pill" style="margin-bottom:28px;">
+            <span class="pulse"></span>
+            <span x-text="siteContent.hero_badge || '🚀 Mais de 500 empresas já usam'"></span>
+        </div>
+        <h1 x-html="siteContent.hero_title || 'O CRM que <span class=\'grad\'>vende por você</span> no WhatsApp'"></h1>
+        <p x-text="siteContent.hero_subtitle || 'Automatize atendimentos, qualifique leads com IA e aumente suas vendas sem aumentar a equipe. Ative em menos de 2 minutos.'"></p>
+
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-item">
+                <span class="stat-num" x-text="siteContent.stat1_num || '500+'"></span>
+                <span class="stat-label" x-text="siteContent.stat1_label || 'Empresas ativas'"></span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num" x-text="siteContent.stat2_num || '98%'"></span>
+                <span class="stat-label" x-text="siteContent.stat2_label || 'Satisfação'"></span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num" x-text="siteContent.stat3_num || '24/7'"></span>
+                <span class="stat-label" x-text="siteContent.stat3_label || 'IA online'"></span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num" x-text="siteContent.stat4_num || '2min'"></span>
+                <span class="stat-label" x-text="siteContent.stat4_label || 'Para ativar'"></span>
+            </div>
+        </div>
+
+        <div class="hero-ctas">
+            <button class="btn-primary" onclick="document.getElementById('planos').scrollIntoView({behavior:'smooth'})">
+                <i data-lucide="zap" style="width:18px;height:18px;"></i>
+                <span x-text="siteContent.hero_cta1 || 'Começar agora →'"></span>
+            </button>
+            <button class="btn-secondary" id="openDemoBtn">
+                <i data-lucide="play-circle" style="width:18px;height:18px;"></i>
+                <span x-text="siteContent.hero_cta2 || 'Ver demonstração'"></span>
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ STRIP ═══ -->
+<div class="strip section" x-show="!modoRenovacao" x-cloak>
+    <div class="strip-item"><i data-lucide="lock" style="width:14px;height:14px;color:#5b5ef4;"></i> Dados criptografados</div>
+    <div class="strip-item"><i data-lucide="shield-check" style="width:14px;height:14px;color:#10b981;"></i> Pagamento 100% seguro</div>
+    <div class="strip-item"><i data-lucide="zap" style="width:14px;height:14px;color:#f59e0b;"></i> Ativação imediata</div>
+    <div class="strip-item"><i data-lucide="headphones" style="width:14px;height:14px;color:#7b7ff5;"></i> Suporte humano</div>
+    <div class="strip-item"><i data-lucide="smartphone" style="width:14px;height:14px;color:#06b6d4;"></i> Funciona no celular</div>
+</div>
+
+<!-- ═══ HERO VIDEO ═══ -->
+<section class="video-hero-section section fade-in" x-show="!modoRenovacao && siteContent.hero_video_url" x-cloak>
+    <div class="video-hero-wrap">
+        <template x-if="siteContent.hero_video_url && siteContent.hero_video_url.includes('youtube') || (siteContent.hero_video_url && siteContent.hero_video_url.includes('youtu.be'))">
+            <iframe :src="getEmbedUrl(siteContent.hero_video_url)" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+        </template>
+        <template x-if="siteContent.hero_video_url && !siteContent.hero_video_url.includes('youtube') && !siteContent.hero_video_url.includes('youtu.be') && !siteContent.hero_video_url.includes('vimeo')">
+            <video :src="siteContent.hero_video_url" controls playsinline poster=""></video>
+        </template>
+        <template x-if="siteContent.hero_video_url && siteContent.hero_video_url.includes('vimeo')">
+            <iframe :src="getVimeoEmbed(siteContent.hero_video_url)" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+        </template>
+        <div class="video-label-overlay" x-text="siteContent.hero_video_label || 'Veja o sistema ao vivo'"></div>
+    </div>
+</section>
+
+<!-- ═══ VIDEO HERO PLACEHOLDER (when no URL set) ═══ -->
+<section class="video-hero-section section fade-in" x-show="!modoRenovacao && !siteContent.hero_video_url" x-cloak>
+    <div class="video-hero-wrap">
+        <div class="video-hero-placeholder" id="openDemoTarget">
+            <div class="video-play-btn">
+                <i data-lucide="play" style="width:32px;height:32px;color:#a5a8fb;margin-left:3px;"></i>
+            </div>
+            <p style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:rgba(255,255,255,.5);">Adicione o vídeo principal pelo painel Evolution</p>
+            <p style="font-size:12px;color:var(--muted);">Painel → Aba Conteúdo → Vídeo Principal</p>
+        </div>
+        <div class="video-label-overlay">Demonstração do sistema</div>
+    </div>
+</section>
+
+<!-- ═══ LOGO STRIP ═══ -->
+<div class="logo-strip section" x-show="!modoRenovacao" x-cloak>
+    <div class="logo-strip-inner">
+        <p class="logo-strip-label">Integra com suas ferramentas favoritas</p>
+        <div class="logos-row">
+            <div class="logo-item"><div class="logo-item-icon" style="background:rgba(37,211,102,.15);"><i data-lucide="message-circle" style="width:16px;height:16px;color:#25d366;"></i></div>WhatsApp</div>
+            <div class="logo-item"><div class="logo-item-icon" style="background:rgba(99,102,241,.15);"><i data-lucide="bot" style="width:16px;height:16px;color:#818cf8;"></i></div>ChatGPT / IA</div>
+            <div class="logo-item"><div class="logo-item-icon" style="background:rgba(6,182,212,.15);"><i data-lucide="webhook" style="width:16px;height:16px;color:#06b6d4;"></i></div>n8n / Make</div>
+            <div class="logo-item"><div class="logo-item-icon" style="background:rgba(245,158,11,.15);"><i data-lucide="database" style="width:16px;height:16px;color:#f59e0b;"></i></div>Supabase</div>
+            <div class="logo-item"><div class="logo-item-icon" style="background:rgba(239,68,68,.15);"><i data-lucide="link" style="width:16px;height:16px;color:#ef4444;"></i></div>Webhooks</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ FEATURES ═══ -->
+<section class="features-section section fade-in" id="recursos" x-show="!modoRenovacao" x-cloak>
+    <div>
+        <span class="section-label">Funcionalidades</span>
+        <h2 class="section-title">Tudo que você precisa para <span class="grad-cyan">vender mais</span> pelo WhatsApp</h2>
+        <p class="section-sub" x-text="siteContent.features_subtitle || 'Automatize o atendimento, organize seus leads e dispare campanhas profissionais com poucos cliques.'"></p>
+    </div>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon-wrap" style="background:rgba(91,94,244,.14);"><i data-lucide="bot" style="width:26px;height:26px;color:#7b7ff5;"></i></div>
+            <h3>IA que responde 24/7</h3>
+            <p>Configure um agente de IA treinado com o seu negócio. Ele responde clientes, qualifica leads e agenda reuniões enquanto você dorme — sem intervenção humana.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrap" style="background:rgba(16,185,129,.11);"><i data-lucide="send" style="width:26px;height:26px;color:#34d399;"></i></div>
+            <h3>Disparo em Massa</h3>
+            <p>Crie campanhas segmentadas e envie mensagens personalizadas para centenas de contatos de uma vez. Com monitoramento de entrega em tempo real.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrap" style="background:rgba(245,158,11,.1);"><i data-lucide="kanban" style="width:26px;height:26px;color:#fbbf24;"></i></div>
+            <h3>Funil Kanban de Leads</h3>
+            <p>Visualize cada cliente no funil de vendas. Arraste, mova e acompanhe o progresso. A IA move os leads automaticamente conforme a conversa avança.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrap" style="background:rgba(239,68,68,.1);"><i data-lucide="bell" style="width:26px;height:26px;color:#f87171;"></i></div>
+            <h3>Alertas e Follow-ups</h3>
+            <p>Nunca perca uma oportunidade. O sistema detecta automaticamente leads em silêncio e dispara lembretes, agendamentos e notificações no momento certo.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrap" style="background:rgba(91,94,244,.12);"><i data-lucide="users" style="width:26px;height:26px;color:#7b7ff5;"></i></div>
+            <h3>Multi-atendente</h3>
+            <p>Distribua conversas entre departamentos e atendentes com controle de acesso por setor. Cada equipe vê apenas suas conversas — organização total.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon-wrap" style="background:rgba(139,92,246,.12);"><i data-lucide="mic" style="width:26px;height:26px;color:#c4b5fd;"></i></div>
+            <h3>IA por Áudio (TTS)</h3>
+            <p>A IA responde com voz natural usando Text-to-Speech. Transcreve áudios recebidos e mantém o contexto da conversa para respostas mais humanizadas.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ DEMO VIDEOS GRID ═══ -->
+<section class="demos-section section" id="demos" x-show="!modoRenovacao" x-cloak>
+    <div class="demos-inner">
+        <div class="fade-in">
+            <span class="section-label">Demonstrações</span>
+            <h2 class="section-title">Veja o <span class="grad">EvoCRM em ação</span></h2>
+            <p class="section-sub" x-text="siteContent.demos_subtitle || 'Assista aos vídeos e entenda como cada funcionalidade funciona na prática antes de assinar.'"></p>
+        </div>
+
+        <!-- Demo videos from Evolution panel -->
+        <div class="demos-grid" x-show="siteContent.demo_videos && siteContent.demo_videos.length > 0">
+            <template x-for="(video, idx) in (siteContent.demo_videos || [])" :key="idx">
+                <div class="demo-card fade-in">
+                    <div class="demo-video-wrap">
+                        <template x-if="video.url && (video.url.includes('youtube') || video.url.includes('youtu.be'))">
+                            <iframe :src="getEmbedUrl(video.url)" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                        </template>
+                        <template x-if="video.url && video.url.includes('vimeo')">
+                            <iframe :src="getVimeoEmbed(video.url)" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                        </template>
+                        <template x-if="video.url && !video.url.includes('youtube') && !video.url.includes('youtu.be') && !video.url.includes('vimeo')">
+                            <video :src="video.url" controls playsinline style="width:100%;height:100%;object-fit:cover;"></video>
+                        </template>
+                        <template x-if="!video.url">
+                            <div class="demo-video-placeholder">
+                                <div class="demo-video-bg"></div>
+                                <div class="demo-play-btn"><i data-lucide="play" style="width:22px;height:22px;color:#a5a8fb;margin-left:2px;"></i></div>
+                            </div>
+                        </template>
+                    </div>
+                    <div class="demo-card-body">
+                        <div class="demo-tag" x-show="video.tag"><i data-lucide="video" style="width:10px;height:10px;"></i> <span x-text="video.tag"></span></div>
+                        <h3 x-text="video.title || 'Funcionalidade do sistema'"></h3>
+                        <p x-text="video.description || 'Veja como essa funcionalidade pode transformar seu negócio.'"></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Placeholder when no videos added -->
+        <div class="demos-grid" x-show="!siteContent.demo_videos || siteContent.demo_videos.length === 0">
+            <template x-for="i in [1,2,3]" :key="i">
+                <div class="demo-card fade-in">
+                    <div class="demo-video-wrap">
+                        <div class="demo-video-placeholder">
+                            <div class="demo-video-bg"></div>
+                            <div style="text-align:center;z-index:2;position:relative;">
+                                <div class="demo-play-btn" style="margin:0 auto 14px;"><i data-lucide="video" style="width:22px;height:22px;color:#7b7ff5;"></i></div>
+                                <p style="font-size:12px;color:var(--muted);">Adicione pelo painel Evolution</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="demo-card-body">
+                        <div class="demo-tag"><i data-lucide="video" style="width:10px;height:10px;"></i> Demo</div>
+                        <h3>Funcionalidade <span x-text="i"></span></h3>
+                        <p>Adicione a URL do vídeo e a descrição no painel Evolution → Aba Conteúdo → Vídeos de Demonstração.</p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ SPOTLIGHT VIDEO ═══ -->
+<section class="spotlight-section section fade-in" x-show="!modoRenovacao && (siteContent.spotlight_video_url || true)" x-cloak>
+    <div class="spotlight-grid">
+        <div class="spotlight-video-wrap">
+            <template x-if="siteContent.spotlight_video_url && (siteContent.spotlight_video_url.includes('youtube') || siteContent.spotlight_video_url.includes('youtu.be'))">
+                <iframe :src="getEmbedUrl(siteContent.spotlight_video_url)" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </template>
+            <template x-if="siteContent.spotlight_video_url && siteContent.spotlight_video_url.includes('vimeo')">
+                <iframe :src="getVimeoEmbed(siteContent.spotlight_video_url)" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+            </template>
+            <template x-if="siteContent.spotlight_video_url && !siteContent.spotlight_video_url.includes('youtube') && !siteContent.spotlight_video_url.includes('youtu.be') && !siteContent.spotlight_video_url.includes('vimeo')">
+                <video :src="siteContent.spotlight_video_url" controls playsinline></video>
+            </template>
+            <template x-if="!siteContent.spotlight_video_url">
+                <div class="spotlight-placeholder">
+                    <div class="bg-glow"></div>
+                    <div style="text-align:center;z-index:1;position:relative;">
+                        <div class="spotlight-play" style="margin:0 auto 16px;"><i data-lucide="play" style="width:28px;height:28px;color:#a5a8fb;margin-left:3px;"></i></div>
+                        <p style="font-size:13px;color:var(--muted);">Vídeo destaque — configure no painel</p>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <div class="spotlight-text">
+            <div class="pill" style="width:fit-content;"><span class="pulse"></span> <span x-text="siteContent.spotlight_badge || 'IA de ponta'"></span></div>
+            <h2 x-html="siteContent.spotlight_title || 'Atendimento inteligente que <span class=\'grad\'>nunca dorme</span>'"></h2>
+            <p x-text="siteContent.spotlight_desc || 'Nossa IA aprende com o histórico do seu negócio e responde com linguagem natural, qualificando cada lead automaticamente no funil de vendas.'"></p>
+            <div class="spotlight-points">
+                <div class="spotlight-point">
+                    <div class="sp-icon" style="background:rgba(91,94,244,.14);"><i data-lucide="check" style="width:14px;height:14px;color:#7b7ff5;"></i></div>
+                    <p><strong>Resposta instantânea</strong> — sem filas de espera, 24h por dia</p>
+                </div>
+                <div class="spotlight-point">
+                    <div class="sp-icon" style="background:rgba(16,185,129,.12);"><i data-lucide="check" style="width:14px;height:14px;color:#34d399;"></i></div>
+                    <p><strong>Qualificação automática</strong> — leads quentes entram direto no funil</p>
+                </div>
+                <div class="spotlight-point">
+                    <div class="sp-icon" style="background:rgba(245,158,11,.1);"><i data-lucide="check" style="width:14px;height:14px;color:#fbbf24;"></i></div>
+                    <p><strong>Integração total</strong> — conecta com seu CRM e agenda automaticamente</p>
+                </div>
+            </div>
+            <button class="btn-primary" style="width:fit-content;" onclick="document.getElementById('planos').scrollIntoView({behavior:'smooth'})">
+                Quero essa tecnologia →
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ HOW IT WORKS ═══ -->
+<section class="how-section section fade-in" x-show="!modoRenovacao" x-cloak>
+    <div style="max-width:540px;">
+        <span class="section-label">Como funciona</span>
+        <h2 class="section-title">Ative em <span class="grad">menos de 2 minutos</span></h2>
+        <p class="section-sub">Sem instalação. Sem complicação. Tudo na nuvem.</p>
+    </div>
+    <div class="steps-grid">
+        <div class="step-card">
+            <div style="width:46px;height:46px;background:rgba(91,94,244,.14);border-radius:15px;display:flex;align-items:center;justify-content:center;"><i data-lucide="credit-card" style="width:21px;height:21px;color:#7b7ff5;"></i></div>
+            <span class="step-num">Passo 01</span>
+            <h3>Escolha seu plano</h3>
+            <p>Selecione o plano que melhor se encaixa no tamanho do seu negócio. Pague via PIX e ative em segundos.</p>
+        </div>
+        <div class="step-card">
+            <div style="width:46px;height:46px;background:rgba(16,185,129,.11);border-radius:15px;display:flex;align-items:center;justify-content:center;"><i data-lucide="smartphone" style="width:21px;height:21px;color:#34d399;"></i></div>
+            <span class="step-num">Passo 02</span>
+            <h3>Conecte o WhatsApp</h3>
+            <p>Escaneie o QR Code com seu WhatsApp e conecte seu número. Leva menos de 30 segundos.</p>
+        </div>
+        <div class="step-card">
+            <div style="width:46px;height:46px;background:rgba(245,158,11,.1);border-radius:15px;display:flex;align-items:center;justify-content:center;"><i data-lucide="rocket" style="width:21px;height:21px;color:#fbbf24;"></i></div>
+            <span class="step-num">Passo 03</span>
+            <h3>Comece a vender</h3>
+            <p>Configure seu funil, ative a IA e veja seus leads sendo atendidos e qualificados automaticamente 24/7.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ PLANS ═══ -->
+<section class="plans-section section" id="planos">
+    <div style="text-align:center;max-width:620px;margin:0 auto;" class="fade-in">
+        <span class="section-label" x-text="modoRenovacao ? 'Renovação de Assinatura' : 'Planos e Preços'"></span>
+        <h2 class="section-title" x-text="modoRenovacao ? 'Escolha o plano para renovar' : 'Simples, transparente'"><span class="grad"> e sem surpresas</span></h2>
+        <p class="section-sub" style="margin:0 auto;" x-text="modoRenovacao ? 'Renove ou faça upgrade do seu plano com um único PIX.' : 'Todos os planos incluem ativação imediata após o pagamento via PIX.'"></p>
+    </div>
+
+    <div class="plans-loading" x-show="carregandoPlanos">
+        <span class="spinner" style="width:28px;height:28px;border-width:2.5px;"></span>
+        <p style="margin-top:12px;font-size:14px;">Carregando planos...</p>
+    </div>
+
+    <div class="plans-grid" x-show="!carregandoPlanos" style="margin-top:56px;">
+        <template x-for="plano in planos" :key="plano.id || plano.id_slug">
+            <div class="plan-card fade-in" :class="plano.popular?'popular':''" @click="abrirModal(plano)">
+                <div x-show="plano.popular" class="popular-badge"><i data-lucide="star" style="width:10px;height:10px;"></i> Mais popular</div>
+                <div class="plan-color-bar" :style="'background:'+plano.cor"></div>
+                <div class="plan-header">
+                    <h3 x-text="plano.nome"></h3>
+                    <p x-text="plano.descricao || plano.desc"></p>
+                </div>
+                <div class="plan-price">
+                    <div class="plan-price-row">
+                        <span class="plan-price-curr">R$</span>
+                        <span class="plan-price-num" :style="'color:'+plano.cor" x-text="plano.preco_mensal || plano.preco"></span>
+                        <span class="plan-price-period">/mês</span>
+                    </div>
+                    <p style="font-size:11px;color:var(--dimmed);margin-top:5px;">Renovação mensal, cancele quando quiser</p>
+                </div>
+                <hr class="plan-divider">
+                <div class="plan-features">
+                    <template x-for="f in plano.features" :key="f.text">
+                        <div class="feature-row" :class="f.on?'on':'off'">
+                            <div class="check-wrap" :class="f.on?'on':'off'">
+                                <svg x-show="f.on" width="10" height="10" viewBox="0 0 12 12"><path d="M2 6l3 3 5-5" :stroke="plano.cor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+                                <svg x-show="!f.on" width="8" height="8" viewBox="0 0 8 8"><line x1="2" y1="2" x2="6" y2="6" stroke="#4b5563" stroke-width="1.5" stroke-linecap="round"/><line x1="6" y1="2" x2="2" y2="6" stroke="#4b5563" stroke-width="1.5" stroke-linecap="round"/></svg>
+                            </div>
+                            <span x-text="f.text"></span>
+                        </div>
+                    </template>
+                </div>
+                <button class="btn-plan" :class="plano.popular?'primary':'outline'" @click.stop="abrirModal(plano)">
+                    <i data-lucide="arrow-right" style="width:16px;height:16px;"></i>
+                    <span x-text="modoRenovacao ? 'Renovar com '+plano.nome : 'Assinar '+plano.nome"></span>
+                </button>
+            </div>
+        </template>
+    </div>
+</section>
+
+<!-- ═══ COMPARISON TABLE ═══ -->
+<section class="compare-section section fade-in" x-show="!modoRenovacao" x-cloak>
+    <div style="text-align:center;margin-bottom:50px;">
+        <span class="section-label">Comparativo detalhado</span>
+        <h2 class="section-title">O que está incluso em <span class="grad">cada plano</span></h2>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:26px;overflow:hidden;">
+        <div style="overflow-x:auto;">
+            <table class="compare-table">
+                <thead>
+                    <tr style="background:rgba(255,255,255,.018);">
+                        <th style="width:40%;">Recurso</th>
+                        <template x-for="plano in planos" :key="plano.id_slug">
+                            <th>
+                                <div class="compare-plan-head" x-text="plano.nome"></div>
+                                <div style="font-size:11px;color:var(--indigo-light);font-family:'Syne',sans-serif;font-weight:700;margin-top:3px;" x-text="'R$ '+plano.preco_mensal+'/mês'"></div>
+                            </th>
+                        </template>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="recurso in comparativo" :key="recurso.nome">
+                        <tr>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:10px;">
+                                    <i :data-lucide="recurso.icon" style="width:14px;height:14px;color:var(--indigo-light);flex-shrink:0;"></i>
+                                    <span x-text="recurso.nome"></span>
+                                </div>
+                            </td>
+                            <template x-for="plano in planos" :key="plano.id_slug">
+                                <td>
+                                    <template x-if="recurso[plano.id_slug]===true"><div class="compare-check"><i data-lucide="check" style="width:16px;height:16px;color:#5b5ef4;"></i></div></template>
+                                    <template x-if="recurso[plano.id_slug]===false"><div class="compare-x"><i data-lucide="minus" style="width:16px;height:16px;"></i></div></template>
+                                    <template x-if="typeof recurso[plano.id_slug] === 'string'"><span style="font-size:12px;font-weight:600;color:#a5a8fb;" x-text="recurso[plano.id_slug]"></span></template>
+                                </td>
+                            </template>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ TESTIMONIALS ═══ -->
+<section class="testimonials-section section" x-show="!modoRenovacao" x-cloak>
+    <div class="testi-inner">
+        <div class="fade-in" style="margin-bottom:0;">
+            <span class="section-label">Depoimentos</span>
+            <h2 class="section-title">O que nossos clientes <span class="grad">estão dizendo</span></h2>
+        </div>
+        <div class="testi-grid">
+            <template x-for="(t, idx) in (siteContent.testimonials || defaultTestimonials)" :key="idx">
+                <div class="testi-card fade-in">
+                    <div class="testi-stars">
+                        <template x-for="s in 5" :key="s"><svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg></template>
+                    </div>
+                    <p class="testi-text" x-text="'\"' + t.text + '\"'"></p>
+                    <div class="testi-author">
+                        <div class="testi-avatar" x-text="t.name.charAt(0)"></div>
+                        <div>
+                            <p class="testi-name" x-text="t.name"></p>
+                            <p class="testi-role" x-text="t.role"></p>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ FAQ ═══ -->
+<section class="faq-section section fade-in" id="faq">
+    <div style="text-align:center;margin-bottom:50px;">
+        <span class="section-label">Dúvidas frequentes</span>
+        <h2 class="section-title">Perguntas e <span class="grad">respostas</span></h2>
+    </div>
+    <template x-for="(item, idx) in faqs" :key="idx">
+        <div class="faq-item">
+            <button class="faq-question" @click="item.open = !item.open">
+                <span x-text="item.q"></span>
+                <i data-lucide="plus" class="faq-icon" :class="item.open?'open':''"></i>
+            </button>
+            <div x-show="item.open" x-collapse class="faq-answer" x-text="item.a"></div>
+        </div>
+    </template>
+</section>
+
+<!-- ═══ CTA FINAL ═══ -->
+<section class="cta-section section fade-in" x-show="!modoRenovacao" x-cloak>
+    <div class="cta-box">
+        <div class="pill" style="margin-bottom:26px;"><i data-lucide="rocket" style="width:12px;height:12px;"></i> Ative em menos de 2 minutos</div>
+        <h2 x-html="siteContent.cta_title || 'Pronto para <span class=\'grad\'>automatizar seus resultados</span>?'"></h2>
+        <p x-text="siteContent.cta_desc || 'Junte-se a mais de 500 empresas que já usam o EvoCRM Pro para vender mais pelo WhatsApp.'"></p>
+        <button class="btn-primary" style="display:inline-flex;" onclick="document.getElementById('planos').scrollIntoView({behavior:'smooth'})">
+            <i data-lucide="arrow-up" style="width:18px;height:18px;"></i>
+            <span x-text="siteContent.cta_button || 'Escolher meu plano agora'"></span>
+        </button>
+    </div>
+</section>
+
+<!-- ═══ TRUST + FOOTER ═══ -->
+<div class="trust-row">
+    <div class="trust-item"><i data-lucide="lock" style="width:13px;height:13px;color:#5b5ef4;"></i> Dados criptografados</div>
+    <div class="trust-item"><i data-lucide="shield-check" style="width:13px;height:13px;color:#10b981;"></i> Pagamento 100% seguro</div>
+    <div class="trust-item"><i data-lucide="zap" style="width:13px;height:13px;color:#f59e0b;"></i> Ativação imediata</div>
+    <div class="trust-item"><i data-lucide="headphones" style="width:13px;height:13px;color:#7b7ff5;"></i> Suporte humano</div>
+</div>
+
+<footer class="footer">
+    <p>© 2025 EvoCRM Pro. Todos os direitos reservados.</p>
+    <div class="mp-badge">
+        <svg width="18" height="18" viewBox="0 0 32 32"><rect width="32" height="32" rx="8" fill="#009EE3"/><text x="50%" y="56%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="9" font-weight="bold" font-family="sans-serif">MP</text></svg>
+        Processado pelo Mercado Pago
+    </div>
+</footer>
+
+<!-- ═══ MODAL ═══ -->
+<div x-show="modalAberto" x-transition.opacity class="modal-overlay" x-cloak @click.self="fecharModal()">
+    <div class="modal-box" x-transition:enter="transition ease-out duration-300" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100">
+
+        <!-- FORM -->
+        <div x-show="step==='form'" style="padding:34px;">
+            <div class="modal-header">
+                <div>
+                    <p style="font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#5b5ef4;margin-bottom:5px;" x-text="modoRenovacao?'Renovar Assinatura':'Finalizar Assinatura'"></p>
+                    <h2 style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;letter-spacing:-.02em;" x-text="(modoRenovacao?'Renovar ':'Plano ') + (planoSelecionado?.nome||'')"></h2>
+                </div>
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                    <div style="text-align:right;">
+                        <p style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:#a5a8fb;" x-text="'R$ '+(planoSelecionado?.preco_mensal || planoSelecionado?.preco)"></p>
+                        <p style="font-size:11px;color:var(--dimmed);">/mês</p>
+                    </div>
+                    <button class="modal-close" @click="fecharModal()"><i data-lucide="x" style="width:16px;height:16px;"></i></button>
+                </div>
+            </div>
+
+            <div x-show="modoRenovacao" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);border-radius:12px;padding:11px 15px;margin-bottom:20px;display:flex;align-items:center;gap:9px;">
+                <i data-lucide="refresh-cw" style="width:14px;height:14px;color:#fbbf24;flex-shrink:0;"></i>
+                <span style="font-size:12.5px;color:#fbbf24;">Renovando plano para a instância: <strong x-text="form.instancia"></strong></span>
+            </div>
+
+            <hr style="border:none;border-top:1px solid var(--border);margin-bottom:24px;">
+
+            <div style="display:flex;flex-direction:column;gap:15px;margin-bottom:26px;">
+                <div>
+                    <label style="font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;"><i data-lucide="user" style="width:12px;height:12px;"></i> Nome completo</label>
+                    <input class="input-field" x-model="form.nome" type="text" placeholder="João da Silva">
+                </div>
+                <div>
+                    <label style="font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;"><i data-lucide="mail" style="width:12px;height:12px;"></i> E-mail</label>
+                    <input class="input-field" x-model="form.email" type="email" placeholder="joao@empresa.com">
+                </div>
+                <div>
+                    <label style="font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;"><i data-lucide="phone" style="width:12px;height:12px;"></i> WhatsApp (com DDD)</label>
+                    <input class="input-field" x-model="form.whatsapp" type="tel" placeholder="(85) 99999-9999" @input="maskPhone($event)">
+                </div>
+                <div>
+                    <label style="font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;"><i data-lucide="credit-card" style="width:12px;height:12px;"></i> CPF</label>
+                    <input class="input-field" x-model="form.cpf" type="text" placeholder="000.000.000-00" maxlength="14" @input="maskCpf($event)">
+                    <p style="font-size:11px;color:var(--dimmed);margin-top:5px;">Exigido pelo Mercado Pago para emissão do PIX.</p>
+                </div>
+                <div x-show="!modoRenovacao">
+                    <label style="font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;"><i data-lucide="server" style="width:12px;height:12px;"></i> Nome da instância</label>
+                    <input class="input-field" x-model="form.instancia" type="text" :disabled="modoRenovacao" placeholder="minha_empresa" @input="form.instancia=$event.target.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+                    <p style="font-size:11px;color:var(--dimmed);margin-top:5px;">Sem espaços ou caracteres especiais. Ex: <b style="color:#5b5ef4;">minha_empresa</b></p>
+                </div>
+            </div>
+
+            <p x-show="erroForm" x-text="erroForm" style="background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.18);border-radius:11px;padding:11px 15px;font-size:13px;color:#f87171;margin-bottom:16px;"></p>
+
+            <button class="btn-pix" style="width:100%;padding:17px;justify-content:center;" @click="gerarPix()" :disabled="loading">
+                <span x-show="!loading" style="display:flex;align-items:center;gap:9px;">
+                    <i data-lucide="qr-code" style="width:18px;height:18px;"></i>
+                    <span x-text="modoRenovacao?'Gerar PIX de Renovação →':'Gerar PIX via Mercado Pago →'"></span>
+                </span>
+                <span x-show="loading" style="display:flex;align-items:center;gap:9px;"><span class="spinner"></span> Gerando PIX...</span>
+            </button>
+            <p style="text-align:center;margin-top:14px;font-size:11px;color:var(--dimmed);">Ativação imediata após confirmação do pagamento.</p>
+        </div>
+
+        <!-- PIX -->
+        <div x-show="step==='pix'" style="padding:30px;">
+            <div style="text-align:center;margin-bottom:22px;">
+                <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.18);border-radius:999px;padding:5px 16px;margin-bottom:15px;">
+                    <span class="spinner" style="width:10px;height:10px;border-color:rgba(74,222,128,.3);border-top-color:#4ade80;"></span>
+                    <span style="font-size:11px;font-weight:700;color:#4ade80;letter-spacing:.08em;text-transform:uppercase;">Aguardando pagamento</span>
+                </div>
+                <h2 style="font-family:'Syne',sans-serif;font-size:21px;font-weight:800;margin-bottom:5px;letter-spacing:-.02em;">Pague com PIX</h2>
+                <p style="font-size:13.5px;color:var(--muted);">Ativação <b style="color:#4ade80;">imediata</b> após o pagamento.</p>
+            </div>
+            <div style="display:flex;justify-content:center;margin-bottom:18px;">
+                <div style="background:#fff;padding:11px;border-radius:18px;box-shadow:0 0 50px rgba(74,222,128,.14);">
+                    <img :src="pixQrCodeBase64 ? 'data:image/png;base64,'+pixQrCodeBase64 : 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='+encodeURIComponent(pixCopiaECola)" style="width:166px;height:166px;display:block;" alt="QR Code PIX">
+                </div>
+            </div>
+            <div style="text-align:center;margin-bottom:16px;">
+                <span style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#4ade80;" x-text="'R$ '+Number(valorPix).toFixed(2).replace('.',',')"></span>
+            </div>
+            <div style="margin-bottom:15px;">
+                <p style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;">PIX Copia e Cola</p>
+                <div style="display:flex;gap:9px;align-items:stretch;">
+                    <div style="flex:1;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:13px;padding:11px 13px;font-family:monospace;font-size:10px;color:#a5a8fb;word-break:break-all;line-height:1.5;max-height:66px;overflow:hidden;" x-text="pixCopiaECola"></div>
+                    <button @click="copiarPix()" :style="pixCopiado?'background:rgba(74,222,128,.14);border-color:rgba(74,222,128,.38)':'background:rgba(91,94,244,.11);border-color:rgba(91,94,244,.22)'" style="flex-shrink:0;width:46px;border:1px solid;border-radius:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;">
+                        <i x-show="!pixCopiado" data-lucide="copy" style="width:16px;height:16px;color:#a5a8fb;"></i>
+                        <i x-show="pixCopiado" data-lucide="check" style="width:16px;height:16px;color:#4ade80;"></i>
+                    </button>
+                </div>
+                <p x-show="pixCopiado" style="font-size:11px;color:#4ade80;font-weight:600;margin-top:5px;text-align:center;">✓ Código copiado!</p>
+            </div>
+            <div style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:13px;padding:11px 15px;display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;">
+                <div style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);"><i data-lucide="clock" style="width:14px;height:14px;"></i> Expira em</div>
+                <span style="font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:#fbbf24;" x-text="contadorPix"></span>
+            </div>
+            <div x-show="mpPaymentId" style="background:rgba(91,94,244,.04);border:1px solid rgba(91,94,244,.13);border-radius:11px;padding:9px 13px;margin-bottom:15px;display:flex;align-items:center;gap:8px;">
+                <i data-lucide="info" style="width:14px;height:14px;color:#a5a8fb;"></i>
+                <span style="font-size:11px;color:#a5a8fb;">Pagamento MP: <span style="font-family:monospace;" x-text="mpPaymentId"></span></span>
+            </div>
+            <button @click="fecharModal()" style="width:100%;background:transparent;border:1px solid rgba(255,255,255,.07);color:var(--muted);padding:12px;border-radius:13px;cursor:pointer;font-size:13.5px;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .2s;">
+                <i data-lucide="x" style="width:14px;height:14px;"></i> Cancelar
+            </button>
+        </div>
+
+        <!-- SUCESSO -->
+        <div x-show="step==='sucesso'" x-effect="if(step==='sucesso') aoSucesso()" style="padding:52px 34px;text-align:center;">
+            <div style="position:relative;width:84px;height:84px;margin:0 auto 26px;">
+                <div class="success-ring" style="position:absolute;inset:0;border-radius:50%;border:3px solid rgba(91,94,244,.4);"></div>
+                <div style="width:84px;height:84px;background:linear-gradient(135deg,#4338ca,#5b5ef4);border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;box-shadow:0 0 50px rgba(91,94,244,.45);">
+                    <i data-lucide="check" style="width:38px;height:38px;color:#fff;"></i>
+                </div>
+            </div>
+            <h2 style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;margin-bottom:9px;letter-spacing:-.02em;" x-text="modoRenovacao?'Plano Renovado!':'Pagamento Confirmado!'"></h2>
+            <p style="font-size:14.5px;color:var(--muted);margin-bottom:9px;line-height:1.65;" x-text="modoRenovacao?'Sua assinatura foi renovada com sucesso!':'Seu plano foi ativado com sucesso!'"></p>
+            <p style="font-size:13.5px;color:#4ade80;margin-bottom:26px;font-weight:600;" x-text="modoRenovacao?'Redirecionando para o CRM...':'Redirecionando para conectar o WhatsApp...'"></p>
+            <div style="width:100%;background:rgba(255,255,255,.06);border-radius:999px;height:4px;overflow:hidden;margin-bottom:22px;">
+                <div style="height:4px;background:linear-gradient(90deg,#4338ca,#5b5ef4);border-radius:999px;animation:progress-bar 3s linear forwards;"></div>
+            </div>
+            <button class="btn-primary" style="padding:16px 38px;font-size:15px;" @click="irParaConectar()">
+                <span x-text="modoRenovacao?'Voltar ao CRM →':'Conectar agora →'"></span>
+            </button>
+            <p x-show="!modoRenovacao" style="font-size:11px;color:var(--dimmed);margin-top:14px;" x-text="'Instância: '+form.instancia"></p>
+        </div>
+
+        <!-- ERRO -->
+        <div x-show="step==='erro'" style="padding:44px 34px;text-align:center;">
+            <div style="width:68px;height:68px;background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.18);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 22px;">
+                <i data-lucide="x-circle" style="width:34px;height:34px;color:#f87171;"></i>
+            </div>
+            <h2 style="font-family:'Syne',sans-serif;font-size:23px;font-weight:800;margin-bottom:9px;">Ocorreu um Erro</h2>
+            <p style="font-size:14px;color:var(--muted);margin-bottom:26px;line-height:1.65;" x-text="erroMsg"></p>
+            <button class="btn-primary" style="padding:14px 34px;" @click="step='form'">Tentar Novamente</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Scroll animations
+const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+
+// Navbar scroll effect
+window.addEventListener('scroll', () => {
+    const nav = document.getElementById('navbar');
+    if(nav) nav.classList.toggle('scrolled', window.scrollY > 60);
+});
+
+// ── DbQueryBuilder: proxy de banco via /api/db (mesmo padrão do app.js) ─────
+// Emula supabase-js: .from('table').select().eq().single() etc.
+function makeDbClient() {
+    function from(table) { return new DbQueryBuilder(table); }
+    return { from };
+}
+
+class DbQueryBuilder {
+    constructor(table) {
+        this._table = table;
+        this._op = 'select';
+        this._select = '*';
+        this._filters = [];
+        this._order = null;
+        this._limit = null;
+        this._single = false;
+        this._data = null;
+        this._upsertConflict = null;
+    }
+    select(cols='*'){ this._select=cols; return this; }
+    eq(col,val){ this._filters.push({op:'eq',col,val}); return this; }
+    neq(col,val){ this._filters.push({op:'neq',col,val}); return this; }
+    in(col,val){ this._filters.push({op:'in',col,val}); return this; }
+    order(col,opts={}){ this._order={col,ascending:opts.ascending??true}; return this; }
+    limit(n){ this._limit=n; return this; }
+    single(){ this._single=true; return this; }
+    insert(data){ this._op='insert'; this._data=data; return this; }
+    update(data){ this._op='update'; this._data=data; return this; }
+    delete(){ this._op='delete'; return this; }
+    upsert(data,opts={}){ this._op='upsert'; this._data=data; this._upsertConflict=opts.onConflict||null; return this; }
+    async _execute(){
+        const res = await fetch('/api/db',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+                table:this._table, op:this._op, select:this._select,
+                filters:this._filters, data:this._data,
+                order:this._order, limit:this._limit,
+                single:this._single, upsertConflict:this._upsertConflict
+            })
+        });
+        return res.json();
+    }
+    then(resolve,reject){ return this._execute().then(resolve,reject); }
+    catch(reject){ return this._execute().catch(reject); }
+}
+
+
+function checkoutApp() {
+    return {
+        // ── CONFIG ──
+        MP_ACCESS_TOKEN: 'APP_USR-551634858809999-031000-b35ffaf8d2252b304ece7d763c723ec4-569868834',
+        MP_PUBLIC_KEY:   'APP_USR-83d49086-a9b8-425a-a3ce-b4b2afbc0ff7',
+        CONECTAR_URL: 'conectar.html',
+        DIAS_MENSAL: 30,
+        DIAS_ANUAL: 365,
+
+        // ── STATE ──
+        client: null,
+        billing: 'mensal',
+        planos: [],
+        carregandoPlanos: true,
+        modalAberto: false,
+        planoSelecionado: null,
+        step: 'form',
+        loading: false,
+        erroForm: '',
+        erroMsg: '',
+        form: { nome: '', email: '', whatsapp: '', cpf: '', instancia: '' },
+        pixQrCodeBase64: '',
+        pixCopiaECola: '',
+        valorPix: 0,
+        mpPaymentId: '',
+        pixCopiado: false,
+        contadorPix: '30:00',
+        pollTimer: null,
+        contadorTimer: null,
+        modoRenovacao: false,
+        comparativo: [],
+
+        // ── SITE CONTENT (carregado do Supabase via painel Evolution) ──
+        siteContent: {},
+
+        // ── DEFAULT TESTIMONIALS ──
+        defaultTestimonials: [
+            { name: 'Carlos Mendonça', role: 'Dono de Imobiliária', text: 'Triplicamos o número de leads qualificados no primeiro mês. A IA responde clientes às 3h da manhã, é impressionante.' },
+            { name: 'Fernanda Lima', role: 'Gestora de E-commerce', text: 'O funil Kanban mudou completamente como a minha equipe trabalha. Cada atendente sabe exatamente onde está cada cliente.' },
+            { name: 'Roberto Assunção', role: 'Dentista e Empreendedor', text: 'Implementei em menos de 5 minutos. Nunca mais perdi um paciente por falta de resposta rápida no WhatsApp.' },
+        ],
+
+        // ── FAQ ──
+        faqs: [
+            { q: 'Quanto tempo leva para ativar após o pagamento?', a: 'A ativação é imediata! Assim que o PIX for confirmado (geralmente em poucos segundos), você receberá acesso ao sistema e poderá conectar seu WhatsApp em menos de 1 minuto.', open: false },
+            { q: 'O que é a "instância" do WhatsApp?', a: 'É o nome único que identifica seu número WhatsApp dentro do sistema. Pense como um apelido para a sua conta — ex: minha_loja ou vendas_joao. Cada instância representa um número de WhatsApp conectado.', open: false },
+            { q: 'Preciso instalar algum programa?', a: 'Não! O EvoCRM Pro funciona 100% na nuvem, direto do navegador. Sem downloads, sem configurações complexas. Acesse de qualquer dispositivo.', open: false },
+            { q: 'Como funciona a IA 24/7?', a: 'A IA é treinada com informações do seu negócio e responde clientes automaticamente, qualifica leads, cria tarefas e move contatos no funil — tudo sem intervenção humana. Disponível nos planos Premium e Platinum.', open: false },
+            { q: 'Posso mudar de plano depois?', a: 'Sim. Você pode fazer upgrade ou downgrade a qualquer momento. Entre em contato com nosso suporte via WhatsApp e realizamos a troca rapidamente.', open: false },
+        ],
+
+        // ── HELPERS PARA EMBED DE VÍDEOS ──
+        getEmbedUrl(url) {
+            if (!url) return '';
+            // youtu.be/XXXX
+            const shortMatch = url.match(/youtu\.be\/([^?&]+)/);
+            if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}?rel=0&modestbranding=1`;
+            // youtube.com/watch?v=XXXX
+            const longMatch = url.match(/[?&]v=([^&]+)/);
+            if (longMatch) return `https://www.youtube.com/embed/${longMatch[1]}?rel=0&modestbranding=1`;
+            return url;
+        },
+
+        getVimeoEmbed(url) {
+            if (!url) return '';
+            const match = url.match(/vimeo\.com\/(\d+)/);
+            if (match) return `https://player.vimeo.com/video/${match[1]}?title=0&byline=0`;
+            return url;
+        },
+
+        // ── INIT ──
+        async init() {
+            // Usa o DbQueryBuilder local — sem Supabase
+            this.client = makeDbClient();
+
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('renovar') === 'true') {
+                this.modoRenovacao = true;
+                this.form.instancia = decodeURIComponent(params.get('instancia') || '');
+            }
+
+            // Carrega config do Supabase
+            try {
+                const { data: rows } = await this.client.from('admin_config')
+                    .select('key,value')
+                    .in('key', ['mp_access_token','mp_public_key','conectar_url']);
+                rows?.forEach(r => {
+                    if (r.key === 'mp_access_token' && r.value) this.MP_ACCESS_TOKEN = r.value;
+                    if (r.key === 'mp_public_key'   && r.value) this.MP_PUBLIC_KEY   = r.value;
+                    if (r.key === 'conectar_url'    && r.value) this.CONECTAR_URL    = r.value;
+                });
+            } catch(e) {}
+
+            // Carrega conteúdo do site (gerenciado pelo painel Evolution)
+            await this.carregarConteudoSite();
+
+            await this.carregarPlanos();
+            setTimeout(() => {
+                lucide.createIcons();
+                // Iniciar observer para fade-in
+                document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+            }, 80);
+
+            if (this.modoRenovacao) {
+                const planoParam = params.get('plano');
+                setTimeout(() => {
+                    const plano = planoParam
+                        ? this.planos.find(p => (p.id_slug||'').toLowerCase() === planoParam.toLowerCase() || p.nome.toLowerCase().includes(planoParam.toLowerCase()))
+                        : this.planos[0];
+                    if (plano) this.abrirModal(plano);
+                }, 600);
+            }
+        },
+
+        // ── CARREGAR CONTEÚDO DO SITE ──
+        async carregarConteudoSite() {
+            try {
+                const { data } = await this.client.from('admin_config').select('key,value').eq('key', 'site_content').single();
+                if (data?.value) {
+                    this.siteContent = JSON.parse(data.value);
+                }
+            } catch(e) {
+                this.siteContent = {};
+            }
+        },
+
+        // ── CARREGAR PLANOS ──
+        async carregarPlanos() {
+            this.carregandoPlanos = true;
+            try {
+                const { data, error } = await this.client.from('planos').select('*').order('ordem', { ascending: true });
+                if (!error && data?.length > 0) {
+                    this.planos = data;
+                    this.buildComparativo();
+                    this.carregandoPlanos = false;
+                    return;
+                }
+            } catch(e) {}
+
+            this.planos = [
+                {
+                    id_slug: 'basico', nome: 'Básico', descricao: 'CRM apenas',
+                    preco_mensal: 67, preco: 67, cor: '#94a3b8', popular: false,
+                    features: [
+                        { text: 'CRM de conversas WhatsApp', on: true },
+                        { text: 'Funil Kanban de leads', on: true },
+                        { text: '1 número WhatsApp', on: true },
+                        { text: 'Histórico de mensagens', on: true },
+                        { text: 'Departamentos / Setores', on: false },
+                        { text: 'Automação (Bot)', on: false },
+                        { text: 'Disparo em Massa', on: false },
+                        { text: 'Agenda', on: false },
+                        { text: 'IA de Atendimento 24/7', on: false },
+                        { text: 'Áudio IA (TTS)', on: false },
+                    ]
+                },
+                {
+                    id_slug: 'premium', nome: 'Premium', descricao: '+ Automação',
+                    preco_mensal: 97, preco: 97, cor: '#7b7ff5', popular: true,
+                    features: [
+                        { text: 'CRM de conversas WhatsApp', on: true },
+                        { text: 'Funil Kanban de leads', on: true },
+                        { text: '3 números WhatsApp', on: true },
+                        { text: 'Departamentos / Setores', on: true },
+                        { text: 'Automação (Bot)', on: true },
+                        { text: 'Disparo em Massa', on: true },
+                        { text: 'Agenda', on: true },
+                        { text: 'IA de Atendimento 24/7', on: false },
+                        { text: 'Áudio IA (TTS)', on: false },
+                    ]
+                },
+                {
+                    id_slug: 'platinum', nome: 'Platinum', descricao: 'Tudo liberado',
+                    preco_mensal: 197, preco: 197, cor: '#c4b5fd', popular: false,
+                    features: [
+                        { text: 'CRM de conversas WhatsApp', on: true },
+                        { text: 'Funil Kanban de leads', on: true },
+                        { text: 'Números ilimitados', on: true },
+                        { text: 'Departamentos / Setores', on: true },
+                        { text: 'Automação (Bot)', on: true },
+                        { text: 'Disparo em Massa', on: true },
+                        { text: 'Agenda', on: true },
+                        { text: 'IA de Atendimento 24/7', on: true },
+                        { text: 'Áudio IA (TTS)', on: true },
+                    ]
+                },
+            ];
+            this.buildComparativo();
+            this.carregandoPlanos = false;
+        },
+
+        buildComparativo() {
+            const recursos = [
+                { nome: 'CRM de conversas WhatsApp', icon: 'message-circle', basico: true, premium: true, platinum: true },
+                { nome: 'Funil Kanban de leads', icon: 'kanban', basico: true, premium: true, platinum: true },
+                { nome: 'Números de WhatsApp', icon: 'smartphone', basico: '1 número', premium: '3 números', platinum: 'Ilimitados' },
+                { nome: 'Departamentos / Setores', icon: 'layers', basico: false, premium: true, platinum: true },
+                { nome: 'Automação (Bot)', icon: 'zap', basico: false, premium: true, platinum: true },
+                { nome: 'Disparo em Massa', icon: 'send', basico: false, premium: true, platinum: true },
+                { nome: 'Agenda integrada', icon: 'calendar', basico: false, premium: true, platinum: true },
+                { nome: 'IA de Atendimento 24/7', icon: 'bot', basico: false, premium: false, platinum: true },
+                { nome: 'Áudio IA (Text-to-Speech)', icon: 'mic', basico: false, premium: false, platinum: true },
+                { nome: 'API & Webhooks', icon: 'webhook', basico: false, premium: false, platinum: true },
+                { nome: 'Suporte prioritário', icon: 'headphones', basico: false, premium: true, platinum: true },
+            ];
+            this.comparativo = recursos;
+        },
+
+        abrirModal(plano) {
+            this.planoSelecionado = plano;
+            this.step = 'form';
+            this.erroForm = '';
+            this.modalAberto = true;
+            setTimeout(() => lucide.createIcons(), 50);
+        },
+
+        fecharModal() {
+            this.modalAberto = false;
+            clearTimeout(this.pollTimer);
+            clearInterval(this.contadorTimer);
+        },
+
+        async gerarPix() {
+            const { nome, email, whatsapp, cpf, instancia } = this.form;
+            if (!nome.trim()) return this.erroForm = 'Informe seu nome completo.';
+            if (!email.includes('@')) return this.erroForm = 'Informe um e-mail válido.';
+            if (whatsapp.replace(/\D/g,'').length < 10) return this.erroForm = 'Informe seu WhatsApp com DDD.';
+            if (cpf.replace(/\D/g,'').length !== 11) return this.erroForm = 'CPF inválido. Informe os 11 dígitos.';
+            if (!this.modoRenovacao && (!instancia || instancia.length < 3)) return this.erroForm = 'Nome de instância deve ter ao menos 3 caracteres.';
+
+            this.loading = true; this.erroForm = '';
+            const plano = this.planoSelecionado;
+            const valor = Number(plano.preco_mensal || plano.preco);
+            this.valorPix = valor;
+
+            try {
+                const licKey = 'LIC-' + Math.random().toString(36).substr(2,9).toUpperCase();
+                const { data: pedido, error: dbErr } = await this.client.from('pagamentos').insert({
+                    nome, email,
+                    whatsapp: whatsapp.replace(/\D/g,''),
+                    cpf: cpf.replace(/\D/g,''),
+                    instancia,
+                    instance_name: instancia,
+                    plano: plano.id_slug || plano.nome,
+                    billing: 'mensal',
+                    valor,
+                    status: 'pending',
+                    license_key: licKey,
+                    is_renewal: this.modoRenovacao ? 1 : 0,
+                }).select().single();
+                if (dbErr) throw dbErr;
+
+                const mpResp = await fetch('https://api.mercadopago.com/v1/payments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.MP_ACCESS_TOKEN}`,
+                        'X-Idempotency-Key': pedido.id,
+                    },
+                    body: JSON.stringify({
+                        transaction_amount: valor,
+                        description: `EvoCRM Pro - Plano ${plano.nome}`,
+                        payment_method_id: 'pix',
+                        payer: {
+                            email,
+                            first_name: nome.split(' ')[0],
+                            last_name: nome.split(' ').slice(1).join(' ') || 'Cliente',
+                            identification: { type: 'CPF', number: cpf.replace(/\D/g,'') },
+                        },
+                        external_reference: pedido.id,
+                        date_of_expiration: new Date(Date.now() + 30*60*1000).toISOString(),
+                    }),
+                });
+                const mpData = await mpResp.json();
+                if (!mpResp.ok) throw new Error(mpData.message || 'Erro ao gerar PIX');
+
+                const pix = mpData.point_of_interaction?.transaction_data;
+                this.pixCopiaECola = pix?.qr_code || '';
+                this.pixQrCodeBase64 = pix?.qr_code_base64 || '';
+                this.mpPaymentId = mpData.id;
+
+                await this.client.from('pagamentos').update({ mp_payment_id: String(mpData.id) }).eq('id', pedido.id);
+
+                this.step = 'pix';
+                this.iniciarContador(1800);
+                this.aguardarPagamento(pedido.id, instancia);
+                setTimeout(() => lucide.createIcons(), 50);
+            } catch(e) {
+                this.erroMsg = e.message || 'Erro desconhecido'; this.step = 'erro';
+            }
+            this.loading = false;
+        },
+
+        async aguardarPagamento(pedidoId, instancia) {
+            const check = async () => {
+                try {
+                    if (this.mpPaymentId) {
+                        const r = await fetch(`https://api.mercadopago.com/v1/payments/${this.mpPaymentId}`, {
+                            headers: { 'Authorization': `Bearer ${this.MP_ACCESS_TOKEN}` }
+                        });
+                        const d = await r.json();
+                        if (d.status === 'approved') {
+                            await this.client.from('pagamentos').update({ status: 'approved' }).eq('id', pedidoId);
+                            clearTimeout(this.pollTimer); clearInterval(this.contadorTimer);
+                            await this.ativarLicenca(pedidoId, instancia);
+                            this.step = 'sucesso'; return;
+                        }
+                    }
+                    const { data } = await this.client.from('pagamentos').select('status').eq('id', pedidoId).single();
+                    if (data?.status === 'approved') {
+                        clearTimeout(this.pollTimer); clearInterval(this.contadorTimer);
+                        await this.ativarLicenca(pedidoId, instancia);
+                        this.step = 'sucesso';
+                    } else if (data?.status === 'cancelled' || data?.status === 'rejected') {
+                        clearTimeout(this.pollTimer);
+                        this.erroMsg = 'PIX expirado ou cancelado.'; this.step = 'erro';
+                    } else {
+                        this.pollTimer = setTimeout(check, 5000);
+                    }
+                } catch(e) { this.pollTimer = setTimeout(check, 6000); }
+            };
+            this.pollTimer = setTimeout(check, 5000);
+        },
+
+        iniciarContador(segundos) {
+            clearInterval(this.contadorTimer);
+            let restante = segundos;
+            const tick = () => {
+                const m = String(Math.floor(restante / 60)).padStart(2, '0');
+                const s = String(restante % 60).padStart(2, '0');
+                this.contadorPix = `${m}:${s}`;
+                if (restante <= 0) {
+                    clearInterval(this.contadorTimer);
+                    if (this.step === 'pix') { clearTimeout(this.pollTimer); this.erroMsg = 'PIX expirado. Gere um novo.'; this.step = 'erro'; }
+                }
+                restante--;
+            };
+            tick();
+            this.contadorTimer = setInterval(tick, 1000);
+        },
+
+        async copiarPix() {
+            try { await navigator.clipboard.writeText(this.pixCopiaECola); } catch(e) {
+                const el = document.createElement('textarea');
+                el.value = this.pixCopiaECola; document.body.appendChild(el);
+                el.select(); document.execCommand('copy'); document.body.removeChild(el);
+            }
+            this.pixCopiado = true;
+            setTimeout(() => lucide.createIcons(), 50);
+            setTimeout(() => this.pixCopiado = false, 3000);
+        },
+
+        async ativarLicenca(pedidoId, instancia) {
+            try {
+                const { data: pag } = await this.client.from('pagamentos').select('*').eq('id', pedidoId).single();
+                if (!pag) return;
+
+                const expires = new Date();
+                expires.setDate(expires.getDate() + this.DIAS_MENSAL);
+                const expiresIso = expires.toISOString();
+                const licKey = pag.license_key || ('LIC-' + Math.random().toString(36).substr(2,9).toUpperCase());
+
+                if (this.modoRenovacao) {
+                    // ── RENOVAÇÃO: usa endpoint do servidor ──────────────────
+                    await fetch('/api/renovar-licenca', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ instancia, pedido_id: pedidoId })
+                    });
+                } else {
+                    // ── NOVA ASSINATURA: cria licença + instância via servidor ─
+                    // 1. Criar licença no SQLite via /api/admin/criar-licenca
+                    await fetch('/api/admin/criar-licenca', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            instance_name: instancia,
+                            license_key: licKey,
+                            plano: pag.plano || 'basico',
+                            admin_secret: 'evocrm-admin-2024'
+                        })
+                    });
+
+                    // 2. Criar instância na Evolution + configurar webhook
+                    await fetch('/api/criar-instancia', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ instancia, pedido_id: pedidoId })
+                    }).catch(() => {}); // não bloqueia se falhar
+
+                    // 3. Marcar pagamento como processado
+                    await this.client.from('pagamentos')
+                        .update({ expires_at: expiresIso, instancia_criada: 1 })
+                        .eq('id', pedidoId);
+                }
+            } catch(e) {
+                console.error('Erro ao ativar licença:', e);
+            }
+        },
+
+        irParaConectar() {
+            if (this.modoRenovacao) window.location.href = 'index.html';
+            else window.location.href = this.CONECTAR_URL + '?i=' + this.form.instancia;
+        },
+
+        aoSucesso() { setTimeout(() => this.irParaConectar(), 3000); },
+
+        maskPhone(e) {
+            let v = e.target.value.replace(/\D/g, '');
+            if (v.length <= 2) v = v.replace(/^(\d{0,2})/, '($1');
+            else if (v.length <= 7) v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+            else v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+            this.form.whatsapp = v;
+        },
+
+        maskCpf(e) {
+            let v = e.target.value.replace(/\D/g, '');
+            v = v.replace(/^(\d{3})(\d)/, '$1.$2');
+            v = v.replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3');
+            v = v.replace(/\.(\d{3})(\d)/, '.$1-$2');
+            this.form.cpf = v.substring(0, 14);
+        },
+    };
+}
+</script>
+</body>
+</html>

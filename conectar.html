@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-br" x-data="qrApp()">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>EvoCRM Pro | Conectar WhatsApp</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: { extend: { colors: { brand: { 500:'#6366f1',600:'#4f46e5',700:'#4338ca',100:'#e0e7ff' } } } }
+        }
+    </script>
+    <style>
+        [x-cloak]{display:none!important}
+        body{background-color:#f1f4f9}
+        .scan-line{width:100%;height:4px;background:rgba(99,102,241,.8);position:absolute;top:0;left:0;box-shadow:0 0 15px rgba(99,102,241,.5);animation:scan 2.5s infinite linear}
+        @keyframes scan{0%{top:0%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4 antialiased text-slate-800 selection:bg-brand-500 selection:text-white">
+
+<div class="bg-white w-full max-w-md rounded-3xl shadow-xl border border-gray-100 p-8 text-center relative overflow-hidden">
+    <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-700 to-brand-500"></div>
+    <div class="w-20 h-20 bg-indigo-50 text-brand-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-indigo-100">
+        <i data-lucide="smartphone" class="w-10 h-10"></i>
+    </div>
+
+    <!-- INIT -->
+    <div x-show="status==='init'" x-transition x-cloak>
+        <h2 class="font-black text-2xl mb-2 text-slate-900">Conexão Segura</h2>
+        <p class="text-sm text-slate-500 mb-6 font-medium">Digite o ID da sua empresa para gerar o QR Code.</p>
+        <input type="text" x-model="inputName" @keydown.enter="startConnection()" placeholder="Ex: empresa_do_joao"
+               class="w-full bg-slate-50 border border-gray-200 rounded-xl py-4 px-5 text-center font-bold text-slate-900 outline-none focus:ring-2 focus:ring-brand-500 transition-all mb-4">
+        <button @click="startConnection()" class="w-full bg-brand-600 hover:bg-brand-500 text-white font-black py-4 rounded-xl shadow-lg shadow-brand-500/30 active:scale-95 transition-all text-sm">
+            Gerar QR Code <i data-lucide="arrow-right" class="w-4 h-4 inline ml-1 -mt-0.5"></i>
+        </button>
+    </div>
+
+    <!-- LOADING -->
+    <div x-show="status==='loading'" x-transition x-cloak class="py-4">
+        <h2 class="font-black text-xl mb-1 text-slate-900" x-text="loadingTitle"></h2>
+        <p class="text-xs text-slate-500 mb-8 font-medium" x-text="loadingMsg"></p>
+        <div class="w-16 h-16 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+    </div>
+
+    <!-- QRCODE -->
+    <div x-show="status==='qrcode'" x-transition x-cloak>
+        <h2 class="font-black text-2xl mb-1 text-slate-900">Escaneie o Código</h2>
+        <p class="text-xs text-slate-500 mb-6 font-medium">Abra o WhatsApp → <b>Aparelhos Conectados</b> → aponte a câmera.</p>
+        <div class="relative inline-block bg-white p-3 rounded-2xl shadow-md border-2 border-gray-100">
+            <img :src="qrBase64" class="w-56 h-56 object-contain relative z-10" alt="QR Code WhatsApp">
+            <div class="scan-line z-20"></div>
+        </div>
+        <p class="text-[10px] uppercase font-black tracking-widest text-brand-600 mt-6 flex items-center justify-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span> Aguardando Leitura...
+        </p>
+    </div>
+
+    <!-- CONNECTED -->
+    <div x-show="status==='connected'" x-transition x-cloak class="py-4">
+        <div class="w-24 h-24 bg-brand-500 text-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-brand-500/40 relative">
+            <div class="absolute inset-0 rounded-full border-4 border-brand-400 animate-ping opacity-50"></div>
+            <i data-lucide="check" class="w-12 h-12 relative z-10"></i>
+        </div>
+        <h2 class="font-black text-3xl mb-2 text-slate-900 tracking-tight">Tudo Pronto!</h2>
+        <p class="text-sm text-slate-500 font-medium">WhatsApp conectado com sucesso. O sistema já está operando.</p>
+        <p class="text-xs font-bold text-slate-400 mt-6 bg-slate-50 py-2 rounded-lg">Pode fechar esta página com segurança.</p>
+    </div>
+
+    <!-- ERROR -->
+    <div x-show="status==='error'" x-transition x-cloak class="py-4">
+        <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="alert-triangle" class="w-8 h-8"></i>
+        </div>
+        <h2 class="font-black text-xl mb-2 text-slate-900">Falha na Conexão</h2>
+        <p class="text-sm text-slate-500 mb-6 font-medium" x-text="errorMsg"></p>
+        <button @click="reset()" class="bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-xl transition-colors text-sm">Tentar Novamente</button>
+    </div>
+
+    <div class="mt-8 pt-4 border-t border-gray-100 flex items-center justify-center gap-2 text-slate-400">
+        <i data-lucide="lock" class="w-3 h-3"></i>
+        <span class="text-[10px] font-bold uppercase tracking-widest">Conexão Segura via Servidor</span>
+    </div>
+</div>
+
+<script>
+// ── Proxy seguro: todas as chamadas à Evolution passam pelo servidor ──────────
+// Elimina CORS e mantém as credenciais só no backend
+async function evoProxy(path, method = 'GET', body = null) {
+    const res = await fetch('/api/evo-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, method, ...(body ? { body } : {}) })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+    return data;
+}
+
+function qrApp() {
+    return {
+        instanceName: new URLSearchParams(window.location.search).get('i') || '',
+        inputName: '',
+        status: 'init',       // init | loading | qrcode | connected | error
+        qrBase64: '',
+        errorMsg: '',
+        loadingTitle: 'Buscando QR Code',
+        loadingMsg: 'Conectando aos servidores seguros...',
+        timer: null,
+        _pollCount: 0,
+        _instanceCreated: false,
+
+        init() {
+            setTimeout(() => lucide.createIcons(), 50);
+            if (this.instanceName) this.fetchQr();
+        },
+
+        startConnection() {
+            const raw = this.inputName.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+            if (!raw || raw.length < 2) {
+                alert('Nome inválido. Use letras minúsculas, números e underline (mín. 2 caracteres).');
+                return;
+            }
+            this.instanceName = raw;
+            window.history.pushState({}, '', '?i=' + this.instanceName);
+            this.fetchQr();
+        },
+
+        reset() {
+            clearTimeout(this.timer);
+            this._pollCount = 0;
+            this._instanceCreated = false;
+            this.status = 'init';
+            this.inputName = this.instanceName;
+            this.errorMsg = '';
+        },
+
+        async fetchQr() {
+            if (!this.instanceName) return;
+
+            // Só mostra loading girando na primeira chamada
+            if (this.status !== 'qrcode') {
+                this.status = 'loading';
+                this.loadingTitle = 'Buscando QR Code';
+                this.loadingMsg = 'Conectando aos servidores seguros...';
+            }
+
+            this._pollCount++;
+
+            try {
+                // ── PASSO 1: Verificar estado atual da instância ──────────────
+                let stateData = {};
+                try {
+                    stateData = await evoProxy(`/instance/connectionState/${this.instanceName}`);
+                } catch (e) {
+                    // Instância ainda não existe — normal na primeira vez
+                }
+
+                const state = stateData?.instance?.state || stateData?.state || '';
+
+                if (state === 'open') {
+                    this.status = 'connected';
+                    clearTimeout(this.timer);
+                    new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3').play().catch(() => {});
+                    setTimeout(() => lucide.createIcons(), 50);
+                    return;
+                }
+
+                // ── PASSO 2: Criar instância se ainda não existe ──────────────
+                if (!this._instanceCreated && !state) {
+                    this.loadingTitle = 'Preparando instância';
+                    this.loadingMsg = 'Criando sua instância na Evolution API...';
+
+                    try {
+                        await evoProxy('/instance/create', 'POST', {
+                            instanceName: this.instanceName,
+                            qrcode: true,
+                            integration: 'WHATSAPP-BAILEYS',
+                            rejectCall: false,
+                            groupsIgnore: false,
+                            alwaysOnline: false,
+                            readMessages: false,
+                            readStatus: false,
+                            syncFullHistory: false,
+                        });
+                    } catch (createErr) {
+                        // "already exists" é OK — continua
+                        const msg = createErr.message.toLowerCase();
+                        if (!msg.includes('already') && !msg.includes('existe') && !msg.includes('exists')) {
+                            console.warn('[conectar] create:', createErr.message);
+                        }
+                    }
+
+                    // ── Configura webhook automaticamente ──────────────────────
+                    try {
+                        await evoProxy(`/webhook/set/${this.instanceName}`, 'POST', {
+                            url: `${window.location.origin}/webhook/${this.instanceName}`,
+                            webhook_by_events: false,
+                            webhook_base64: false,
+                            events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE', 'CONNECTION_UPDATE']
+                        });
+                    } catch (e) {
+                        console.warn('[conectar] webhook:', e.message);
+                    }
+
+                    this._instanceCreated = true;
+                    // Aguarda a Evolution inicializar
+                    await new Promise(r => setTimeout(r, 1800));
+                }
+
+                // ── PASSO 3: Buscar QR Code ───────────────────────────────────
+                this.loadingMsg = 'Aguardando QR Code...';
+                let qrData = {};
+                try {
+                    qrData = await evoProxy(`/instance/connect/${this.instanceName}`);
+                } catch (e) {
+                    // Pode falhar enquanto a instância carrega — tentará de novo
+                    this.timer = setTimeout(() => this.fetchQr(), 3000);
+                    return;
+                }
+
+                if (qrData?.base64) {
+                    this.qrBase64 = qrData.base64;
+                    this.status = 'qrcode';
+                    // Polling a cada 4s para detectar quando o cliente leu
+                    this.timer = setTimeout(() => this.fetchQr(), 4000);
+
+                } else if (qrData?.instance?.state === 'open' || qrData?.state === 'open') {
+                    this.status = 'connected';
+                    clearTimeout(this.timer);
+                    new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3').play().catch(() => {});
+
+                } else {
+                    // Instância iniciando — aguarda
+                    this.timer = setTimeout(() => this.fetchQr(), 3000);
+                }
+
+            } catch (e) {
+                this.status = 'error';
+                this.errorMsg = e.message || 'Erro desconhecido. Tente novamente.';
+            }
+
+            setTimeout(() => lucide.createIcons(), 50);
+        }
+    };
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EvoCRM · Storage</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#07090d;--s1:#0d1018;--s2:#121620;--s3:#181d28;
+  --border:#1c2230;--border2:#242d3e;
+  --text:#e4eaf5;--muted:#3d4d66;--muted2:#5a6f8a;
+  --accent:#6366f1;--accent2:#818cf8;
+  --green:#10b981;--red:#ef4444;--yellow:#f59e0b;
+  --blue:#38bdf8;--purple:#a855f7;--orange:#f97316;--teal:#14b8a6;
+  --pink:#ec4899;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Syne',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 70% 40% at 10% 0%,rgba(99,102,241,.06) 0%,transparent 60%),
+    radial-gradient(ellipse 50% 35% at 90% 100%,rgba(168,85,247,.05) 0%,transparent 60%),
+    linear-gradient(var(--border) 1px,transparent 1px) 0 0/44px 44px,
+    linear-gradient(90deg,var(--border) 1px,transparent 1px) 0 0/44px 44px}
+
+.app{display:flex;min-height:100vh;position:relative;z-index:1}
+
+/* ── SIDEBAR ── */
+.sidebar{width:270px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sb-head{padding:22px 18px 18px;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--purple));
+  display:flex;align-items:center;justify-content:center;font-size:17px;box-shadow:0 4px 14px rgba(99,102,241,.3)}
+.logo-name{font-size:14px;font-weight:800;letter-spacing:.02em}
+.logo-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted2);letter-spacing:.1em;text-transform:uppercase;margin-top:1px}
+
+.sb-section{padding:14px 16px 6px}
+.sb-label{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;padding:0 2px}
+
+/* item de instância */
+.inst-item{border-radius:10px;margin-bottom:4px;overflow:hidden;border:1px solid transparent;transition:border-color .2s}
+.inst-item.open{border-color:var(--border2)}
+.inst-head{display:flex;align-items:center;gap:9px;padding:9px 10px;cursor:pointer;transition:background .15s;border-radius:9px}
+.inst-head:hover{background:var(--s3)}
+.inst-item.open .inst-head{background:var(--s3)}
+.inst-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.inst-name{font-size:13px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inst-count{font-family:'JetBrains Mono',monospace;font-size:10px;
+  background:var(--s2);border:1px solid var(--border2);padding:2px 7px;border-radius:4px;color:var(--muted2)}
+.inst-arrow{color:var(--muted);font-size:10px;transition:transform .2s;flex-shrink:0}
+.inst-item.open .inst-arrow{transform:rotate(90deg)}
+
+/* sub-itens de tipo */
+.inst-types{display:none;padding:4px 0 6px 20px}
+.inst-item.open .inst-types{display:block}
+.type-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;
+  cursor:pointer;transition:all .15s;margin-bottom:1px}
+.type-item:hover{background:rgba(255,255,255,.04)}
+.type-item.active{background:rgba(99,102,241,.12)}
+.type-item.active .type-name{color:var(--accent2)}
+.type-icon{font-size:14px;flex-shrink:0;width:20px;text-align:center}
+.type-name{font-size:12px;font-weight:600;flex:1}
+.type-count{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2)}
+
+/* "todos" link no topo */
+.all-btn{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:9px;
+  cursor:pointer;transition:background .15s;margin-bottom:6px;border:1px solid transparent}
+.all-btn:hover{background:var(--s3);border-color:var(--border2)}
+.all-btn.active{background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.25)}
+.all-btn.active .inst-name{color:var(--accent2)}
+
+/* stats disk */
+.sb-footer{padding:14px 16px;margin-top:auto;border-top:1px solid var(--border)}
+.disk-row{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;
+  font-size:10px;color:var(--muted2);margin-bottom:6px}
+.disk-bar{height:4px;background:var(--border2);border-radius:2px;overflow:hidden}
+.disk-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--purple));transition:width .6s}
+.disk-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.ds-card{background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.ds-val{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700}
+.ds-lbl{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted2);margin-top:2px;text-transform:uppercase;letter-spacing:.06em}
+
+/* ── MAIN ── */
+.main{flex:1;min-width:0}
+.topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:18px 24px;
+  border-bottom:1px solid var(--border);background:rgba(13,16,24,.9);
+  backdrop-filter:blur(10px);position:sticky;top:0;z-index:10}
+.page-title{font-size:17px;font-weight:800;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.page-title span{color:var(--muted2);font-weight:400;font-size:12px;margin-left:8px}
+
+.search-wrap{position:relative}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search-input{background:var(--s2);border:1px solid var(--border2);color:var(--text);
+  font-size:13px;font-family:'Syne',sans-serif;padding:8px 12px 8px 32px;
+  border-radius:8px;outline:none;width:200px;transition:border-color .2s}
+.search-input:focus{border-color:var(--accent)}
+
+.btn{display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:8px;
+  font-size:12px;font-weight:700;cursor:pointer;border:none;font-family:'Syne',sans-serif;transition:all .15s}
+.btn-ghost{background:var(--s2);border:1px solid var(--border2);color:var(--muted2)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+.btn-danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--red)}
+.btn-danger:hover{background:rgba(239,68,68,.2)}
+
+.view-toggle{display:flex;gap:2px;background:var(--s2);border:1px solid var(--border2);border-radius:7px;padding:2px}
+.vb{width:27px;height:25px;border-radius:5px;border:none;background:transparent;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.vb.active{background:var(--accent);color:#fff}
+
+/* ── CONTENT ── */
+.content{padding:24px}
+
+/* instância block */
+.inst-block{margin-bottom:40px}
+.inst-block-head{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding:14px 18px;
+  background:var(--s2);border:1px solid var(--border2);border-radius:14px}
+.ibh-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;box-shadow:0 0 8px currentColor}
+.ibh-name{font-size:16px;font-weight:800;flex:1}
+.ibh-meta{display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted2)}
+
+/* tabs de tipo */
+.type-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.tab{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;
+  border:1px solid var(--border2);background:var(--s2);color:var(--muted2);
+  cursor:pointer;font-size:12px;font-weight:700;transition:all .15s}
+.tab:hover{border-color:var(--border2);color:var(--text);background:var(--s3)}
+.tab.active{border-color:var(--accent);color:var(--accent2);background:rgba(99,102,241,.1)}
+.tab-count{font-family:'JetBrains Mono',monospace;font-size:10px;
+  background:rgba(255,255,255,.06);padding:1px 6px;border-radius:4px}
+
+/* grid de arquivos */
+.files-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.file-card{background:var(--s2);border:1px solid var(--border);border-radius:11px;
+  overflow:hidden;transition:all .18s;position:relative}
+.file-card:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.35)}
+.file-card.sel{border-color:var(--accent)!important;background:rgba(99,102,241,.07)}
+.fc-chk{position:absolute;top:7px;left:7px;z-index:2;width:18px;height:18px;border-radius:5px;
+  background:rgba(13,16,24,.8);border:1px solid var(--border2);
+  display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s;cursor:pointer}
+.file-card:hover .fc-chk,.file-card.sel .fc-chk{opacity:1}
+.file-card.sel .fc-chk{background:var(--accent);border-color:var(--accent)}
+.fc-prev{height:100px;background:var(--s3);display:flex;align-items:center;justify-content:center;
+  font-size:36px;overflow:hidden;position:relative}
+.fc-prev img{width:100%;height:100%;object-fit:cover}
+.fc-prev video{width:100%;height:100%;object-fit:cover}
+.fc-body{padding:9px 11px 5px}
+.fc-name{font-family:'JetBrains Mono',monospace;font-size:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.fc-meta{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted2)}
+.fc-actions{display:flex;gap:3px;padding:5px 8px 8px}
+.mb{flex:1;padding:4px 3px;border-radius:5px;border:1px solid var(--border2);background:transparent;
+  color:var(--muted2);cursor:pointer;font-size:9px;font-family:'Syne',sans-serif;font-weight:700;
+  transition:all .15s;display:flex;align-items:center;justify-content:center}
+.mb:hover{border-color:var(--accent);color:var(--accent2);background:rgba(99,102,241,.08)}
+.mb.del:hover{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.08)}
+
+/* lista */
+.files-list{display:flex;flex-direction:column;gap:3px}
+.fr{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;
+  background:var(--s2);border:1px solid var(--border);transition:all .15s;cursor:pointer}
+.fr:hover{border-color:var(--border2)}
+.fr.sel{border-color:var(--accent);background:rgba(99,102,241,.06)}
+.fr-icon{font-size:18px;flex-shrink:0;width:24px;text-align:center}
+.fr-info{flex:1;min-width:0}
+.fr-name{font-family:'JetBrains Mono',monospace;font-size:11px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fr-sub{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted2);margin-top:1px}
+.fr-size{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2);white-space:nowrap;min-width:65px;text-align:right}
+.fr-date{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;min-width:120px;text-align:right}
+.fr-acts{display:flex;gap:3px}
+.ib{width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);background:transparent;
+  color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.ib:hover{border-color:var(--accent);color:var(--accent2);background:rgba(99,102,241,.1)}
+.ib.del:hover{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.1)}
+
+/* audio player inline */
+.audio-player{padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.audio-player audio{width:100%;height:28px;filter:invert(1) hue-rotate(180deg) brightness(.8)}
+
+/* empty */
+.empty{text-align:center;padding:40px 20px;color:var(--muted2);font-size:13px}
+.empty-icon{font-size:36px;margin-bottom:10px;opacity:.35}
+
+/* loading */
+.spin-wrap{display:flex;align-items:center;justify-content:center;padding:60px;gap:10px;color:var(--muted2)}
+.sp{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--accent);
+  border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* modal */
+.mbg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.8);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.mbg.show{opacity:1;pointer-events:all}
+.mdl{background:var(--s1);border:1px solid var(--border2);border-radius:16px;padding:26px;
+  max-width:420px;width:90%;transform:scale(.95);transition:transform .2s}
+.mbg.show .mdl{transform:scale(1)}
+.mdl h3{font-size:15px;font-weight:800;margin-bottom:8px}
+.mdl p{font-size:12px;color:var(--muted2);margin-bottom:14px;line-height:1.6}
+.mdl-file{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--accent2);
+  background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);
+  padding:8px 10px;border-radius:7px;margin-bottom:18px;word-break:break-all}
+.mdl-acts{display:flex;gap:8px;justify-content:flex-end}
+
+/* toast */
+.toast{position:fixed;bottom:22px;right:22px;z-index:200;background:var(--s1);
+  border:1px solid var(--border2);border-radius:9px;padding:11px 16px;
+  font-size:12px;font-weight:700;transform:translateY(14px);opacity:0;
+  transition:all .25s;pointer-events:none;max-width:280px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.ok{border-left:3px solid var(--green)}
+.toast.err{border-left:3px solid var(--red)}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+@media(max-width:768px){.sidebar{display:none}.content{padding:14px}.topbar{padding:12px 14px}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sb-head">
+    <div class="logo">
+      <div class="logo-icon">💾</div>
+      <div>
+        <div class="logo-name">EVOCRM</div>
+        <div class="logo-sub">Storage Manager</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sb-section">
+    <div class="sb-label">Navegação</div>
+    <div class="all-btn active" id="nav-all" onclick="navAll()">
+      <div class="inst-dot" style="background:var(--accent)"></div>
+      <span class="inst-name">Todos os arquivos</span>
+      <span class="inst-count" id="nav-all-count">0</span>
+    </div>
+    <div id="nav-instances"></div>
+  </div>
+
+  <div class="sb-footer">
+    <div class="disk-row"><span>Espaço total</span><span id="disk-total">—</span></div>
+    <div class="disk-bar"><div class="disk-fill" style="width:40%"></div></div>
+    <div class="disk-stats">
+      <div class="ds-card">
+        <div class="ds-val" id="ds-files">0</div>
+        <div class="ds-lbl">Arquivos</div>
+      </div>
+      <div class="ds-card">
+        <div class="ds-val" id="ds-insts">0</div>
+        <div class="ds-lbl">Instâncias</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div class="page-title" id="page-title">Carregando… <span></span></div>
+    <div class="search-wrap">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-input" id="search" type="text" placeholder="Buscar arquivo..." oninput="renderContent()">
+    </div>
+    <div class="view-toggle">
+      <button class="vb active" id="btn-grid" onclick="setView('grid')" title="Grid">
+        <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1zM1 12a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1z"/></svg>
+      </button>
+      <button class="vb" id="btn-list" onclick="setView('list')" title="Lista">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </button>
+    </div>
+    <button class="btn btn-ghost" onclick="loadFiles()">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+      Atualizar
+    </button>
+    <button class="btn btn-danger" id="btn-del-sel" style="display:none" onclick="deleteSelected()">
+      🗑️ Deletar (<span id="sel-count">0</span>)
+    </button>
+  </div>
+
+  <div class="content" id="content">
+    <div class="spin-wrap"><div class="sp"></div> Carregando arquivos...</div>
+  </div>
+</main>
+</div>
+
+<!-- MODAL DELETE -->
+<div class="mbg" id="modal">
+  <div class="mdl">
+    <h3>🗑️ Deletar arquivo?</h3>
+    <p>Esta ação é permanente e não pode ser desfeita.</p>
+    <div class="mdl-file" id="modal-fname"></div>
+    <div class="mdl-acts">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Deletar</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────
+const SERVER = '';
+
+// Tipos de mídia
+const TYPES = {
+  image:    { label:'Imagens',    icon:'🖼️',  color:'#38bdf8', exts:['.jpg','.jpeg','.png','.gif','.webp','.svg'] },
+  audio:    { label:'Áudios',     icon:'🎵',  color:'#a855f7', exts:['.mp3','.ogg','.wav','.m4a','.aac'] },
+  video:    { label:'Vídeos',     icon:'🎬',  color:'#f97316', exts:['.mp4','.mov','.webm','.avi'] },
+  document: { label:'Documentos', icon:'📄',  color:'#10b981', exts:['.pdf','.doc','.docx','.xls','.xlsx','.txt','.zip'] },
+  other:    { label:'Outros',     icon:'📎',  color:'#64748b', exts:[] },
+};
+
+function getType(ext) {
+  for (const [k, v] of Object.entries(TYPES)) {
+    if (v.exts.includes(ext)) return k;
+  }
+  return 'other';
+}
+
+// Paleta de cores por instância
+const INST_PALETTE = ['#6366f1','#10b981','#f59e0b','#ef4444','#38bdf8','#ec4899','#14b8a6','#f97316','#a855f7','#84cc16'];
+function instColor(name) {
+  let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) % INST_PALETTE.length;
+  return INST_PALETTE[h];
+}
+
+function fmtSize(b) { if(b<1024)return b+' B'; if(b<1048576)return(b/1024).toFixed(1)+' KB'; return(b/1048576).toFixed(2)+' MB' }
+function fmtDate(iso) { const d=new Date(iso); return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) }
+function timeAgo(iso) { const s=Math.floor((Date.now()-new Date(iso))/1000); if(s<60)return'agora'; if(s<3600)return Math.floor(s/60)+'min'; if(s<86400)return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d' }
+
+// ── ESTADO ──────────────────────────────────────────────────────
+let allFiles    = [];
+let activeInst  = '';    // '' = todos
+let activeType  = {};    // { [inst]: tipo }
+let viewMode    = 'grid';
+let selected    = new Set();
+let deleteTarget = null;
+
+// ── PARSE INSTÂNCIA ──────────────────────────────────────────────
+// Estrutura esperada: chat_media/INSTANCIA_NUMERO/arquivo
+// ou ia_tts/arquivo (sem instância → "sistema")
+function parseInstance(path) {
+  const parts = path.split('/');
+  const folder = parts[0];
+  // chat_media/<inst>_<numero>/arquivo  ou  chat_media/bot_media/arquivo
+  if (folder === 'chat_media' && parts.length >= 3 && parts[1] !== 'bot_media' && parts[1] !== 'disparos') {
+    return parts[1]; // "empresa_joao_5511999"
+  }
+  if (folder === 'chat_media' && parts[1] === 'bot_media') return '_bot_flows';
+  if (folder === 'chat_media' && parts[1] === 'disparos')  return '_disparos';
+  if (folder === 'ia_tts')    return '_ia_tts';
+  if (folder === 'ia_midias') return '_ia_midias';
+  return '_sistema';
+}
+
+// ── CARREGAR ────────────────────────────────────────────────────
+async function loadFiles() {
+  document.getElementById('content').innerHTML = '<div class="spin-wrap"><div class="sp"></div> Carregando arquivos...</div>';
+  selected.clear(); updateSelBtn();
+  try {
+    const res  = await fetch(`${SERVER}/api/storage/list`);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Erro');
+    allFiles = data.files || [];
+    buildSidebar();
+    renderContent();
+  } catch(e) {
+    document.getElementById('content').innerHTML = `<div class="empty"><div class="empty-icon">⚠️</div><div style="color:var(--red)">${e.message}</div></div>`;
+  }
+}
+
+// ── SIDEBAR ─────────────────────────────────────────────────────
+function buildSidebar() {
+  // Agrupa por instância
+  const instMap = {};
+  for (const f of allFiles) {
+    const inst = parseInstance(f.path);
+    if (!instMap[inst]) instMap[inst] = { count:0, size:0, byType:{} };
+    instMap[inst].count++;
+    instMap[inst].size += f.size;
+    const t = getType(f.ext);
+    instMap[inst].byType[t] = (instMap[inst].byType[t]||0)+1;
+  }
+
+  const totalSize = allFiles.reduce((s,f)=>s+f.size, 0);
+  document.getElementById('disk-total').textContent = fmtSize(totalSize);
+  document.getElementById('ds-files').textContent = allFiles.length;
+  document.getElementById('ds-insts').textContent = Object.keys(instMap).filter(k=>!k.startsWith('_')).length;
+  document.getElementById('nav-all-count').textContent = allFiles.length;
+
+  // Separa instâncias reais das pastas do sistema
+  const realInsts = Object.entries(instMap).filter(([k])=>!k.startsWith('_')).sort(([a],[b])=>a.localeCompare(b));
+  const sysInsts  = Object.entries(instMap).filter(([k])=>k.startsWith('_')).sort();
+  const sysLabels = { _bot_flows:'Bot Flows', _disparos:'Disparos', _ia_tts:'IA · TTS', _ia_midias:'IA · Mídias', _sistema:'Sistema' };
+
+  let html = '';
+
+  if (realInsts.length > 0) {
+    html += `<div class="sb-label" style="margin-top:10px">Instâncias</div>`;
+    for (const [inst, info] of realInsts) {
+      const color = instColor(inst);
+      const open  = activeInst === inst ? 'open' : '';
+      html += `<div class="inst-item ${open}" id="inst-nav-${inst}">
+        <div class="inst-head" onclick="toggleInst('${inst}')">
+          <div class="inst-dot" style="background:${color}"></div>
+          <span class="inst-name">${inst}</span>
+          <span class="inst-count">${info.count}</span>
+          <span class="inst-arrow">▶</span>
+        </div>
+        <div class="inst-types">`;
+      for (const [tk, tv] of Object.entries(TYPES)) {
+        const cnt = info.byType[tk] || 0;
+        if (cnt === 0) continue;
+        const isActive = activeInst === inst && (activeType[inst]||'all') === tk;
+        html += `<div class="type-item ${isActive?'active':''}" onclick="navType('${inst}','${tk}')">
+          <span class="type-icon">${tv.icon}</span>
+          <span class="type-name">${tv.label}</span>
+          <span class="type-count">${cnt}</span>
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+  }
+
+  if (sysInsts.length > 0) {
+    html += `<div class="sb-label" style="margin-top:14px">Sistema</div>`;
+    for (const [inst, info] of sysInsts) {
+      const label = sysLabels[inst] || inst;
+      const color = instColor(inst);
+      const isActive = activeInst === inst;
+      html += `<div class="type-item ${isActive?'active':''}" onclick="navInst('${inst}')">
+        <span class="type-icon">📁</span>
+        <span class="type-name">${label}</span>
+        <span class="type-count">${info.count}</span>
+      </div>`;
+    }
+  }
+
+  document.getElementById('nav-instances').innerHTML = html;
+}
+
+// ── NAVEGAÇÃO ────────────────────────────────────────────────────
+function navAll() {
+  activeInst = ''; activeType = {};
+  document.getElementById('nav-all').classList.add('active');
+  buildSidebar(); renderContent();
+}
+function navInst(inst) {
+  activeInst = inst;
+  if (!activeType[inst]) activeType[inst] = 'all';
+  buildSidebar(); renderContent();
+}
+function navType(inst, type) {
+  activeInst = inst;
+  activeType[inst] = type;
+  buildSidebar(); renderContent();
+}
+function toggleInst(inst) {
+  if (activeInst === inst) { navAll(); return; }
+  navInst(inst);
+}
+function setActiveTab(inst, type) {
+  activeType[inst] = type;
+  renderContent();
+}
+
+// ── RENDER ───────────────────────────────────────────────────────
+function renderContent() {
+  const q = document.getElementById('search').value.toLowerCase();
+
+  // Filtra arquivos
+  let files = allFiles.filter(f => {
+    if (q && !f.path.toLowerCase().includes(q)) return false;
+    if (activeInst) {
+      if (parseInstance(f.path) !== activeInst) return false;
+      const curType = activeType[activeInst] || 'all';
+      if (curType !== 'all' && getType(f.ext) !== curType) return false;
+    }
+    return true;
+  });
+
+  // Título
+  const titleInst = activeInst
+    ? (activeInst.startsWith('_') ? activeInst.replace('_','').replace('_',' · ') : activeInst)
+    : 'Todos os arquivos';
+  document.getElementById('page-title').innerHTML = `${titleInst} <span>${files.length} arquivo${files.length!==1?'s':''}</span>`;
+
+  if (files.length === 0) {
+    document.getElementById('content').innerHTML = `<div class="empty"><div class="empty-icon">📭</div>Nenhum arquivo encontrado.</div>`;
+    return;
+  }
+
+  // Se mostrando tudo → agrupa por instância
+  if (!activeInst) {
+    renderAllInstances(files, q);
+    return;
+  }
+
+  // Se instância selecionada → mostra com tabs de tipo
+  renderSingleInstance(activeInst, files);
+}
+
+function renderAllInstances(files, q) {
+  // Agrupa por instância
+  const instMap = {};
+  for (const f of files) {
+    const inst = parseInstance(f.path);
+    if (!instMap[inst]) instMap[inst] = [];
+    instMap[inst].push(f);
+  }
+
+  const realInsts = Object.entries(instMap).filter(([k])=>!k.startsWith('_')).sort(([a],[b])=>a.localeCompare(b));
+  const sysInsts  = Object.entries(instMap).filter(([k])=>k.startsWith('_')).sort();
+
+  let html = '';
+  for (const [inst, flist] of [...realInsts, ...sysInsts]) {
+    html += renderInstBlock(inst, flist, 'all', false);
+  }
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderSingleInstance(inst, files) {
+  document.getElementById('content').innerHTML = renderInstBlock(inst, files, activeType[inst]||'all', true);
+}
+
+function renderInstBlock(inst, files, curType, showAllTabs) {
+  const color   = instColor(inst);
+  const totalSz = files.reduce((s,f)=>s+f.size, 0);
+  const sysLabels = { _bot_flows:'Bot Flows', _disparos:'Disparos', _ia_tts:'IA · TTS (Áudios gerados)', _ia_midias:'IA · Mídias', _sistema:'Sistema' };
+  const label   = inst.startsWith('_') ? (sysLabels[inst]||inst) : inst;
+
+  // Conta por tipo
+  const byType = {};
+  for (const f of files) { const t=getType(f.ext); byType[t]=(byType[t]||0)+1; }
+
+  // Filtra pelo tipo ativo
+  const filtered = curType === 'all' ? files : files.filter(f => getType(f.ext) === curType);
+
+  let html = `<div class="inst-block">
+    <div class="inst-block-head">
+      <div class="ibh-dot" style="background:${color};box-shadow:0 0 8px ${color}44"></div>
+      <div class="ibh-name">${label}</div>
+      <div class="ibh-meta">
+        <span>📄 ${files.length} arquivo${files.length!==1?'s':''}</span>
+        <span>💾 ${fmtSize(totalSz)}</span>
+      </div>
+    </div>`;
+
+  // Tabs de tipo
+  const tabTypes = Object.entries(byType).filter(([,c])=>c>0);
+  if (tabTypes.length > 1 || showAllTabs) {
+    html += `<div class="type-tabs">
+      <div class="tab ${curType==='all'?'active':''}" onclick="setActiveTab('${inst}','all')">
+        <span>📦 Todos</span><span class="tab-count">${files.length}</span>
+      </div>`;
+    for (const [tk, cnt] of tabTypes.sort(([a],[b])=>a.localeCompare(b))) {
+      const tv = TYPES[tk];
+      html += `<div class="tab ${curType===tk?'active':''}" onclick="setActiveTab('${inst}','${tk}')">
+        <span>${tv.icon} ${tv.label}</span><span class="tab-count">${cnt}</span>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Agrupa os filtered por subtipo para exibição
+  if (curType === 'all' && tabTypes.length > 1) {
+    // Mostra separado por tipo
+    for (const [tk] of Object.entries(TYPES)) {
+      const tfiles = filtered.filter(f=>getType(f.ext)===tk);
+      if (tfiles.length === 0) continue;
+      const tv = TYPES[tk];
+      html += `<div style="margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+          <span style="font-size:15px">${tv.icon}</span>
+          <span style="font-size:13px;font-weight:800;color:${tv.color}">${tv.label}</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted2)">${tfiles.length}</span>
+        </div>
+        ${renderFiles(tfiles, inst)}
+      </div>`;
+    }
+  } else {
+    html += renderFiles(filtered, inst);
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function renderFiles(files, inst) {
+  if (files.length === 0) return `<div class="empty"><div class="empty-icon" style="font-size:28px">📭</div>Sem arquivos nesta categoria.</div>`;
+
+  if (viewMode === 'grid') {
+    let html = `<div class="files-grid">`;
+    for (const f of files) {
+      const name = f.path.split('/').pop();
+      const sel  = selected.has(f.path) ? 'sel' : '';
+      const type = getType(f.ext);
+      const tv   = TYPES[type];
+
+      let preview = `<div style="font-size:38px">${tv.icon}</div>`;
+      if (type === 'image') preview = `<img src="${f.url}" loading="lazy" onerror="this.parentElement.innerHTML='<div style=\\'font-size:38px\\'>🖼️</div>'">`;
+      if (type === 'video') preview = `<video src="${f.url}" muted preload="none" onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>`;
+
+      html += `<div class="file-card ${sel}" onclick="toggleCard('${f.path}',event)">
+        <div class="fc-chk" onclick="toggleSel('${f.path}',event)">
+          ${selected.has(f.path)?'<svg width="10" height="10" fill="white" viewBox="0 0 16 16"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/></svg>':''}
+        </div>
+        <div class="fc-prev" style="border-bottom:2px solid ${tv.color}22">${preview}</div>`;
+
+      if (type === 'audio') {
+        html += `<div class="audio-player"><audio controls src="${f.url}" preload="none"></audio></div>`;
+      }
+
+      html += `<div class="fc-body">
+          <div class="fc-name" title="${name}">${name}</div>
+          <div class="fc-meta"><span>${fmtSize(f.size)}</span><span>${timeAgo(f.modified)}</span></div>
+        </div>
+        <div class="fc-actions">
+          <button class="mb" onclick="copyUrl(event,'${f.url}')">📋</button>
+          <button class="mb" onclick="dlFile(event,'${f.url}','${name}')">⬇️</button>
+          <button class="mb" onclick="window.open('${f.url}','_blank');event.stopPropagation()">↗️</button>
+          <button class="mb del" onclick="askDel(event,'${f.path}','${name}')">🗑️</button>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  // Lista
+  let html = `<div class="files-list">`;
+  for (const f of files) {
+    const name = f.path.split('/').pop();
+    const sel  = selected.has(f.path) ? 'sel' : '';
+    const type = getType(f.ext);
+    const tv   = TYPES[type];
+    html += `<div class="fr ${sel}" onclick="toggleRow('${f.path}',event)">
+      <input type="checkbox" ${sel?'checked':''} onclick="event.stopPropagation()" onchange="toggleSel('${f.path}',{checked:this.checked})">
+      <div class="fr-icon">${tv.icon}</div>
+      <div class="fr-info">
+        <div class="fr-name" title="${name}">${name}</div>
+        <div class="fr-sub">${f.path}</div>
+      </div>
+      <div class="fr-size">${fmtSize(f.size)}</div>
+      <div class="fr-date">${fmtDate(f.modified)}</div>
+      <div class="fr-acts">
+        <button class="ib" title="Copiar URL" onclick="copyUrl(event,'${f.url}')">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button class="ib" title="Download" onclick="dlFile(event,'${f.url}','${name}')">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <button class="ib" title="Abrir" onclick="window.open('${f.url}','_blank');event.stopPropagation()">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+        <button class="ib del" title="Deletar" onclick="askDel(event,'${f.path}','${name}')">
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ── SELEÇÃO ──────────────────────────────────────────────────────
+function toggleCard(path, e) { if(e.target.closest('.mb')||e.target.closest('audio')||e.target.closest('video'))return; toggleSel(path,{checked:!selected.has(path)}); renderContent(); }
+function toggleRow(path, e)  { if(e.target.closest('.ib')||e.target.tagName==='INPUT')return; toggleSel(path,{checked:!selected.has(path)}); renderContent(); }
+function toggleSel(path, chk) { if(chk.checked)selected.add(path);else selected.delete(path); updateSelBtn(); }
+function updateSelBtn() {
+  document.getElementById('sel-count').textContent = selected.size;
+  document.getElementById('btn-del-sel').style.display = selected.size > 0 ? '' : 'none';
+}
+
+// ── VIEW ─────────────────────────────────────────────────────────
+function setView(v) {
+  viewMode = v;
+  document.getElementById('btn-grid').classList.toggle('active', v==='grid');
+  document.getElementById('btn-list').classList.toggle('active', v==='list');
+  renderContent();
+}
+
+// ── DELETE ───────────────────────────────────────────────────────
+function askDel(e, path, name) { e.stopPropagation(); deleteTarget=path; document.getElementById('modal-fname').textContent=name; document.getElementById('modal').classList.add('show'); }
+function closeModal() { document.getElementById('modal').classList.remove('show'); deleteTarget=null; }
+async function confirmDelete() {
+  if(!deleteTarget)return; const p=deleteTarget; closeModal();
+  if(await doDel(p)){ allFiles=allFiles.filter(f=>f.path!==p); selected.delete(p); buildSidebar(); renderContent(); updateSelBtn(); }
+}
+async function deleteSelected() {
+  const paths=[...selected]; let ok=0;
+  for(const p of paths)if(await doDel(p))ok++;
+  allFiles=allFiles.filter(f=>!paths.includes(f.path)); selected.clear(); updateSelBtn(); buildSidebar(); renderContent();
+  toast(`${ok} arquivo(s) deletado(s)`,'ok');
+}
+async function doDel(path) {
+  try{
+    const r=await fetch(`${SERVER}/api/storage/delete`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})});
+    const d=await r.json(); if(!d.ok)throw new Error(d.error);
+    toast(`Deletado: ${path.split('/').pop()}`,'ok'); return true;
+  }catch(e){toast(`Erro: ${e.message}`,'err');return false}
+}
+
+// ── UTILS ────────────────────────────────────────────────────────
+async function copyUrl(e, url) { e.stopPropagation(); try{await navigator.clipboard.writeText(url);toast('URL copiada!','ok')}catch{toast('Erro ao copiar','err')} }
+function dlFile(e, url, name) { e.stopPropagation(); const a=document.createElement('a');a.href=url;a.download=name;a.target='_blank';document.body.appendChild(a);a.click();document.body.removeChild(a); }
+let tt; function toast(m,t='ok'){const el=document.getElementById('toast');el.textContent=(t==='ok'?'✅ ':'❌ ')+m;el.className=`toast ${t} show`;clearTimeout(tt);tt=setTimeout(()=>el.classList.remove('show'),3000)}
+
+// ── INIT ─────────────────────────────────────────────────────────
+loadFiles();
+setInterval(loadFiles, 30000);
+</script>
+</body>
+</html>

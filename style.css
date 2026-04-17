@@ -1,0 +1,453 @@
+[x-cloak] { display: none !important; }
+
+/* ── Variáveis — Tema Indigo Pro ── */
+:root {
+    --brand:          #6366f1;
+    --brand-dark:     #4f46e5;
+    --brand-deep:     #3730a3;
+    --brand-light:    #e0e7ff;
+    --brand-glow:     rgba(99,102,241,.35);
+}
+
+/* ── Safe areas ── */
+.pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
+.pt-safe { padding-top: max(env(safe-area-inset-top), 3px); }
+body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+
+/* ── Scroll ── */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.smooth-scroll-container { -webkit-overflow-scrolling: touch; }
+
+/* ── Scrollbar elegante ── */
+.scroll-elegant::-webkit-scrollbar { width: 4px; height: 4px; }
+.scroll-elegant::-webkit-scrollbar-track { background: transparent; }
+.scroll-elegant::-webkit-scrollbar-thumb { background: rgba(99,102,241,.3); border-radius: 99px; }
+.scroll-elegant::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,.55); }
+
+/* ── Drag ── */
+.smooth-drag-card { cursor: grab; transition: transform 0.15s, box-shadow 0.15s; }
+.smooth-drag-card:active { cursor: grabbing; transform: scale(0.98); }
+
+/* ── Node canvas ── */
+.node-canvas { background-color: #f1f4f9; background-image: radial-gradient(#c7cfe0 1.5px, transparent 1.5px); background-size: 24px 24px; }
+.dark .node-canvas { background-color: #0d1117; background-image: radial-gradient(#21262d 1.5px, transparent 1.5px); }
+.node-port { width: 12px; height: 12px; background: var(--brand); border: 2px solid white; border-radius: 50%; position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; }
+.dark .node-port { border-color: #0d1117; }
+.port-left { left: -6px; }
+.port-right { right: -6px; }
+
+/* ── Background pattern ── */
+.bg-pattern { background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V4h4V2h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V4h4V2H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"); }
+
+/* ── Glass ── */
+.glass { background: rgba(255,255,255,0.98) !important; }
+.dark .glass { background: rgba(22,27,34,0.98) !important; }
+@media (min-width: 768px) {
+    .glass { background: rgba(255,255,255,0.92) !important; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+    .dark .glass { background: rgba(22,27,34,0.92) !important; }
+}
+
+/* ── Kanban ── */
+.kanban-col { min-width: 78vw; max-width: 78vw; height: calc(100vh - 180px); scroll-snap-align: start; }
+@media (min-width: 768px) { .kanban-col { min-width: 320px; max-width: 320px; height: calc(100vh - 200px); } }
+.kanban-container { scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; touch-action: pan-x; }
+
+/* ── Modal bottom sheet ── */
+.modal-sheet {
+    position: relative; width: 100%; background: white;
+    border-radius: 2rem 2rem 0 0; overflow: visible;
+    display: flex; flex-direction: column;
+    max-height: calc(var(--vh, 1vh) * 92);
+}
+.dark .modal-sheet { background: #161b22; }
+@media (min-width: 768px) {
+    .modal-sheet { max-width: 448px; border-radius: 2rem; width: 100%; max-height: 90vh; overflow: hidden; }
+}
+.modal-sheet-inner {
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain; flex: 1 1 auto; max-height: 100%;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.modal-task-wrap, .modal-notif-wrap {
+    height: 100dvh; height: calc(var(--vh, 1vh) * 100);
+}
+
+/* ── Flatpickr dark ── */
+.dark .flatpickr-calendar { background: #161b22; border: 1px solid #30363d; }
+.dark .flatpickr-day { color: #e6edf3; }
+.dark .flatpickr-day.selected { background: var(--brand); border-color: var(--brand); }
+.dark .flatpickr-time input { color: #e6edf3; }
+.dark .flatpickr-months .flatpickr-month { color: #f8fafc; fill: #f8fafc; }
+.dark .flatpickr-current-month .flatpickr-monthDropdown-months { background: #161b22; }
+
+/* ── Transições ── */
+button { transition: opacity 0.15s ease, transform 0.15s ease; }
+input, select, textarea { transition: box-shadow 0.15s ease; }
+@media (min-width: 768px) {
+    button, input, select, textarea, a { transition: all 0.18s cubic-bezier(0.4,0,0.2,1); }
+}
+
+/* ── Card hover ── */
+.card-hover { transition: box-shadow 0.2s ease; }
+@media (min-width: 768px) {
+    .card-hover:hover { transform: translateY(-2px); box-shadow: 0 12px 32px -8px rgba(99,102,241,.18), 0 4px 12px -4px rgba(0,0,0,.08); }
+    .dark .card-hover:hover { box-shadow: 0 12px 32px -8px rgba(99,102,241,.28), 0 4px 12px -4px rgba(0,0,0,.3); }
+}
+
+/* ── Btn glow ── */
+@media (min-width: 768px) {
+    .btn-glow { box-shadow: 0 4px 14px -4px rgba(99,102,241,.5); }
+    .btn-glow:hover { box-shadow: 0 6px 20px -4px rgba(99,102,241,.65); transform: translateY(-1px); }
+    .btn-glow:active { transform: scale(0.97); }
+    .btn-success-glow { box-shadow: 0 4px 14px -4px rgba(99,102,241,.45); }
+    .btn-success-glow:hover { box-shadow: 0 6px 20px -4px rgba(99,102,241,.65); transform: translateY(-1px); }
+}
+
+/* ── Input focus ── */
+input:focus, textarea:focus, select:focus { outline: none; box-shadow: 0 0 0 2.5px rgba(99,102,241,.28); }
+.dark input:focus, .dark textarea:focus, .dark select:focus { box-shadow: 0 0 0 2.5px rgba(99,102,241,.38); }
+
+/* ── Nav lateral indicator ── */
+.nav-item { position: relative; transition: all 0.2s cubic-bezier(0.4,0,0.2,1); }
+.nav-item::before {
+    content: ''; position: absolute; left: 0; top: 50%;
+    transform: translateY(-50%) scaleY(0);
+    width: 3px; height: 60%; background: var(--brand);
+    border-radius: 0 4px 4px 0;
+    transition: transform 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+.nav-item.active::before { transform: translateY(-50%) scaleY(1); }
+
+/* ── Sidebar ── */
+aside { background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(241,244,249,0.96) 100%) !important; }
+.dark aside { background: linear-gradient(180deg, rgba(22,27,34,0.98) 0%, rgba(13,17,23,0.97) 100%) !important; }
+
+/* ── Screen fade ── */
+@media (min-width: 768px) {
+    .screen-fade { animation: screenFadeIn 0.2s ease; }
+    @keyframes screenFadeIn { from { opacity:0; } to { opacity:1; } }
+}
+
+/* ── Notif toast ── */
+.notif-item { box-shadow: 0 8px 28px -8px rgba(99,102,241,.22); }
+
+/* ── Badge pulse ── */
+.badge-pulse { animation: badgePop 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+@keyframes badgePop { from { transform:scale(0.7); opacity:0; } to { transform:scale(1); opacity:1; } }
+
+/* ── Ripple ── */
+.ripple { position: relative; overflow: hidden; }
+.ripple::after { content:''; position:absolute; inset:0; background:radial-gradient(circle, rgba(255,255,255,0.22) 0%, transparent 70%); opacity:0; transition:opacity 0.3s ease; pointer-events:none; }
+.ripple:active::after { opacity:1; transition:none; }
+
+/* ── Header shadow ── */
+header { box-shadow: 0 1px 0 rgba(99,102,241,.1); }
+
+/* ── Nav mobile ── */
+nav.fixed { background: rgba(255,255,255,0.99) !important; }
+.dark nav.fixed { background: rgba(22,27,34,0.99) !important; }
+@media (min-width: 768px) {
+    nav.fixed { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); background: rgba(255,255,255,0.94) !important; }
+    .dark nav.fixed { background: rgba(22,27,34,0.94) !important; }
+}
+
+/* ── Text selection ── */
+::selection { background: rgba(99,102,241,.18); color: inherit; }
+.dark ::selection { background: rgba(99,102,241,.3); }
+
+/* ── Checkbox/radio ── */
+input[type="checkbox"]:checked, input[type="radio"]:checked { transform: scale(1.08); }
+
+/* ── Divider ── */
+.divider-glow { height:1px; background: linear-gradient(90deg, transparent, rgba(99,102,241,.35), transparent); }
+
+/* ── Tab Bar ── */
+.wa-tab-bar { display:flex; border-bottom: 2px solid #e2e8f0; }
+.dark .wa-tab-bar { border-bottom-color: #30363d; }
+.wa-tab { position:relative; flex:1; text-align:center; padding:13px 8px; font-size:.75rem; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#6b7280; cursor:pointer; border:none; background:transparent; transition:color .2s; }
+.dark .wa-tab { color:#8b949e; }
+.wa-tab::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:3px; background:var(--brand); transform:scaleX(0); transition:transform .22s cubic-bezier(0.4,0,0.2,1); border-radius:3px 3px 0 0; }
+.wa-tab.active { color:var(--brand); }
+.wa-tab.active::after { transform:scaleX(1); }
+
+/* ── Status Bar gradient ── */
+.wa-status-bar { background: linear-gradient(90deg, var(--brand), var(--brand-dark)); height: 3px; width: 100%; }
+
+/* ── Touch targets ── */
+.touch-target { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; justify-content: center; }
+@media (max-width: 767px) { button { min-height: 36px; } }
+
+/* ── Font size mobile ── */
+@media (max-width: 767px) { html { font-size: 15px; } }
+
+/* ── Previne zoom iOS ── */
+@media (max-width: 767px) {
+    input[type="text"], input[type="password"], input[type="email"],
+    input[type="number"], textarea, select { font-size: 16px !important; }
+}
+
+/* ── Nav item mobile ── */
+.nav-item-mobile { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+@media (max-width: 380px) { .nav-item-mobile span { font-size: 8px; } }
+
+/* ── Chat status select compact mobile ── */
+@media (max-width: 767px) {
+    .chat-status-select { max-width: 75px; padding: 6px 4px !important; font-size: 8px !important; }
+}
+
+/* ── Notif toast mobile ── */
+@media (max-width: 767px) {
+    .notif-toast-wrap { left: 12px !important; right: 12px !important; width: auto !important; top: 12px !important; }
+}
+
+/* ── Áudio responsivo ── */
+@media (max-width: 767px) { 
+    audio { max-width: 100%; height: 40px !important; }
+    #chat-box audio { width: 100% !important; min-width: 180px; }
+}
+
+/* ── Scroll containment ── */
+#chat-box { overscroll-behavior: contain; }
+.chat-list-wrap { overscroll-behavior: contain; }
+
+/* ── Seção interna padding bottom ── */
+@media (max-width: 767px) {
+    .section-inner { padding-bottom: max(calc(env(safe-area-inset-bottom) + 80px), 100px) !important; }
+}
+
+/* ── Main header mobile ── */
+@media (max-width: 767px) { .main-header { height: 54px !important; } }
+
+/* ── CSS Containment ── */
+.chat-list-wrap > div > div { contain: layout style; }
+
+/* ── Chat header actions ── */
+.chat-header-right {
+    display: flex; align-items: center; gap: 4px;
+    overflow: hidden; max-width: calc(100vw - 160px); flex-wrap: nowrap;
+}
+@media (min-width: 768px) { .chat-header-right { max-width: none; gap: 6px; } }
+
+/* ══════════════════════════════════════
+   MOBILE FIXES — EvoPRO
+══════════════════════════════════════ */
+
+/* ── Main scrollable section ── */
+section.flex-1.overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+/* ── Screens inside main section ── */
+@media (max-width: 767px) {
+    /* IA screen full scroll */
+    [x-show="screen === 'ia_atendimento'"],
+    .max-w-4xl.mx-auto { width: 100%; }
+
+    /* Logs list height adaptável ao mobile */
+    .logs-list { max-height: calc(50vh - 80px) !important; }
+
+    /* Tabs IA: scroll horizontal no mobile */
+    .ia-tabs-bar {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none;
+    }
+    .ia-tabs-bar::-webkit-scrollbar { display: none; }
+    .ia-tabs-bar > button { white-space: nowrap; flex-shrink: 0; flex: 0 0 auto !important; }
+
+    /* Cards internos — sem bordas excessivas no mobile */
+    .rounded-\[2rem\] { border-radius: 1.25rem !important; }
+    .rounded-\[2\.5rem\] { border-radius: 1.5rem !important; }
+
+    /* Grid 2 colunas → 1 coluna em telas muito pequenas */
+    .grid-cols-2.mobile-single { grid-template-columns: 1fr !important; }
+
+    /* Botões do header hero IA — empilhar em telas pequenas */
+    .ia-hero-header { flex-wrap: wrap; gap: 8px; }
+
+    /* Status badges — scroll horizontal */
+    .ia-status-badges { overflow-x: auto; flex-wrap: nowrap !important; }
+    .ia-status-badges::-webkit-scrollbar { display: none; }
+    .ia-status-badges > span { white-space: nowrap; flex-shrink: 0; }
+}
+
+/* ── Logs: fix z-index e overflow ── */
+.logs-panel {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+}
+.logs-list {
+    max-height: 384px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    position: relative;
+}
+
+/* ── Telas menores que 380px ── */
+@media (max-width: 380px) {
+    .ia-tabs-bar > button { font-size: 10px !important; padding: 8px 10px !important; }
+    .grid-cols-2 { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Previne overflow de conteúdo sobre nav mobile ── */
+@media (max-width: 767px) {
+    .section-inner, section.flex-1 {
+        padding-bottom: max(calc(env(safe-area-inset-bottom) + 80px), 96px) !important;
+    }
+    /* Força kanban overflow correto */
+    .kanban-col { height: calc(100dvh - 160px); }
+}
+
+/* ── Touch feedback mais responsivo ── */
+@media (max-width: 767px) {
+    button:active { opacity: 0.75; }
+    .modal-sheet { max-height: calc(100dvh - env(safe-area-inset-top, 0px)); }
+}
+
+/* ══════════════════════════════════════
+   MODAL IA — Mobile fixes
+══════════════════════════════════════ */
+
+/* Modal de prompt de IA: no mobile ocupa a tela inteira como bottom sheet */
+@media (max-width: 767px) {
+    /* Overlay alinha embaixo */
+    [x-show="iaShowModal"] > div {
+        border-bottom-left-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+    }
+
+    /* Textarea do prompt: altura adaptável no mobile */
+    [x-show="iaModalTab==='prompt'"] textarea {
+        min-height: 160px !important;
+        max-height: 260px !important;
+        font-size: 14px !important;
+        line-height: 1.5 !important;
+    }
+
+    /* Inputs do modal não disparam zoom no iOS */
+    [x-show="iaShowModal"] input,
+    [x-show="iaShowModal"] select,
+    [x-show="iaShowModal"] textarea {
+        font-size: 16px !important;
+    }
+
+    /* Tabs do modal não quebram linha */
+    [x-show="iaShowModal"] .flex.border-b > button {
+        font-size: 10px !important;
+        padding: 10px 4px !important;
+    }
+
+    /* Grid 2 cols → 1 col no modal mobile */
+    [x-show="iaModalTab==='prompt'"] .grid-cols-2,
+    [x-show="iaModalTab==='avancado'"] .grid-cols-2 {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* Confirmação agendamentos — badge visual */
+.agenda-confirmacao-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 9px; font-weight: 800;
+    padding: 2px 8px; border-radius: 99px;
+    background: #fef3c7; color: #d97706;
+    border: 1px solid #fde68a;
+}
+
+/* ══════════════════════════════════════
+   MODAL PROMPT IA — Fix mobile completo
+══════════════════════════════════════ */
+
+/* Overlay cobre 100% da tela sem conflitos */
+.ia-modal-overlay {
+    top: 0; left: 0; right: 0; bottom: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.75);
+}
+
+/* Desktop: centralizado */
+@media (min-width: 768px) {
+    .ia-modal-overlay {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+    }
+    .ia-modal-panel {
+        width: 100%;
+        max-width: 672px;
+        border-radius: 2rem;
+        max-height: 92vh;
+        height: 92vh;
+    }
+}
+
+/* Mobile: bottom-sheet fixo, ocupa largura total */
+@media (max-width: 767px) {
+    .ia-modal-panel {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 1.5rem 1.5rem 0 0 !important;
+        height: calc(var(--vh, 1vh) * 92) !important;
+        max-height: calc(var(--vh, 1vh) * 92) !important;
+    }
+
+    /* Corpo com scroll e padding menor */
+    .ia-modal-panel .flex-1.overflow-y-auto .p-6 {
+        padding: 1rem !important;
+    }
+
+    /* Grid 2 colunas → 1 coluna */
+    .ia-modal-panel .grid-cols-2 {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Tabs compactas */
+    .ia-modal-panel .flex.border-b > button {
+        font-size: 11px !important;
+        padding: 10px 4px !important;
+    }
+
+    /* Textarea altura generosa */
+    .ia-modal-panel textarea {
+        min-height: 140px !important;
+        max-height: 200px !important;
+        resize: none !important;
+    }
+
+    /* Sem zoom no iOS */
+    .ia-modal-panel input,
+    .ia-modal-panel select,
+    .ia-modal-panel textarea {
+        font-size: 16px !important;
+    }
+
+    /* Footer: botões empilhados, salvar em cima */
+    .ia-modal-footer {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+    }
+}
+
+/* ── Mobile Kanban touch drag ── */
+#kanban-ghost {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+[data-kanban-col] {
+  transition: outline 0.12s ease;
+}
+
+
+/* ── Kanban touch drag – long press ativa o drag ── */
+.smooth-drag-card { touch-action: pan-x pan-y; }

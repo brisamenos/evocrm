@@ -1,0 +1,22 @@
+{
+  "name": "evocrm-ia-worker",
+  "version": "3.0.0",
+  "description": "EvoCRM — SQLite via sql.js (WebAssembly, zero compilação nativa)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "sql.js": "^1.11.0",
+    "form-data": "^4.0.2",
+    "node-fetch": "^3.3.2",
+    "ws": "^8.18.0",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.8.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}
