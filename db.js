@@ -359,6 +359,7 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
         "ALTER TABLE crm_tags ADD COLUMN color TEXT DEFAULT '#6366f1'",
         // departments: colunas novas
         "ALTER TABLE departments ADD COLUMN name TEXT",
+        "ALTER TABLE departments ADD COLUMN nome TEXT",
         "ALTER TABLE departments ADD COLUMN access_key TEXT DEFAULT 'admin123'",
         "ALTER TABLE departments ADD COLUMN palavras_chave TEXT DEFAULT ''",
         "ALTER TABLE departments ADD COLUMN msg_roteamento TEXT DEFAULT 'Você está sendo direcionado para o setor responsável. Em breve um de nossos atendentes irá te atender. 😊'",
