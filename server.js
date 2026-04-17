@@ -3806,17 +3806,18 @@ const server = http.createServer(async (req, res) => {
                 .order('created_at', { ascending: true });
 
             const { data: leads } = await db.from('leads')
-                .select('id, departamento, tma_segundos, atendimento_inicio, atendimento_fim')
+                .select('id, departamento, atendente_nome, tma_segundos, atendimento_inicio, atendimento_fim')
                 .eq('instance_name', inst);
 
             if (!msgs || !leads) { res.writeHead(200, {'Content-Type':'application/json'}); res.end(JSON.stringify({ok:true,stats:[]})); return; }
 
             const leadDept = {};
             const leadTma  = {};
+            const leadAtend = {};
             for (const l of leads) {
                 leadDept[l.id] = l.departamento || 'ADM Principal';
-                // Usa tma_segundos real se disponível (atendimento encerrado via conclusão)
                 if (l.tma_segundos) leadTma[l.id] = l.tma_segundos;
+                if (l.atendente_nome) leadAtend[l.id] = l.atendente_nome;
             }
 
             // Agrupa mensagens por lead
@@ -3829,25 +3830,37 @@ const server = http.createServer(async (req, res) => {
                 if (m.from_me && !m.sent_by_ia) porLead[m.lead_id].humano.push(ts);
             }
 
-            // Calcula TMA e TME por departamento
+            // Calcula TMA e TME por departamento E por atendente
             const porDept = {};
+            const porAtendente = {};
             for (const [leadId, data] of Object.entries(porLead)) {
                 const dept = leadDept[leadId] || 'ADM Principal';
+                const atend = leadAtend[leadId] || null;
                 if (!porDept[dept]) porDept[dept] = { tme: [], tma: [], total: 0 };
                 porDept[dept].total++;
 
                 // TME: primeira msg cliente → primeira resposta humana
+                let tmeVal = null;
                 if (data.cliente.length > 0 && data.humano.length > 0) {
                     const primeiraCliente = Math.min(...data.cliente);
                     const primeiraHumana  = data.humano.filter(t => t > primeiraCliente)[0];
-                    if (primeiraHumana) porDept[dept].tme.push(Math.round((primeiraHumana - primeiraCliente) / 1000));
+                    if (primeiraHumana) { tmeVal = Math.round((primeiraHumana - primeiraCliente) / 1000); porDept[dept].tme.push(tmeVal); }
                 }
                 // TMA: usa tma_segundos real se disponível, senão estima por mensagens
+                let tmaVal = null;
                 if (leadTma[leadId]) {
-                    porDept[dept].tma.push(leadTma[leadId]);
+                    tmaVal = leadTma[leadId]; porDept[dept].tma.push(tmaVal);
                 } else if (data.todas.length > 1) {
-                    const dur = Math.max(...data.todas) - Math.min(...data.todas);
-                    porDept[dept].tma.push(Math.round(dur / 1000));
+                    tmaVal = Math.round((Math.max(...data.todas) - Math.min(...data.todas)) / 1000); porDept[dept].tma.push(tmaVal);
+                }
+
+                // Por atendente
+                if (atend) {
+                    const key = dept + '||' + atend;
+                    if (!porAtendente[key]) porAtendente[key] = { dept, nome: atend, tme: [], tma: [], total: 0 };
+                    porAtendente[key].total++;
+                    if (tmeVal) porAtendente[key].tme.push(tmeVal);
+                    if (tmaVal) porAtendente[key].tma.push(tmaVal);
                 }
             }
 
@@ -3868,17 +3881,32 @@ const server = http.createServer(async (req, res) => {
                 }
             } catch(e) {}
 
-            const stats = Object.entries(porDept).map(([dept, d]) => ({
-                dept,
-                total: d.total,
-                tme_seg: d.tme.length ? Math.round(d.tme.reduce((a,b)=>a+b,0)/d.tme.length) : null,
-                tma_seg: d.tma.length ? Math.round(d.tma.reduce((a,b)=>a+b,0)/d.tma.length) : null,
-                tme_fmt: fmtTempo(d.tme.length ? Math.round(d.tme.reduce((a,b)=>a+b,0)/d.tme.length) : null),
-                tma_fmt: fmtTempo(d.tma.length ? Math.round(d.tma.reduce((a,b)=>a+b,0)/d.tma.length) : null),
-                tme_amostras: d.tme.length,
-                tma_amostras: d.tma.length,
-                fila_agora: filaAgora[dept] || 0,
-            })).sort((a,b) => b.total - a.total);
+            const stats = Object.entries(porDept).map(([dept, d]) => {
+                // Atendentes deste departamento
+                const deptAtendentes = Object.values(porAtendente)
+                    .filter(a => a.dept === dept)
+                    .map(a => ({
+                        nome: a.nome,
+                        total: a.total,
+                        tme_seg: a.tme.length ? Math.round(a.tme.reduce((x,y)=>x+y,0)/a.tme.length) : null,
+                        tma_seg: a.tma.length ? Math.round(a.tma.reduce((x,y)=>x+y,0)/a.tma.length) : null,
+                        tme_fmt: fmtTempo(a.tme.length ? Math.round(a.tme.reduce((x,y)=>x+y,0)/a.tme.length) : null),
+                        tma_fmt: fmtTempo(a.tma.length ? Math.round(a.tma.reduce((x,y)=>x+y,0)/a.tma.length) : null),
+                    }))
+                    .sort((a,b) => b.total - a.total);
+                return {
+                    dept,
+                    total: d.total,
+                    tme_seg: d.tme.length ? Math.round(d.tme.reduce((a,b)=>a+b,0)/d.tme.length) : null,
+                    tma_seg: d.tma.length ? Math.round(d.tma.reduce((a,b)=>a+b,0)/d.tma.length) : null,
+                    tme_fmt: fmtTempo(d.tme.length ? Math.round(d.tme.reduce((a,b)=>a+b,0)/d.tme.length) : null),
+                    tma_fmt: fmtTempo(d.tma.length ? Math.round(d.tma.reduce((a,b)=>a+b,0)/d.tma.length) : null),
+                    tme_amostras: d.tme.length,
+                    tma_amostras: d.tma.length,
+                    fila_agora: filaAgora[dept] || 0,
+                    atendentes: deptAtendentes,
+                };
+            }).sort((a,b) => b.total - a.total);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true, stats, periodo: dias }));
