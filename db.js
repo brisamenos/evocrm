@@ -428,6 +428,7 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
         // Supervisor por departamento
         "ALTER TABLE departments ADD COLUMN supervisor_nome TEXT",
         "ALTER TABLE departments ADD COLUMN supervisor_key TEXT",
+        "ALTER TABLE departments ADD COLUMN supervisor_id TEXT",
         // Atendente atribuído ao lead
         "ALTER TABLE leads ADD COLUMN atendente_nome TEXT",
     ];

@@ -601,6 +601,7 @@ function crmApp() {
                 filaPorLead: {},         // { lead_id: { posicao, departamento } }
                 filaAguardando: 0,       // total aguardando no meu depto
                 filaPainelAberto: false, // expansão do painel flutuante na tela Chats
+                chatListTab: 'fila',     // 'fila' | 'historico' (para supervisor/atendente)
                 filaLista: [],           // lista ordenada para o painel
                 _stopVozAudio() {
                     if (this._vozAbort) { this._vozAbort.abort(); this._vozAbort = null; }
@@ -908,17 +909,17 @@ function crmApp() {
                 _operatorNames: new Set(), // nomes do operador — nunca salvar como nome de lead
 
                 navItems: [
-                    { id: 'dash',              label: 'Dash',            icon: 'pie-chart' },
-                    { id: 'kanban',            label: 'Kanban',          icon: 'columns' },
-                    { id: 'chats',             label: 'Conversas',       icon: 'message-circle' },
-                    { id: 'bot',               label: 'Automação',       icon: 'git-merge',     requerFeature: true },
-                    { id: 'ia_atendimento',    label: 'Agentes de IA',   icon: 'sparkles',      requerFeature: true, apenasAdm: true },
-                    { id: 'disparo',           label: 'Campanhas',       icon: 'send',          requerFeature: true },
-                    { id: 'agenda',            label: 'Agenda',          icon: 'calendar',      requerFeature: true },
-                    { id: 'setores',           label: 'Departamentos',   icon: 'shield',        requerFeature: true, apenasAdm: true },
-                    { id: 'atendimento',       label: 'Atendimento',     icon: 'activity',      apenasAdm: true },
-                    { id: 'conexao',           label: 'Conexão',         icon: 'smartphone' },
-                    { id: 'meu_plano',         label: 'Meu Plano',       icon: 'crown' }
+                    { id: 'dash',              label: 'Dash',            icon: 'pie-chart',                          roles: ['admin','supervisor'] },
+                    { id: 'kanban',            label: 'Kanban',          icon: 'columns',                            roles: ['admin','atendente'] },
+                    { id: 'chats',             label: 'Conversas',       icon: 'message-circle',                     roles: ['admin','supervisor','atendente'] },
+                    { id: 'bot',               label: 'Automação',       icon: 'git-merge',     requerFeature: true, roles: ['admin'] },
+                    { id: 'ia_atendimento',    label: 'Agentes de IA',   icon: 'sparkles',      requerFeature: true, roles: ['admin'] },
+                    { id: 'disparo',           label: 'Campanhas',       icon: 'send',          requerFeature: true, roles: ['admin'] },
+                    { id: 'agenda',            label: 'Agenda',          icon: 'calendar',      requerFeature: true, roles: ['admin','atendente'] },
+                    { id: 'setores',           label: 'Departamentos',   icon: 'shield',        requerFeature: true, roles: ['admin','supervisor'] },
+                    { id: 'atendimento',       label: 'Atendimento',     icon: 'activity',                           roles: ['admin','supervisor'] },
+                    { id: 'conexao',           label: 'Conexão',         icon: 'smartphone',                         roles: ['admin'] },
+                    { id: 'meu_plano',         label: 'Meu Plano',       icon: 'crown',                              roles: ['admin'] }
                 ],
                 
                 columns: [],
@@ -1124,11 +1125,16 @@ function crmApp() {
                     return this.privacy.nomes || (!temNomeReal && this.privacy.numeros);
                 },
 
+                get userRole() {
+                    if (this.currentUserDept === 'ADM Principal') return 'admin';
+                    if (this.isSupervisor) return 'supervisor';
+                    return 'atendente';
+                },
+
                 get filteredNavItems() {
+                    const role = this.userRole;
                     return [...this.navItems]
-                        // Itens exclusivos de ADM ficam invisíveis para outros setores (supervisor vê Atendimento)
-                        .filter(item => !item.apenasAdm || this.currentUserDept === 'ADM Principal' || (this.isSupervisor && (item.id === 'atendimento' || item.id === 'setores')))
-                        // Marca itens sem feature como bloqueados (visíveis mas com cadeado + toast)
+                        .filter(item => !item.roles || item.roles.includes(role))
                         .map(item => ({
                             ...item,
                             bloqueado: !!(item.requerFeature && !this._temFeature(item.id))
@@ -1374,13 +1380,21 @@ function crmApp() {
                     if (this.newDeptName.trim() === 'ADM Principal' && !this.newDeptKey.trim()) return alert("Preencha a chave master!");
                     
                     try {
+                        // Gerar supervisor_id se supervisor novo (sem ID ainda)
+                        let supId = this.editingDeptId ? (this.departmentsDB.find(d => d.id === this.editingDeptId)?.supervisor_id || null) : null;
+                        if (this.newDeptSupervisorNome.trim() && this.newDeptSupervisorKey.trim() && !supId) {
+                            supId = 'SUP-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+                        }
+                        if (!this.newDeptSupervisorNome.trim()) supId = null;
+
                         const deptPayload = {
                             name: this.newDeptName.trim(),
                             access_key: this.newDeptKey.trim() || 'admin123',
                             palavras_chave: this.newDeptKeywords.trim(),
                             msg_roteamento: this.newDeptMsg.trim(),
                             supervisor_nome: this.newDeptSupervisorNome.trim() || null,
-                            supervisor_key: this.newDeptSupervisorKey.trim() || null
+                            supervisor_key: this.newDeptSupervisorKey.trim() || null,
+                            supervisor_id: supId
                         };
 
                         if (this.editingDeptId && this.editingDeptId !== 'new-adm') {
@@ -1406,6 +1420,7 @@ function crmApp() {
                         this.addNotification('Sucesso', 'Setor atualizado com sucesso!', 'success');
                         this.cancelDeptEdit();
                         await this.loadDepartments();
+                        if (this.currentUserDept === 'ADM Principal') this.loadStaffLogins();
                     } catch(e) { 
                         alert("Erro do Banco de Dados: " + e.message); 
                     }
@@ -1522,7 +1537,9 @@ function crmApp() {
                     const deptDb = this.departmentsDB.find(d => d.name === this.currentUserDept);
                     if (!deptDb) return;
                     try {
+                        const atdId = 'ATD-' + Math.random().toString(36).substring(2, 6).toUpperCase();
                         const { error } = await this.client.from('dept_atendentes').insert({
+                            id: atdId,
                             instance_name: this.instanceName,
                             dept_id: deptDb.id,
                             nome: nome.trim(),
@@ -1530,7 +1547,7 @@ function crmApp() {
                             ativo: 1
                         });
                         if (error) throw error;
-                        this.addNotification('Sucesso', `Atendente "${nome}" criado!`, 'success');
+                        this.addNotification('Sucesso', `Atendente "${nome}" criado! ID: ${atdId}`, 'success');
                         await this.loadDeptAtendentes();
                     } catch(e) { alert('Erro ao criar atendente: ' + e.message); }
                 },
@@ -1556,9 +1573,10 @@ function crmApp() {
                     const idx = this.leads.findIndex(l => l.id === leadId);
                     if (idx !== -1) {
                         this.leads[idx].departamento = novoDept;
+                        this.leads[idx].atendente_nome = null;
                         this.leads = [...this.leads];
-                        await this.client.from('leads').update({ departamento: novoDept }).eq('id', leadId);
-                        this.addNotification('Transferido', `Cliente enviado para ${novoDept}.`, 'success');
+                        await this.client.from('leads').update({ departamento: novoDept, atendente_nome: null }).eq('id', leadId);
+                        this.addNotification('Transferido', `Cliente enviado para fila de ${novoDept}.`, 'success');
                         
                         const sysMsg = `*Transferência de Setor*\nO cliente foi transferido de ${this.currentUserDept} para: *${novoDept}*.`;
                         const tempId = 'sys-' + Date.now();
@@ -1568,8 +1586,22 @@ function crmApp() {
                             this.messages = [...this.messages, tempMsgObj];
                             this.scrollToBottom();
                         }
-                        this.updateLeadLocalInteraction(leadId, sysMsg, 'text');
+                        this.updateLeadLocalInteraction(leadId, sysMsg, 'type');
                         this.client.from('messages').insert({ lead_id: leadId, content: sysMsg, from_me: true, type: 'text', status: 'sent', instance_name: this.instanceName }).then();
+
+                        // Enfileirar o lead no novo departamento
+                        fetch('/api/fila/entrar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                inst: this.instanceName,
+                                lead_id: leadId,
+                                numero: this.leads[idx]?.numero || '',
+                                nome: this.leads[idx]?.nome || '',
+                                departamento: novoDept,
+                                motivo: 'Transferência manual'
+                            })
+                        }).then(() => this.carregarFila()).catch(() => {});
 
                         if(this.currentUserDept !== 'ADM Principal' && this.currentUserDept !== novoDept) {
                             this.isChatOpen = false; this.selectedLead = null;
@@ -2250,43 +2282,28 @@ function crmApp() {
                     this.isCheckingLicense = false;
                 },
                 
-                staffOptions: [],
-                showStaffSelector: false,
+                staffLogins: [],
 
-                async doStaffLogin(nome, senha) {
-                    if (!nome?.trim() || !senha?.trim()) return;
+                async doStaffLogin(loginId, senha) {
+                    if (!loginId?.trim() || !senha?.trim()) return;
                     this.isCheckingLicense = true;
                     try {
                         const resp = await fetch(`${SERVER_URL}/api/auth/staff-login`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ nome: nome.trim(), senha: senha.trim() })
+                            body: JSON.stringify({ login_id: loginId.trim(), senha: senha.trim() })
                         });
                         const result = await resp.json();
                         if (!resp.ok || result.error) {
-                            this._setStaffError(result.error || 'Credenciais inválidas');
+                            this._setStaffError(result.error || 'ID ou senha inválidos');
                             this.isCheckingLicense = false;
                             return;
                         }
-
-                        // Múltiplas correspondências — pede para escolher
-                        if (result.multiple) {
-                            this.staffOptions = result.options;
-                            this.showStaffSelector = true;
-                            this.isCheckingLicense = false;
-                            return;
-                        }
-
                         this._completeStaffLogin(result);
                     } catch(e) {
                         this._setStaffError('Erro de conexão');
                     }
                     this.isCheckingLicense = false;
-                },
-
-                selectStaffOption(opt) {
-                    this.showStaffSelector = false;
-                    this._completeStaffLogin(opt);
                 },
 
                 _setStaffError(msg) {
@@ -2324,6 +2341,29 @@ function crmApp() {
                     this.initCrm();
                 },
 
+
+                // Admin: carregar todos os logins de staff
+                async loadStaffLogins() {
+                    try {
+                        const resp = await fetch(`${SERVER_URL}/api/staff-logins?inst=${encodeURIComponent(this.instanceName)}`);
+                        this.staffLogins = await resp.json();
+                    } catch(e) { this.staffLogins = []; }
+                },
+
+                staffDashData: [],
+                staffDashLoading: false,
+
+                async loadStaffDashboard() {
+                    this.staffDashLoading = true;
+                    try {
+                        const dept = (this.userRole === 'supervisor') ? `&dept=${encodeURIComponent(this.currentUserDept)}` : '';
+                        const resp = await fetch(`${SERVER_URL}/api/stats/staff-dashboard?inst=${encodeURIComponent(this.instanceName)}${dept}`);
+                        const data = await resp.json();
+                        if (data.ok) this.staffDashData = data.departamentos || [];
+                    } catch(e) { this.staffDashData = []; }
+                    this.staffDashLoading = false;
+                },
+
                 doLogout() {
                     localStorage.removeItem('evo_instance'); localStorage.removeItem('evo_user_dept'); localStorage.removeItem('evo_plano'); localStorage.removeItem('evo_features'); localStorage.removeItem('evo_expires_at'); localStorage.removeItem('evo_is_trial'); localStorage.removeItem('evo_renewal_url'); localStorage.removeItem('evo_is_supervisor'); localStorage.removeItem('evo_user_name');
                     this.instanceName = ''; this.loginInput = ''; this.loginKey = ''; this.currentUserDept = ''; this.isSupervisor = false; this.loggedUserName = ''; this.deptAtendentes = []; this.clientePlano = 'basico'; this.clienteFeatures = null; this.clienteExpiresAt = null; this.clienteIsTrial = false; this.clienteRenewalUrl = null;
@@ -2355,6 +2395,7 @@ function crmApp() {
                     await this.loadDepartments(); 
                     if (!this.currentUserDept) { this.showDeptModal = true; }
                     if (this.isSupervisor) this.loadDeptAtendentes();
+                    if (this.currentUserDept === 'ADM Principal') this.loadStaffLogins();
                     await this.loadColumns(); 
                     await this.loadLeads();
                     await this.loadTags();
@@ -2376,6 +2417,10 @@ function crmApp() {
                     this.setupWakeLock();
                     // Tick de 1s para timers ao vivo (TMA/TME dashboard)
                     setInterval(() => { this._tickSegundo++; }, 1000);
+                    // Refresh periódico da fila para supervisor/atendente (10s)
+                    if (this.userRole !== 'admin') {
+                        setInterval(() => { this.carregarFila(); }, 10000);
+                    }
                     
                     // Intervalos robustos que funcionam em segundo plano
                     this.setupBackgroundIntervals();
@@ -3545,24 +3590,25 @@ function crmApp() {
                     this.chatInternoNaoLidos = 0;
                     this.carregarChatInterno(lead.id);
 
-                    // Tira o lead da fila se estiver aguardando (fire-and-forget)
-                    fetch('/api/fila/iniciar', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            inst: this.instanceName,
-                            lead_id: lead.id,
-                            agente_nome: this.loggedUserName || this.currentUserDept || 'ADM Principal'
-                        })
-                    }).catch(() => {});
-
-                    // Atribui o atendente ao lead
-                    const meuNome = this.loggedUserName || this.currentUserDept || 'ADM Principal';
-                    if (leadRef.atendente_nome !== meuNome) {
-                        leadRef.atendente_nome = meuNome;
-                        this.selectedLead.atendente_nome = meuNome;
-                        this.leads = [...this.leads];
-                        this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', lead.id);
+                    // Admin: tira da fila ao abrir (comportamento original)
+                    // Supervisor/Atendente: NÃO tira da fila aqui — só ao enviar a primeira mensagem
+                    if (this.userRole === 'admin') {
+                        fetch('/api/fila/iniciar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                inst: this.instanceName,
+                                lead_id: lead.id,
+                                agente_nome: this.loggedUserName || this.currentUserDept || 'ADM Principal'
+                            })
+                        }).catch(() => {});
+                        const meuNome = this.loggedUserName || this.currentUserDept || 'ADM Principal';
+                        if (leadRef.atendente_nome !== meuNome) {
+                            leadRef.atendente_nome = meuNome;
+                            this.selectedLead.atendente_nome = meuNome;
+                            this.leads = [...this.leads];
+                            this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', lead.id);
+                        }
                     }
 
                     // Foto e nome — sincroniza em background sem bloquear abertura
@@ -3809,6 +3855,26 @@ function crmApp() {
                     if(!this.msgInput.trim() || !this.selectedLead) return;
 
                     const msgTexto = this.msgInput.trim();
+                    const leadId = this.selectedLead.id;
+
+                    // Supervisor/Atendente: primeira mensagem inicia o atendimento (tira da fila, atribui nome)
+                    if (this.userRole !== 'admin' && this.filaPorLead[leadId]) {
+                        const meuNome = this.loggedUserName || this.currentUserDept || 'Atendente';
+                        fetch('/api/fila/iniciar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ inst: this.instanceName, lead_id: leadId, agente_nome: meuNome })
+                        }).then(() => this.carregarFila()).catch(() => {});
+                        // Atribui atendente ao lead
+                        const idx = this.leads.findIndex(l => l.id === leadId);
+                        if (idx !== -1) {
+                            this.leads[idx].atendente_nome = meuNome;
+                            this.leads = [...this.leads];
+                        }
+                        this.selectedLead.atendente_nome = meuNome;
+                        this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', leadId);
+                    }
+
                     // Aplica mesma lógica de pausa do WhatsApp direto
                     this._pausarIA(
                         this.selectedLead.id,
@@ -3834,7 +3900,21 @@ function crmApp() {
                 },
 
                 async uploadAndSend(event, type) { 
-                    const file = event.target.files[0]; if (!file || !this.selectedLead) return; 
+                    const file = event.target.files[0]; if (!file || !this.selectedLead) return;
+                    const leadId = this.selectedLead.id;
+                    // Supervisor/Atendente: primeira mensagem (mídia) inicia o atendimento
+                    if (this.userRole !== 'admin' && this.filaPorLead[leadId]) {
+                        const meuNome = this.loggedUserName || this.currentUserDept || 'Atendente';
+                        fetch('/api/fila/iniciar', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ inst: this.instanceName, lead_id: leadId, agente_nome: meuNome })
+                        }).then(() => this.carregarFila()).catch(() => {});
+                        const idx = this.leads.findIndex(l => l.id === leadId);
+                        if (idx !== -1) { this.leads[idx].atendente_nome = meuNome; this.leads = [...this.leads]; }
+                        this.selectedLead.atendente_nome = meuNome;
+                        this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', leadId);
+                    } 
                     const tempId = 'temp-' + Date.now(); const fakeUrl = `http://supabase.co/fake_${Date.now()}.${file.name.split('.').pop()}`; const tempMsg = { id: tempId, lead_id: this.selectedLead.id, content: fakeUrl, from_me: true, type: type, status: 'sent', timestamp: new Date().toISOString() };
                     this.messages = [...this.messages, tempMsg]; this.updateLeadLocalInteraction(this.selectedLead.id, fakeUrl, type); this.scrollToBottom(); this._refreshIcons();
                     try { 

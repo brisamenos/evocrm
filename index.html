@@ -106,27 +106,6 @@
 
 <body class="bg-[#f1f4f9] text-[#0d1117] dark:bg-[#0d1117] dark:text-[#e6edf3] antialiased font-sans overflow-hidden transition-colors duration-300 bg-pattern">
 
-    <!-- Modal: Escolher empresa (quando nome+senha tem múltiplas correspondências) -->
-    <div x-show="showStaffSelector" class="fixed inset-0 z-[900] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
-        <div class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl border border-gray-100 dark:border-[#21262d]">
-            <div class="w-16 h-16 bg-amber-50 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><i data-lucide="building-2" class="w-8 h-8"></i></div>
-            <h3 class="font-black text-xl dark:text-white mb-2">Selecione sua Empresa</h3>
-            <p class="text-xs text-slate-500 font-medium mb-6">Encontramos seu acesso em mais de uma empresa. Selecione a correta:</p>
-            <div class="space-y-3 max-h-[40vh] overflow-y-auto no-scrollbar">
-                <template x-for="(opt, idx) in staffOptions" :key="idx">
-                    <button @click="selectStaffOption(opt); $nextTick(()=>lucide.createIcons())" class="w-full p-4 rounded-2xl border-2 transition-all font-bold text-sm flex items-center gap-3 shadow-sm active:scale-95 border-gray-100 dark:border-[#21262d] text-slate-700 dark:text-slate-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-left">
-                        <i data-lucide="building-2" class="w-5 h-5 text-amber-500 shrink-0"></i>
-                        <div>
-                            <p class="font-black" x-text="opt.instance_name"></p>
-                            <p class="text-[10px] text-slate-400" x-text="opt.role === 'supervisor' ? 'Supervisor — ' + opt.departamento : 'Atendente — ' + opt.departamento"></p>
-                        </div>
-                    </button>
-                </template>
-            </div>
-            <button @click="showStaffSelector = false; staffOptions = []" class="mt-4 text-sm text-slate-400 hover:text-slate-600 font-bold">Cancelar</button>
-        </div>
-    </div>
-
     <div x-show="showDeptModal" class="fixed inset-0 z-[800] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl border border-gray-100 dark:border-[#21262d]">
             <div class="w-20 h-20 bg-[#e0e7ff] dark:bg-[#3730a3]/30 text-[#6366f1] rounded-3xl flex items-center justify-center mx-auto mb-6 transform rotate-3"><i data-lucide="briefcase" class="w-10 h-10"></i></div>
@@ -279,7 +258,7 @@
     </div>
 
     <!-- ── TOAST DE TRIAL / VENCIMENTO ──────────────────────────────────── -->
-    <div x-show="mostrarToastTrial && appState === 'crm'" x-cloak
+    <div x-show="mostrarToastTrial && appState === 'crm' && userRole === 'admin'" x-cloak
          x-transition:enter="transition ease-out duration-500 transform"
          x-transition:enter-start="translate-y-full opacity-0"
          x-transition:enter-end="translate-y-0 opacity-100"
@@ -317,7 +296,7 @@
 
 
     <div x-show="appState === 'login'" x-cloak class="min-h-screen flex items-center justify-center p-4 bg-slate-50 dark:bg-[#0d1117]"
-         x-data="{ loginMode: 'admin', staffNome: '', staffSenha: '', staffLoading: false, staffError: '' }">
+         x-data="{ loginMode: 'admin', staffLoginId: '', staffSenha: '', staffLoading: false, staffError: '' }">
         <div class="bg-white dark:bg-[#161b22] w-full max-w-md rounded-[2.5rem] shadow-2xl border border-gray-100 dark:border-[#21262d] p-8 md:p-10 text-center relative overflow-hidden">
             <div class="absolute top-4 right-4"><button @click="toggleTheme()" class="p-2 text-slate-400 hover:text-[#6366f1] transition-colors"><i :data-lucide="isDarkMode ? 'sun' : 'moon'" class="w-5 h-5"></i></button></div>
             <div class="w-20 h-20 bg-[#6366f1] rounded-3xl flex items-center justify-center shadow-lg shadow-[#6366f1]/40 mx-auto mb-6 transform rotate-3 hover:rotate-0 transition-transform"><i data-lucide="zap" class="text-white w-10 h-10"></i></div>
@@ -348,13 +327,13 @@
 
             <!-- Login Supervisor/Atendente (nome + senha) -->
             <div x-show="loginMode === 'staff'" x-transition>
-                <p class="text-sm text-slate-500 font-medium mb-6">Supervisor ou Atendente — entre com seu nome e senha.</p>
+                <p class="text-sm text-slate-500 font-medium mb-6">Supervisor ou Atendente — entre com seu ID e senha.</p>
                 <div class="space-y-4 mb-4">
-                    <input type="text" x-model="staffNome" placeholder="Seu nome" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-bold dark:text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all text-center">
-                    <input type="password" x-model="staffSenha" @keydown.enter="doStaffLogin(staffNome, staffSenha)" placeholder="Sua senha" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-black dark:text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all text-center tracking-widest">
+                    <input type="text" x-model="staffLoginId" placeholder="Seu ID (ex: SUP-A3F2)" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-bold dark:text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all text-center uppercase tracking-widest">
+                    <input type="password" x-model="staffSenha" @keydown.enter="doStaffLogin(staffLoginId, staffSenha)" placeholder="Sua senha" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-black dark:text-white outline-none focus:ring-2 focus:ring-amber-500 transition-all text-center tracking-widest">
                 </div>
                 <p x-show="staffError" class="text-xs text-red-500 font-bold mb-4" x-text="staffError"></p>
-                <button @click="staffError=''; doStaffLogin(staffNome, staffSenha)" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all text-base mb-4 flex justify-center items-center gap-2">
+                <button @click="staffError=''; doStaffLogin(staffLoginId, staffSenha)" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all text-base mb-4 flex justify-center items-center gap-2">
                     <span x-show="!staffLoading">Entrar</span> <i x-show="!staffLoading" data-lucide="log-in" class="w-5 h-5"></i>
                     <span x-show="staffLoading" class="animate-pulse flex items-center gap-2"><i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Verificando...</span>
                 </button>
@@ -687,7 +666,10 @@
                                                 </div>
                                                 <div>
                                                     <p class="text-sm font-bold dark:text-white" x-text="at.nome"></p>
-                                                    <p class="text-[10px] text-slate-400">Senha: <span class="font-mono tracking-widest" x-text="at.senha"></span></p>
+                                                    <p class="text-[10px] text-slate-400 flex items-center gap-2">
+                                                        ID: <span class="font-mono font-black text-[#6366f1] tracking-widest" x-text="at.id"></span>
+                                                        Senha: <span class="font-mono tracking-widest" x-text="at.senha"></span>
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div class="flex items-center gap-2">
@@ -805,6 +787,73 @@
                                 </div>
                             </template>
                         </div>
+
+                        <!-- Painel Admin: Todos os Logins Criados -->
+                        <div class="mt-10" x-show="currentUserDept === 'ADM Principal' && staffLogins.length > 0"
+                             x-init="$watch('screen', v => { if(v==='setores' && currentUserDept === 'ADM Principal') loadStaffLogins() })">
+                            <h4 class="font-black text-lg dark:text-white mb-4 flex items-center gap-2">
+                                <i data-lucide="key-round" class="w-5 h-5 text-amber-500"></i> Logins de Equipe
+                            </h4>
+                            <p class="text-[10px] text-slate-400 mb-4">Todos os supervisores e atendentes com acesso ao painel nesta instância.</p>
+
+                            <div class="space-y-4">
+                                <template x-for="dept in staffLogins" :key="dept.dept_id">
+                                    <div class="bg-slate-50 dark:bg-[#0d1117] rounded-2xl border border-gray-100 dark:border-[#21262d] overflow-hidden">
+                                        <!-- Header do departamento -->
+                                        <div class="px-4 py-3 border-b border-gray-100 dark:border-[#21262d] flex items-center justify-between">
+                                            <p class="font-black text-sm dark:text-white flex items-center gap-2">
+                                                <i data-lucide="building-2" class="w-4 h-4 text-[#6366f1]"></i>
+                                                <span x-text="dept.dept_nome"></span>
+                                            </p>
+                                        </div>
+                                        <div class="p-4 space-y-2">
+                                            <!-- Supervisor -->
+                                            <template x-if="dept.supervisor_nome">
+                                                <div class="flex items-center justify-between bg-amber-50 dark:bg-amber-900/10 p-3 rounded-xl border border-amber-100 dark:border-amber-800/30">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 text-amber-600 rounded-lg flex items-center justify-center">
+                                                            <i data-lucide="crown" class="w-4 h-4"></i>
+                                                        </div>
+                                                        <div>
+                                                            <p class="text-sm font-bold dark:text-white" x-text="dept.supervisor_nome"></p>
+                                                            <p class="text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase">Supervisor</p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-[10px] font-mono bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 px-2 py-1 rounded font-black tracking-widest" x-text="dept.supervisor_id" title="ID de login"></span>
+                                                        <span class="text-[10px] font-mono bg-white dark:bg-[#161b22] text-slate-500 px-2 py-1 rounded border border-gray-200 dark:border-[#21262d] tracking-widest" x-text="dept.supervisor_key" title="Senha"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="!dept.supervisor_nome">
+                                                <p class="text-[11px] text-slate-400 italic py-1">Sem supervisor definido</p>
+                                            </template>
+
+                                            <!-- Atendentes -->
+                                            <template x-for="at in dept.atendentes" :key="at.id">
+                                                <div class="flex items-center justify-between p-3 rounded-xl" :class="at.ativo ? 'bg-white dark:bg-[#161b22] border border-gray-100 dark:border-[#21262d]' : 'bg-slate-100 dark:bg-[#21262d]/50 opacity-60'">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" :class="at.ativo ? 'bg-[#e0e7ff] text-[#6366f1] dark:bg-[#3730a3]/30' : 'bg-slate-200 text-slate-400 dark:bg-[#21262d]'">
+                                                            <i data-lucide="headset" class="w-4 h-4"></i>
+                                                        </div>
+                                                        <div>
+                                                            <p class="text-sm font-bold dark:text-white" x-text="at.nome"></p>
+                                                            <p class="text-[10px] font-bold uppercase" :class="at.ativo ? 'text-[#6366f1]' : 'text-slate-400'" x-text="at.ativo ? 'Atendente — Ativo' : 'Atendente — Inativo'"></p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-[10px] font-mono bg-[#e0e7ff] dark:bg-[#3730a3]/30 text-[#6366f1] px-2 py-1 rounded font-black tracking-widest" x-text="at.id" title="ID de login"></span>
+                                                        <span class="text-[10px] font-mono bg-slate-50 dark:bg-[#0d1117] text-slate-500 px-2 py-1 rounded border border-gray-200 dark:border-[#21262d] tracking-widest" x-text="at.senha" title="Senha"></span>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <p x-show="dept.atendentes.length === 0 && dept.supervisor_nome" class="text-[11px] text-slate-400 italic py-1">Nenhum atendente criado pelo supervisor.</p>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
                             </div>
                         </template>
                     </div>
@@ -946,12 +995,29 @@
                         </div>
                     </div>
 
-                    <div class="bg-[#f1f4f9] dark:bg-[#161b22] p-3.5 flex justify-between items-center shrink-0 border-b border-gray-200 dark:border-[#21262d]/50">
-                        <h2 class="font-bold text-wa-text-light dark:text-wa-text-dark text-xl">Conversas</h2>
-                        <div class="flex gap-4">
-                            <button @click="showDeptModal = true" class="text-[#6366f1] dark:text-[#6366f1] md:hidden"><i data-lucide="briefcase" class="w-5 h-5"></i></button>
-                            <button @click="toggleTheme()" class="text-wa-sub-light dark:text-wa-sub-dark hover:text-[#6366f1] transition-colors"><i :data-lucide="isDarkMode ? 'sun' : 'moon'" class="w-5 h-5"></i></button>
-                            <i data-lucide="more-vertical" class="w-5 h-5 text-wa-sub-light dark:text-wa-sub-dark"></i>
+                    <div class="bg-[#f1f4f9] dark:bg-[#161b22] shrink-0 border-b border-gray-200 dark:border-[#21262d]/50">
+                        <!-- Header -->
+                        <div class="p-3.5 flex justify-between items-center">
+                            <h2 class="font-bold text-wa-text-light dark:text-wa-text-dark text-xl" x-text="userRole === 'admin' ? 'Conversas' : (chatListTab === 'fila' ? 'Fila / Atendimento' : 'Conversas Encerradas')"></h2>
+                            <div class="flex gap-4">
+                                <button @click="showDeptModal = true" class="text-[#6366f1] dark:text-[#6366f1] md:hidden"><i data-lucide="briefcase" class="w-5 h-5"></i></button>
+                                <button @click="toggleTheme()" class="text-wa-sub-light dark:text-wa-sub-dark hover:text-[#6366f1] transition-colors"><i :data-lucide="isDarkMode ? 'sun' : 'moon'" class="w-5 h-5"></i></button>
+                                <i data-lucide="more-vertical" class="w-5 h-5 text-wa-sub-light dark:text-wa-sub-dark"></i>
+                            </div>
+                        </div>
+                        <!-- Tabs para Supervisor/Atendente -->
+                        <div x-show="userRole !== 'admin'" class="flex border-t border-gray-200 dark:border-[#21262d]">
+                            <button @click="chatListTab = 'fila'; $nextTick(()=>lucide.createIcons())"
+                                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-black uppercase tracking-wide transition-colors border-b-2"
+                                    :class="chatListTab === 'fila' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : 'border-transparent text-slate-400'">
+                                <i data-lucide="clock" class="w-3.5 h-3.5"></i> Fila / Atendimento
+                                <span x-show="filaLista.length > 0" class="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full" x-text="filaLista.length"></span>
+                            </button>
+                            <button @click="chatListTab = 'historico'; $nextTick(()=>lucide.createIcons())"
+                                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-black uppercase tracking-wide transition-colors border-b-2"
+                                    :class="chatListTab === 'historico' ? 'border-[#6366f1] text-[#6366f1]' : 'border-transparent text-slate-400'">
+                                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Conversas
+                            </button>
                         </div>
                     </div>
                     <div class="bg-white dark:bg-wa-header-dark p-2 border-b border-[#f2f2f2] dark:border-[#21262d] shrink-0">
@@ -961,6 +1027,10 @@
                         </div>
                     </div>
                     <div class="flex-1 overflow-y-auto no-scrollbar smooth-scroll-container">
+
+                        <!-- ══ MODO ADMIN: lista única como antes ══ -->
+                        <template x-if="userRole === 'admin'">
+                            <div>
                         <template x-for="lead in myLeads.filter(l => getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).sort((a,b) => new Date(b.last_interaction || b.created_at || 0).getTime() - new Date(a.last_interaction || a.created_at || 0).getTime())" :key="lead.id">
                             <div @click="openChat(lead)" class="flex items-center px-3 py-2 hover:bg-[#f5f6f6] dark:hover:bg-[#21262d] cursor-pointer transition-colors group relative">
                                 <img :src="(lead.foto_url && lead.foto_url !== 'default' && lead.foto_url.startsWith('http')) ? lead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" referrerpolicy="no-referrer" :class="['w-[49px] h-[49px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]', privacy.fotos && 'blur-foto']" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" loading="lazy">
@@ -992,7 +1062,104 @@
                                 </button>
                             </div>
                         </template>
-                        <div x-show="myLeads.filter(l => getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).length === 0" class="text-center py-10 text-wa-sub-light dark:text-wa-sub-dark text-sm">Nenhuma conversa encontrada no seu setor.</div>
+                        <div x-show="myLeads.filter(l => getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).length === 0" class="text-center py-10 text-wa-sub-light dark:text-wa-sub-dark text-sm">Nenhuma conversa encontrada.</div>
+                            </div>
+                        </template>
+
+                        <!-- ══ MODO EQUIPE (supervisor/atendente): abas Fila/Atendimento + Conversas ══ -->
+                        <template x-if="userRole !== 'admin'">
+                            <div>
+                                <!-- ═══ ABA: FILA / ATENDIMENTO ═══ -->
+                                <div x-show="chatListTab === 'fila'">
+                                    <!-- FILA DE ESPERA -->
+                                    <div class="bg-amber-50/50 dark:bg-amber-900/5 border-b-2 border-amber-200/50 dark:border-amber-800/30">
+                                        <div class="flex items-center justify-between px-3 py-2">
+                                            <p class="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                                <i data-lucide="clock" class="w-3 h-3"></i> Aguardando na Fila
+                                            </p>
+                                            <span class="text-[10px] font-black text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full"
+                                                  x-text="filaLista.filter(f => !chatSearch || (f.nome||'').toLowerCase().includes(chatSearch.toLowerCase()) || (f.numero||'').includes(chatSearch)).length"></span>
+                                        </div>
+                                        <template x-for="item in filaLista.filter(f => !chatSearch || (f.nome||'').toLowerCase().includes(chatSearch.toLowerCase()) || (f.numero||'').includes(chatSearch))" :key="item.id">
+                                            <div @click="(() => { const l = leads.find(x => x.id === item.lead_id); if (l) openChat(l); })()"
+                                                 class="flex items-center px-3 py-2.5 hover:bg-amber-100/50 dark:hover:bg-amber-900/10 cursor-pointer transition-colors group border-b border-amber-100/50 dark:border-amber-800/20 last:border-0">
+                                                <div class="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center mr-3 shrink-0">
+                                                    <span class="text-xs font-black text-amber-700 dark:text-amber-300" x-text="item.posicao"></span>
+                                                </div>
+                                                <img :src="(() => { const l = leads.find(x => x.id === item.lead_id); return (l?.foto_url && l.foto_url !== 'default' && l.foto_url.startsWith('http')) ? l.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (item.numero || item.lead_id); })()"
+                                                     class="w-[42px] h-[42px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]" loading="lazy"
+                                                     @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (item.numero || item.lead_id)">
+                                                <div class="flex-1 min-w-0">
+                                                    <h4 class="font-bold text-[15px] text-wa-text-light dark:text-wa-text-dark truncate" x-text="item.nome || item.numero"></h4>
+                                                    <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-0.5 mt-0.5">
+                                                        <i data-lucide="timer" class="w-3 h-3"></i> TME:
+                                                        <span x-text="(() => { void _tickSegundo; const s = Math.round((Date.now() - new Date(item.entrada_em || item.created_at).getTime()) / 1000); return s < 60 ? s+'s' : s < 3600 ? Math.floor(s/60)+'min' : Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m'; })()"></span>
+                                                    </span>
+                                                </div>
+                                                <div class="shrink-0 ml-2">
+                                                    <span class="text-[9px] bg-amber-500 text-white px-2.5 py-1.5 rounded-lg font-black uppercase shadow-sm">Atender</span>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <div x-show="filaLista.length === 0" class="px-3 py-6 text-center text-[11px] text-amber-500/60 font-medium">Nenhum cliente na fila.</div>
+                                    </div>
+
+                                    <!-- EM ATENDIMENTO (leads com atendente, fora da fila, não encerrados) -->
+                                    <div>
+                                        <div class="flex items-center justify-between px-3 py-2 border-b border-[#f2f2f2] dark:border-[#21262d]">
+                                            <p class="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                                <i data-lucide="headset" class="w-3 h-3"></i> Em Atendimento
+                                            </p>
+                                            <span class="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-300 px-2 py-0.5 rounded-full"
+                                                  x-text="myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).filter(l => !chatSearch || getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).length"></span>
+                                        </div>
+                                        <template x-for="lead in myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).filter(l => !chatSearch || getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).sort((a,b) => new Date(b.last_interaction || b.created_at || 0).getTime() - new Date(a.last_interaction || a.created_at || 0).getTime())" :key="lead.id">
+                                            <div @click="openChat(lead)" class="flex items-center px-3 py-2 hover:bg-[#f5f6f6] dark:hover:bg-[#21262d] cursor-pointer transition-colors group relative">
+                                                <img :src="(lead.foto_url && lead.foto_url !== 'default' && lead.foto_url.startsWith('http')) ? lead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" referrerpolicy="no-referrer" :class="['w-[49px] h-[49px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]', privacy.fotos && 'blur-foto']" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" loading="lazy">
+                                                <div class="flex-1 border-b border-[#f2f2f2] dark:border-[#21262d]/60 pb-2.5 pt-1 group-last:border-0 overflow-hidden">
+                                                    <div class="flex justify-between items-center mb-0.5">
+                                                        <h4 class="font-normal text-[17px] text-wa-text-light dark:text-wa-text-dark truncate" :class="lead.unread > 0 ? 'font-bold' : ''" x-text="getLeadName(lead)"></h4>
+                                                        <span class="text-xs text-wa-sub-light dark:text-wa-sub-dark shrink-0" :class="lead.unread > 0 ? 'text-[#6366f1] font-bold' : ''" x-text="new Date(lead.last_interaction || lead.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})"></span>
+                                                    </div>
+                                                    <div class="flex items-center justify-between">
+                                                        <p class="text-[13px] text-wa-sub-light dark:text-wa-sub-dark truncate pr-2 flex items-center gap-1" :class="lead.unread > 0 ? 'font-medium' : ''">
+                                                            <span class="text-[9px] bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 px-1 py-0.5 rounded font-bold shrink-0" x-text="lead.atendente_nome"></span>
+                                                            <span class="truncate" x-text="lead.last_msg ? formatText(lead.last_msg) : lead.numero"></span>
+                                                        </p>
+                                                        <span x-show="lead.unread > 0" class="bg-[#6366f1] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center shadow-sm shrink-0" x-text="lead.unread"></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                        <div x-show="myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).length === 0" class="text-center py-6 text-wa-sub-light dark:text-wa-sub-dark text-[11px]">Nenhum atendimento ativo.</div>
+                                    </div>
+                                </div>
+
+                                <!-- ═══ ABA: CONVERSAS (historico/encerradas) ═══ -->
+                                <div x-show="chatListTab === 'historico'">
+                                    <template x-for="lead in myLeads.filter(l => l.atendimento_fim || (!l.atendente_nome && !filaPorLead[l.id])).filter(l => !chatSearch || getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).sort((a,b) => new Date(b.last_interaction || b.created_at || 0).getTime() - new Date(a.last_interaction || a.created_at || 0).getTime())" :key="lead.id">
+                                        <div @click="openChat(lead)" class="flex items-center px-3 py-2 hover:bg-[#f5f6f6] dark:hover:bg-[#21262d] cursor-pointer transition-colors group relative">
+                                            <img :src="(lead.foto_url && lead.foto_url !== 'default' && lead.foto_url.startsWith('http')) ? lead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" referrerpolicy="no-referrer" :class="['w-[49px] h-[49px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]', privacy.fotos && 'blur-foto']" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" loading="lazy">
+                                            <div class="flex-1 border-b border-[#f2f2f2] dark:border-[#21262d]/60 pb-2.5 pt-1 group-last:border-0 overflow-hidden">
+                                                <div class="flex justify-between items-center mb-0.5">
+                                                    <h4 class="font-normal text-[17px] text-wa-text-light dark:text-wa-text-dark truncate" x-text="getLeadName(lead)"></h4>
+                                                    <span class="text-xs text-wa-sub-light dark:text-wa-sub-dark shrink-0" x-text="new Date(lead.last_interaction || lead.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})"></span>
+                                                </div>
+                                                <div class="flex items-center justify-between">
+                                                    <p class="text-[13px] text-wa-sub-light dark:text-wa-sub-dark truncate pr-2 flex items-center gap-1">
+                                                        <span x-show="lead.atendente_nome" class="text-[9px] bg-slate-100 text-slate-500 dark:bg-[#21262d] dark:text-slate-400 px-1 py-0.5 rounded font-bold shrink-0" x-text="lead.atendente_nome"></span>
+                                                        <span class="truncate" x-text="lead.last_msg ? formatText(lead.last_msg) : lead.numero"></span>
+                                                    </p>
+                                                    <span x-show="lead.tma_segundos" class="text-[9px] text-slate-400 shrink-0" x-text="'TMA: ' + _fmtTempo(lead.tma_segundos)"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <div x-show="myLeads.filter(l => l.atendimento_fim || (!l.atendente_nome && !filaPorLead[l.id])).length === 0" class="text-center py-10 text-wa-sub-light dark:text-wa-sub-dark text-sm">Nenhuma conversa encerrada.</div>
+                                </div>
+                            </div>
+                        </template>
+
                     </div>
                 </div>
 
@@ -1318,8 +1485,8 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Tabs compactas -->
-                        <div class="flex overflow-x-auto no-scrollbar border-t border-[#e6edf3] dark:border-[#21262d]">
+                        <!-- Tabs compactas (somente admin) -->
+                        <div x-show="userRole === 'admin'" class="flex overflow-x-auto no-scrollbar border-t border-[#e6edf3] dark:border-[#21262d]">
                             <button @click="dashTab='overview'"
                                     class="flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-[10px] font-black uppercase tracking-wide transition-colors border-b-2 min-w-0"
                                     :class="dashTab==='overview' ? 'border-[#6366f1] text-[#6366f1]' : 'border-transparent text-[#6b7280] dark:text-[#8b949e]'">
@@ -1353,8 +1520,92 @@
                         </div>
                     </div>
 
-                    <!-- ══ ABA: VISÃO GERAL ══ -->
-                    <div x-show="dashTab==='overview'" x-transition class="px-3 pt-3 space-y-3 pb-3">
+                    <!-- ══ SUPERVISOR DASH (métricas do departamento) ══ -->
+                    <div x-show="userRole === 'supervisor'" class="px-4 pt-4 pb-6 space-y-4"
+                         x-init="$watch('screen', v => { if(v==='dash' && userRole === 'supervisor') loadAtendimentoStats(); })">
+                        <h3 class="font-black text-lg dark:text-white flex items-center gap-2">
+                            <i data-lucide="activity" class="w-5 h-5 text-amber-500"></i> Painel do Supervisor — <span class="text-amber-600" x-text="currentUserDept"></span>
+                        </h3>
+
+                        <!-- KPIs do departamento -->
+                        <div class="grid grid-cols-3 gap-3">
+                            <div class="bg-white dark:bg-[#161b22] p-4 rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm text-center">
+                                <div class="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center mx-auto mb-2">
+                                    <i data-lucide="clock" class="w-5 h-5 text-blue-500"></i>
+                                </div>
+                                <p class="text-2xl font-black text-blue-500" x-text="(atendimentoStats.find(s => s.dept === currentUserDept)?.tme_fmt) || '0s'"></p>
+                                <p class="text-[10px] text-slate-500 font-bold mt-1">TME</p>
+                                <p class="text-[9px] text-slate-400">Tempo Médio de Espera</p>
+                            </div>
+                            <div class="bg-white dark:bg-[#161b22] p-4 rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm text-center">
+                                <div class="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center mx-auto mb-2">
+                                    <i data-lucide="timer" class="w-5 h-5 text-emerald-500"></i>
+                                </div>
+                                <p class="text-2xl font-black text-emerald-500" x-text="(atendimentoStats.find(s => s.dept === currentUserDept)?.tma_fmt) || '0s'"></p>
+                                <p class="text-[10px] text-slate-500 font-bold mt-1">TMA</p>
+                                <p class="text-[9px] text-slate-400">Tempo Médio de Atendimento</p>
+                            </div>
+                            <div class="bg-white dark:bg-[#161b22] p-4 rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm text-center">
+                                <div class="w-10 h-10 bg-amber-50 dark:bg-amber-900/20 rounded-xl flex items-center justify-center mx-auto mb-2">
+                                    <i data-lucide="users" class="w-5 h-5 text-amber-500"></i>
+                                </div>
+                                <p class="text-2xl font-black text-amber-500" x-text="(atendimentoStats.find(s => s.dept === currentUserDept)?.fila_agora) || 0"></p>
+                                <p class="text-[10px] text-slate-500 font-bold mt-1">Na Fila</p>
+                                <p class="text-[9px] text-slate-400">Aguardando agora</p>
+                            </div>
+                        </div>
+
+                        <!-- Equipe: conversas em andamento -->
+                        <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm overflow-hidden">
+                            <div class="px-4 py-3 border-b border-gray-100 dark:border-[#21262d] flex items-center justify-between">
+                                <p class="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                                    <i data-lucide="headset" class="w-3.5 h-3.5 text-[#6366f1]"></i> Equipe em Atendimento
+                                </p>
+                                <span class="text-[9px] font-bold text-slate-400" x-text="myLeads.filter(l => l.atendente_nome).length + ' conversa(s)'"></span>
+                            </div>
+                            <div class="divide-y divide-gray-50 dark:divide-[#21262d]">
+                                <template x-for="lead in myLeads.filter(l => l.atendente_nome).sort((a,b) => new Date(b.last_interaction || 0) - new Date(a.last_interaction || 0)).slice(0, 20)" :key="lead.id">
+                                    <div @click="openChat(lead)" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-[#21262d]/50 cursor-pointer transition-colors">
+                                        <img :src="(lead.foto_url && lead.foto_url !== 'default' && lead.foto_url.startsWith('http')) ? lead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" class="w-9 h-9 rounded-full object-cover bg-slate-100 dark:bg-[#21262d]" loading="lazy" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)">
+                                        <div class="flex-1 min-w-0">
+                                            <p class="text-sm font-bold dark:text-white truncate" x-text="getLeadName(lead)"></p>
+                                            <p class="text-[10px] text-slate-400 truncate" x-text="lead.last_msg || lead.numero"></p>
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <span class="text-[9px] bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 px-1.5 py-0.5 rounded font-bold" x-text="lead.atendente_nome"></span>
+                                            <p class="text-[9px] text-slate-400 mt-1" x-text="lead.last_interaction ? new Date(lead.last_interaction).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : ''"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                                <p x-show="myLeads.filter(l => l.atendente_nome).length === 0" class="text-center text-[11px] text-slate-400 py-6">Nenhum atendimento em andamento.</p>
+                            </div>
+                        </div>
+
+                        <!-- Números gerais -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="bg-white dark:bg-[#161b22] p-3 rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-[#e0e7ff] dark:bg-[#3730a3]/30 flex items-center justify-center shrink-0">
+                                    <i data-lucide="message-circle" class="w-4 h-4 text-[#6366f1]"></i>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-black dark:text-white leading-none" x-text="myLeads.length"></p>
+                                    <p class="text-[10px] text-slate-500 font-bold mt-0.5">Conversas no Setor</p>
+                                </div>
+                            </div>
+                            <div class="bg-white dark:bg-[#161b22] p-3 rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm flex items-center gap-3">
+                                <div class="w-9 h-9 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0">
+                                    <i data-lucide="bell-ring" class="w-4 h-4 text-red-500"></i>
+                                </div>
+                                <div>
+                                    <p class="text-2xl font-black text-red-500 leading-none" x-text="myLeads.filter(l => l.unread > 0).length"></p>
+                                    <p class="text-[10px] text-slate-500 font-bold mt-0.5">Não lidas</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ══ ABA: VISÃO GERAL (admin) ══ -->
+                    <div x-show="dashTab==='overview' && userRole === 'admin'" x-transition class="px-3 pt-3 space-y-3 pb-3">
 
                         <!-- KPIs 2x2 compactos -->
                         <div class="grid grid-cols-2 gap-2">
@@ -1490,7 +1741,7 @@
                         </div>
 
                     </div>
-                    <div x-show="dashTab==='tasks'" x-transition class="px-3 pt-3 pb-3 space-y-3">
+                    <div x-show="dashTab==='tasks' && userRole === 'admin'" x-transition class="px-3 pt-3 pb-3 space-y-3">
 
                         <!-- Header tarefas -->
                         <div class="flex items-center justify-between">
@@ -1595,7 +1846,7 @@
 
                     <!-- ══ ABA: NOTIFICAÇÕES (manuais) ══ -->
                     <!-- ══ ABA: NOTIFICAÇÕES (UNIFICADA) ══ -->
-                    <div x-show="dashTab==='notifs'" x-transition x-data="{ notifFilter: 'todas' }"
+                    <div x-show="dashTab==='notifs' && userRole === 'admin'" x-transition x-data="{ notifFilter: 'todas' }"
                          x-init="$watch('dashTab', v => { if(v==='notifs') refreshDashNotifs(); })"
                          class="px-4 pt-4 pb-4 space-y-4">
 
@@ -1802,7 +2053,7 @@
 
 
                     <!-- ══ ABA: ANALYTICS ══ -->
-                    <div x-show="dashTab==='analytics'" x-transition class="px-4 pt-4 pb-6 space-y-5"
+                    <div x-show="dashTab==='analytics' && userRole === 'admin'" x-transition class="px-4 pt-4 pb-6 space-y-5"
                          x-init="$watch('dashTab', v => { if(v==='analytics') { $nextTick(()=>renderDashCharts()); loadAtendimentoStats(); } })">
 
                         <!-- KPIs row -->
@@ -2376,6 +2627,132 @@
                                     </div>
                                 </template>
                             </div>
+                        </div>
+
+                        <!-- ══ DASHBOARD POR SUPERVISOR / ATENDENTE ══ -->
+                        <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm overflow-hidden"
+                             x-init="$watch('screen', v => { if(v==='atendimento' && (userRole === 'admin' || userRole === 'supervisor')) loadStaffDashboard(); })">
+                            <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-[#21262d]">
+                                <p class="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
+                                    <i data-lucide="users" class="w-3.5 h-3.5 text-amber-500"></i>
+                                    <span x-text="userRole === 'admin' ? 'Dashboard por Departamento / Equipe' : 'Dashboard da Equipe'"></span>
+                                </p>
+                                <button @click="loadStaffDashboard(); $nextTick(()=>lucide.createIcons())" class="p-1.5 rounded-xl bg-slate-50 dark:bg-[#21262d] hover:bg-amber-50 transition-colors">
+                                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-400" :class="staffDashLoading && 'animate-spin'"></i>
+                                </button>
+                            </div>
+
+                            <div x-show="staffDashLoading" class="text-center py-8">
+                                <i data-lucide="loader" class="w-6 h-6 text-[#6366f1] animate-spin mx-auto"></i>
+                            </div>
+
+                            <div x-show="!staffDashLoading && staffDashData.length === 0" class="text-center py-8 text-slate-400 text-sm">
+                                Nenhum departamento com equipe configurada.
+                            </div>
+
+                            <template x-for="dept in staffDashData" :key="dept.dept_id">
+                                <div class="border-b border-gray-50 dark:border-[#21262d] last:border-0">
+                                    <!-- Header do departamento -->
+                                    <div class="bg-slate-50 dark:bg-[#0d1117] px-4 py-3 flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <i data-lucide="building-2" class="w-4 h-4 text-[#6366f1]"></i>
+                                            <span class="text-sm font-black dark:text-white" x-text="dept.dept_nome"></span>
+                                            <template x-if="dept.supervisor_nome">
+                                                <span class="text-[9px] bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 px-2 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                                                    <i data-lucide="crown" class="w-2.5 h-2.5"></i> <span x-text="dept.supervisor_nome"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+                                        <!-- KPIs mini -->
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-[9px] font-bold" :class="dept.kpis.aguardando > 0 ? 'text-amber-600' : 'text-slate-400'" x-text="dept.kpis.aguardando + ' na fila'"></span>
+                                            <span class="text-[9px] font-bold text-emerald-500" x-text="dept.kpis.ativos + ' ativos'"></span>
+                                            <span class="text-[9px] font-bold text-slate-400" x-text="dept.kpis.encerradosHoje + ' enc. hoje'"></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Fila de espera do departamento (clientes esperando com TME) -->
+                                    <template x-if="dept.fila.length > 0">
+                                        <div class="bg-amber-50/30 dark:bg-amber-900/5 px-4 py-2">
+                                            <p class="text-[9px] font-black uppercase text-amber-600 dark:text-amber-400 tracking-wider mb-2 flex items-center gap-1">
+                                                <i data-lucide="clock" class="w-3 h-3"></i> Clientes em Espera
+                                            </p>
+                                            <div class="flex flex-wrap gap-2">
+                                                <template x-for="f in dept.fila" :key="f.id">
+                                                    <div class="flex items-center gap-1.5 bg-white dark:bg-[#161b22] px-2.5 py-1.5 rounded-lg border border-amber-200/50 dark:border-amber-800/30 text-[10px]">
+                                                        <span class="font-bold text-slate-700 dark:text-slate-200 truncate max-w-[100px]" x-text="f.nome || f.numero"></span>
+                                                        <span class="font-black text-amber-600 dark:text-amber-400" x-text="(() => { void _tickSegundo; const s = Math.round((Date.now() - new Date(f.entrada_em).getTime())/1000); return s < 60 ? s+'s' : s < 3600 ? Math.floor(s/60)+'min' : Math.floor(s/3600)+'h'+Math.floor((s%3600)/60)+'m'; })()"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- Tabela de atendentes -->
+                                    <div class="px-4 py-3">
+                                        <template x-if="dept.atendentes.length > 0">
+                                            <div class="overflow-x-auto">
+                                                <table class="w-full text-[11px]">
+                                                    <thead>
+                                                        <tr class="text-left text-[9px] font-black uppercase text-slate-400 tracking-wider">
+                                                            <th class="py-2 pr-2">Atendente</th>
+                                                            <th class="py-2 px-2 text-center">Ativos</th>
+                                                            <th class="py-2 px-2 text-center">Enc. Hoje</th>
+                                                            <th class="py-2 px-2 text-center">TMA Hoje</th>
+                                                            <th class="py-2 px-2 text-center">Total 7d</th>
+                                                            <th class="py-2 px-2 text-center">TMA 7d</th>
+                                                            <th class="py-2 px-2 text-center">TME 7d</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-slate-50 dark:divide-[#21262d]">
+                                                        <template x-for="at in dept.atendentes" :key="at.id">
+                                                            <tr class="hover:bg-slate-50 dark:hover:bg-[#0d1117] transition-colors">
+                                                                <td class="py-2.5 pr-2">
+                                                                    <div class="flex items-center gap-2">
+                                                                        <div class="w-6 h-6 rounded-lg bg-[#e0e7ff] dark:bg-[#3730a3]/30 flex items-center justify-center">
+                                                                            <i data-lucide="headset" class="w-3 h-3 text-[#6366f1]"></i>
+                                                                        </div>
+                                                                        <span class="font-bold text-slate-700 dark:text-white" x-text="at.nome"></span>
+                                                                    </div>
+                                                                </td>
+                                                                <td class="py-2.5 px-2 text-center">
+                                                                    <span class="font-black" :class="at.ativos > 0 ? 'text-emerald-500' : 'text-slate-300'" x-text="at.ativos"></span>
+                                                                </td>
+                                                                <td class="py-2.5 px-2 text-center font-bold text-slate-600 dark:text-slate-300" x-text="at.encerradosHoje"></td>
+                                                                <td class="py-2.5 px-2 text-center font-bold text-[#6366f1]" x-text="_fmtTempo(at.tmaHoje)"></td>
+                                                                <td class="py-2.5 px-2 text-center font-bold text-slate-500" x-text="at.total7d"></td>
+                                                                <td class="py-2.5 px-2 text-center font-bold text-emerald-500" x-text="_fmtTempo(at.tma7d)"></td>
+                                                                <td class="py-2.5 px-2 text-center font-bold text-amber-500" x-text="_fmtTempo(at.tme7d)"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </template>
+                                        <p x-show="dept.atendentes.length === 0" class="text-[11px] text-slate-400 italic text-center py-2">Nenhum atendente cadastrado neste setor.</p>
+
+                                        <!-- Resumo do departamento -->
+                                        <div class="mt-3 pt-3 border-t border-slate-100 dark:border-[#21262d] grid grid-cols-4 gap-2 text-center">
+                                            <div>
+                                                <p class="text-lg font-black text-[#6366f1]" x-text="_fmtTempo(dept.kpis.tmaMedHoje)"></p>
+                                                <p class="text-[9px] text-slate-400 font-bold">TMA Médio</p>
+                                            </div>
+                                            <div>
+                                                <p class="text-lg font-black text-amber-500" x-text="_fmtTempo(dept.kpis.tmeAtual)"></p>
+                                                <p class="text-[9px] text-slate-400 font-bold">TME Atual</p>
+                                            </div>
+                                            <div>
+                                                <p class="text-lg font-black" :class="dept.kpis.aguardando > 0 ? 'text-red-500' : 'text-slate-300'" x-text="dept.kpis.aguardando"></p>
+                                                <p class="text-[9px] text-slate-400 font-bold">Na Fila</p>
+                                            </div>
+                                            <div>
+                                                <p class="text-lg font-black text-emerald-500" x-text="dept.kpis.encerradosHoje"></p>
+                                                <p class="text-[9px] text-slate-400 font-bold">Enc. Hoje</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
 
                     </div>

@@ -3247,6 +3247,46 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // POST /api/fila/entrar  { inst, lead_id, departamento, motivo? }
+    if (req.url === '/api/fila/entrar' && req.method === 'POST') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const { inst, lead_id, departamento, motivo } = JSON.parse(body || '{}');
+                if (!inst || !lead_id || !departamento) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'inst, lead_id, departamento obrigatórios' }));
+                    return;
+                }
+                const { data: lead } = await db.from('leads').select('*').eq('id', lead_id).single();
+                if (!lead) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'Lead não encontrado' }));
+                    return;
+                }
+                // Limpa qualquer entrada antiga na fila (em_atendimento, encerrado, ou outro dept)
+                try {
+                    await db.from('fila_atendimento').delete()
+                        .eq('instance_name', inst).eq('lead_id', lead_id);
+                } catch(e) { /* ok */ }
+                // Limpa atendimento ativo deste lead
+                try {
+                    await db.from('leads').update({ atendimento_inicio: null, atendimento_fim: null, tma_segundos: null, atendente_nome: null })
+                        .eq('id', lead_id);
+                } catch(e) { /* ok */ }
+                // Enfileira no novo departamento
+                await enfileirarLead(inst, lead, departamento, motivo || 'Transferência manual');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
+            } catch(e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
     // GET /api/fila/listar?inst=...&departamento=...  — lista quem está aguardando
     if (req.url.startsWith('/api/fila/listar') && req.method === 'GET') {
         try {
@@ -3596,6 +3636,109 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // GET /api/stats/staff-dashboard?inst=...&dept=...  — dashboard por supervisor/atendente
+    if (req.url.startsWith('/api/stats/staff-dashboard') && req.method === 'GET') {
+        try {
+            const urlP = new URL(req.url, 'http://localhost');
+            const inst = urlP.searchParams.get('inst') || '';
+            const deptFilter = urlP.searchParams.get('dept') || '';
+            if (!inst) { res.writeHead(400); res.end(JSON.stringify({ error: 'inst obrigatório' })); return; }
+
+            const agora = Date.now();
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
+            const hojeIso = hoje.toISOString();
+            const desde7 = new Date(Date.now() - 7*86400000).toISOString();
+
+            // Departamentos com supervisor
+            const { data: allDepts } = await db.from('departments').select('*').eq('instance_name', inst);
+            const depts = (allDepts || []).filter(d => d.name !== 'ADM Principal' && (!deptFilter || d.name === deptFilter));
+
+            // Atendentes
+            const { data: allAtend } = await db.from('dept_atendentes').select('*').eq('instance_name', inst).eq('ativo', 1);
+
+            // Leads e fila
+            const { data: leads } = await db.from('leads')
+                .select('id, departamento, atendente_nome, atendimento_inicio, atendimento_fim, tma_segundos')
+                .eq('instance_name', inst);
+            const leadsArr = leads || [];
+
+            let filaArr = [];
+            try {
+                const { data: fila } = await db.from('fila_atendimento')
+                    .select('id, lead_id, departamento, numero, nome, entrada_em, created_at, posicao')
+                    .eq('instance_name', inst).eq('status', 'aguardando');
+                filaArr = fila || [];
+            } catch(e) {}
+
+            // Atendimentos (últimos 7 dias)
+            let atendimentos7d = [];
+            try {
+                const { data: at } = await db.from('atendimentos')
+                    .select('departamento, agente_nome, tma_segundos, tme_segundos, status, inicio, fim')
+                    .eq('instance_name', inst).gte('inicio', desde7);
+                atendimentos7d = at || [];
+            } catch(e) {}
+
+            const result = depts.map(dept => {
+                const deptName = dept.name;
+                const deptAtendentes = (allAtend || []).filter(a => a.dept_id === dept.id);
+                const deptLeads = leadsArr.filter(l => (l.departamento || 'ADM Principal') === deptName);
+                const deptFila = filaArr.filter(f => f.departamento === deptName);
+                const deptAtend7d = atendimentos7d.filter(a => a.departamento === deptName);
+
+                // Fila com TME ao vivo
+                const filaComTme = deptFila.map(f => ({
+                    id: f.id, lead_id: f.lead_id, nome: f.nome, numero: f.numero, posicao: f.posicao,
+                    tme_segundos: Math.round((agora - new Date(f.entrada_em || f.created_at).getTime()) / 1000),
+                    entrada_em: f.entrada_em || f.created_at
+                })).sort((a,b) => a.posicao - b.posicao);
+
+                // Stats por atendente
+                const atendentesStats = deptAtendentes.map(at => {
+                    const meusLeads = deptLeads.filter(l => l.atendente_nome === at.nome);
+                    const ativos = meusLeads.filter(l => l.atendimento_inicio && !l.atendimento_fim);
+                    const encerradosHoje = meusLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje);
+                    const tmasHoje = encerradosHoje.map(l => l.tma_segundos).filter(Boolean);
+                    const meusAtend = deptAtend7d.filter(a => a.agente_nome === at.nome);
+                    const tmas7d = meusAtend.map(a => a.tma_segundos).filter(Boolean);
+                    const tmes7d = meusAtend.map(a => a.tme_segundos).filter(Boolean);
+                    return {
+                        id: at.id, nome: at.nome,
+                        ativos: ativos.length,
+                        encerradosHoje: encerradosHoje.length,
+                        tmaHoje: tmasHoje.length ? Math.round(tmasHoje.reduce((a,b)=>a+b,0)/tmasHoje.length) : 0,
+                        total7d: meusAtend.length,
+                        encerrados7d: meusAtend.filter(a => a.status === 'encerrado').length,
+                        tma7d: tmas7d.length ? Math.round(tmas7d.reduce((a,b)=>a+b,0)/tmas7d.length) : 0,
+                        tme7d: tmes7d.length ? Math.round(tmes7d.reduce((a,b)=>a+b,0)/tmes7d.length) : 0,
+                    };
+                });
+
+                // Totais do departamento
+                const totalAtivos = deptLeads.filter(l => l.atendimento_inicio && !l.atendimento_fim).length;
+                const totalEncerradosHoje = deptLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje).length;
+                const allTmasHoje = deptLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje).map(l => l.tma_segundos).filter(Boolean);
+                const tmaMedHoje = allTmasHoje.length ? Math.round(allTmasHoje.reduce((a,b)=>a+b,0)/allTmasHoje.length) : 0;
+                const tmeAtual = deptFila.length ? Math.round(deptFila.map(f => (agora - new Date(f.entrada_em || f.created_at).getTime())/1000).reduce((a,b)=>a+b,0)/deptFila.length) : 0;
+
+                return {
+                    dept_id: dept.id, dept_nome: deptName,
+                    supervisor_nome: dept.supervisor_nome || null,
+                    kpis: { ativos: totalAtivos, aguardando: deptFila.length, encerradosHoje: totalEncerradosHoje, tmaMedHoje, tmeAtual },
+                    fila: filaComTme,
+                    atendentes: atendentesStats,
+                };
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, departamentos: result, geradoEm: new Date().toISOString() }));
+        } catch(e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+    }
+
     // GET /api/stats/ativos?inst=...  — atendimentos em andamento agora
     if (req.url.startsWith('/api/stats/ativos') && req.method === 'GET') {
         try {
@@ -3700,6 +3843,16 @@ const server = http.createServer(async (req, res) => {
                 return Math.floor(s/3600) + 'h ' + Math.floor((s%3600)/60) + 'min';
             };
 
+            // Conta fila de espera atual por departamento
+            const filaAgora = {};
+            try {
+                const { data: filaAtiva } = await db.from('fila_atendimento').select('departamento').eq('instance_name', inst).eq('status', 'aguardando');
+                for (const f of (filaAtiva || [])) {
+                    const d = f.departamento || 'ADM Principal';
+                    filaAgora[d] = (filaAgora[d] || 0) + 1;
+                }
+            } catch(e) {}
+
             const stats = Object.entries(porDept).map(([dept, d]) => ({
                 dept,
                 total: d.total,
@@ -3709,6 +3862,7 @@ const server = http.createServer(async (req, res) => {
                 tma_fmt: fmtTempo(d.tma.length ? Math.round(d.tma.reduce((a,b)=>a+b,0)/d.tma.length) : null),
                 tme_amostras: d.tme.length,
                 tma_amostras: d.tma.length,
+                fila_agora: filaAgora[dept] || 0,
             })).sort((a,b) => b.total - a.total);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -3845,78 +3999,88 @@ const server = http.createServer(async (req, res) => {
     }
 
 
-    // ── API: Login de Supervisor/Atendente (sem instância) ───────────────────
+    // ── API: Login de Supervisor/Atendente (ID + senha) ────────────────────
     if (req.url === '/api/auth/staff-login' && req.method === 'POST') {
         let body = '';
         req.on('data', c => body += c);
         req.on('end', async () => {
             try {
-                const { nome, senha } = JSON.parse(body);
-                if (!nome || !senha) {
+                const { login_id, senha } = JSON.parse(body);
+                if (!login_id || !senha) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'Nome e senha obrigatórios' }));
+                    res.end(JSON.stringify({ error: 'ID e senha obrigatórios' }));
                     return;
                 }
-                const nomeTrim = nome.trim();
+                const idTrim = login_id.trim().toUpperCase();
                 const senhaTrim = senha.trim();
-                const matches = [];
 
-                // 1. Busca supervisores com esse nome+senha
+                // 1. Busca supervisor pelo supervisor_id
                 const { data: allDepts } = await db.from('departments').select('*');
                 for (const dept of (allDepts || [])) {
-                    if (dept.supervisor_nome && dept.supervisor_key &&
-                        dept.supervisor_nome.toLowerCase() === nomeTrim.toLowerCase() &&
+                    if (dept.supervisor_id && dept.supervisor_key &&
+                        dept.supervisor_id.toUpperCase() === idTrim &&
                         dept.supervisor_key === senhaTrim) {
                         const { data: lic } = await db.from('licenses').select('*')
                             .eq('instance_name', dept.instance_name).single();
-                        if (lic && lic.status === 'active') {
-                            matches.push({ role: 'supervisor', nome: dept.supervisor_nome, departamento: dept.name, instance_name: dept.instance_name, license: lic });
-                        }
+                        if (!lic || lic.status !== 'active') continue;
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ role: 'supervisor', nome: dept.supervisor_nome, login_id: dept.supervisor_id, departamento: dept.name, instance_name: dept.instance_name, license: lic }));
+                        return;
                     }
                 }
 
-                // 2. Busca atendentes com esse nome+senha
+                // 2. Busca atendente pelo id
                 const { data: allAtend } = await db.from('dept_atendentes').select('*').eq('ativo', 1);
                 for (const at of (allAtend || [])) {
-                    if (at.nome.toLowerCase() === nomeTrim.toLowerCase() && at.senha === senhaTrim) {
+                    if (at.id.toUpperCase() === idTrim && at.senha === senhaTrim) {
                         const { data: dept } = await db.from('departments').select('*').eq('id', at.dept_id).single();
                         if (!dept) continue;
                         const { data: lic } = await db.from('licenses').select('*').eq('instance_name', dept.instance_name).single();
                         if (!lic || lic.status !== 'active') continue;
-                        matches.push({ role: 'atendente', nome: at.nome, departamento: dept.name, instance_name: dept.instance_name, license: lic });
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ role: 'atendente', nome: at.nome, login_id: at.id, departamento: dept.name, instance_name: dept.instance_name, license: lic }));
+                        return;
                     }
                 }
 
-                if (matches.length === 0) {
-                    res.writeHead(401, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ error: 'Nome ou senha inválidos' }));
-                    return;
-                }
-
-                if (matches.length === 1) {
-                    const m = matches[0];
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify(m));
-                    return;
-                }
-
-                // Múltiplas correspondências — retorna lista para o frontend escolher
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    multiple: true,
-                    options: matches.map(m => ({
-                        role: m.role,
-                        nome: m.nome,
-                        departamento: m.departamento,
-                        instance_name: m.instance_name,
-                        license: m.license
-                    }))
-                }));
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'ID ou senha inválidos' }));
             } catch(e) {
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: e.message }));
             }
         });
+        return;
+    }
+
+    // ── API: Listar todos os logins de staff (para o admin ver) ──────────────
+    if (req.url.startsWith('/api/staff-logins') && req.method === 'GET') {
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const inst = url.searchParams.get('inst');
+        if (!inst) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'inst obrigatório' }));
+            return;
+        }
+        try {
+            const { data: depts } = await db.from('departments').select('*').eq('instance_name', inst);
+            const { data: atendentes } = await db.from('dept_atendentes').select('*').eq('instance_name', inst);
+            const result = (depts || []).filter(d => d.name !== 'ADM Principal').map(d => ({
+                dept_id: d.id,
+                dept_nome: d.name,
+                supervisor_id: d.supervisor_id || null,
+                supervisor_nome: d.supervisor_nome || null,
+                supervisor_key: d.supervisor_key || null,
+                atendentes: (atendentes || []).filter(a => a.dept_id === d.id).map(a => ({
+                    id: a.id, nome: a.nome, senha: a.senha, ativo: a.ativo
+                }))
+            }));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+        } catch(e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+        }
         return;
     }
 
