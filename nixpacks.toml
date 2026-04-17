@@ -1,10 +1,10 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "python3", "gnumake", "gcc"]
+nixPkgs = ["nodejs_20"]
 
 [phases.install]
 cmds = [
   "rm -rf node_modules",
-  "npm install --production --build-from-source"
+  "npm install --production"
 ]
 
 [start]

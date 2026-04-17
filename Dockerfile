@@ -1,19 +1,14 @@
-FROM node:20
+FROM node:20-slim
 
 WORKDIR /app
-
-# Dependências de build para better-sqlite3 (node-gyp)
-RUN apt-get update && apt-get install -y \
-    python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY package.json ./
 RUN npm install --production
 
 COPY . .
 
-RUN mkdir -p /app/data/uploads
+RUN mkdir -p /app/data /app/uploads-v2
 
-EXPOSE 3001
+EXPOSE 3002
 
 CMD ["node", "server.js"]
