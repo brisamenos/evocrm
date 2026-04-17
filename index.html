@@ -2506,7 +2506,7 @@
                             </div>
                         </div>
 
-                        <!-- Em Atendimento Agora -->
+                        <!-- Em Atendimento Agora — Conversas do Setor em Tempo Real -->
                         <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#21262d] shadow-sm overflow-hidden">
                             <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-[#21262d]">
                                 <p class="text-[11px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1.5">
@@ -2514,14 +2514,14 @@
                                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                                         <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                     </span>
-                                    Em Atendimento Agora
+                                    Conversas em Atendimento
                                 </p>
                                 <span class="text-[10px] font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-full"
-                                      x-text="leads.filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length+' ativo(s)'"></span>
+                                      x-text="(userRole === 'admin' ? leads : myLeads).filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length+' ativo(s)'"></span>
                             </div>
 
                             <!-- Sem ativos -->
-                            <div x-show="leads.filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length===0"
+                            <div x-show="(userRole === 'admin' ? leads : myLeads).filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length===0"
                                  class="text-center py-8">
                                 <i data-lucide="coffee" class="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2"></i>
                                 <p class="text-sm text-slate-400">Nenhum atendimento ativo no momento</p>
@@ -2529,7 +2529,7 @@
 
                             <!-- Lista por departamento -->
                             <div class="divide-y divide-slate-50 dark:divide-[#21262d]">
-                                <template x-for="grupo in ativosAgoraPorDept" :key="grupo.dept">
+                                <template x-for="grupo in (userRole === 'supervisor' ? ativosAgoraPorDept.filter(g => g.dept === currentUserDept) : ativosAgoraPorDept)" :key="grupo.dept">
                                     <div>
                                         <!-- Label departamento -->
                                         <div class="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-[#0d1117]">
@@ -2537,24 +2537,37 @@
                                             <span class="text-[11px] font-black uppercase tracking-wide text-[#6366f1]" x-text="grupo.dept"></span>
                                             <span class="text-[9px] font-bold bg-[#6366f1]/10 text-[#6366f1] px-2 py-0.5 rounded-full ml-1" x-text="grupo.lista.length+' em atend.'"></span>
                                         </div>
-                                        <!-- Leads do departamento -->
+                                        <!-- Leads do departamento com atendente -->
                                         <template x-for="lead in grupo.lista" :key="lead.id">
                                             <div class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-[#0d1117] cursor-pointer transition-colors border-b border-slate-50 dark:border-[#21262d] last:border-0"
-                                                 @click="screen='conversas'; openChat(lead); $nextTick(()=>lucide.createIcons())">
+                                                 @click="screen='chats'; openChat(lead); $nextTick(()=>lucide.createIcons())">
                                                 <div class="relative shrink-0">
                                                     <img :src="(lead.foto_url&&lead.foto_url.startsWith('http'))?lead.foto_url:'https://api.dicebear.com/8.x/notionists/svg?seed='+lead.numero"
-                                                         class="w-10 h-10 rounded-xl object-cover bg-slate-100" referrerpolicy="no-referrer">
+                                                         class="w-11 h-11 rounded-xl object-cover bg-slate-100 dark:bg-[#21262d]" referrerpolicy="no-referrer"
+                                                         @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed='+lead.numero">
                                                     <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white dark:border-[#161b22] rounded-full"></span>
                                                 </div>
                                                 <div class="flex-1 min-w-0">
-                                                    <p class="text-[13px] font-bold text-slate-800 dark:text-white truncate" x-text="getLeadName(lead)"></p>
-                                                    <p class="text-[11px] text-slate-400 truncate" x-text="lead.numero"></p>
+                                                    <div class="flex items-center gap-2 mb-0.5">
+                                                        <p class="text-[13px] font-bold text-slate-800 dark:text-white truncate" x-text="getLeadName(lead)"></p>
+                                                        <span x-show="lead.unread > 0" class="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full shrink-0" x-text="lead.unread"></span>
+                                                    </div>
+                                                    <p class="text-[11px] text-slate-400 truncate mb-1" x-text="lead.last_msg || lead.numero"></p>
+                                                    <!-- Atendente responsável -->
+                                                    <div class="flex items-center gap-1.5">
+                                                        <span x-show="lead.atendente_nome" class="text-[9px] bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
+                                                            <i data-lucide="headset" class="w-2.5 h-2.5"></i>
+                                                            <span x-text="lead.atendente_nome"></span>
+                                                        </span>
+                                                        <span x-show="!lead.atendente_nome" class="text-[9px] text-slate-400 italic">Sem atendente</span>
+                                                        <span class="text-[9px] text-slate-300" x-text="lead.numero"></span>
+                                                    </div>
                                                 </div>
                                                 <div class="shrink-0 text-right">
                                                     <span class="text-[12px] font-black px-2.5 py-1.5 rounded-xl block"
                                                           :class="(Date.now()-new Date(lead.atendimento_inicio).getTime())>3600000?'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400':(Date.now()-new Date(lead.atendimento_inicio).getTime())>1200000?'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400':'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'"
                                                           x-text="_tempoDecorrido(lead.atendimento_inicio)"></span>
-                                                    <span class="text-[9px] text-slate-400 mt-1 block" x-text="lead.unread>0?lead.unread+' não lida(s)':'em dia'"></span>
+                                                    <span class="text-[9px] text-slate-400 mt-1 block" x-text="'Início: ' + new Date(lead.atendimento_inicio).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})"></span>
                                                 </div>
                                             </div>
                                         </template>
@@ -2563,7 +2576,7 @@
                             </div>
 
                             <!-- Legenda -->
-                            <div x-show="leads.filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length>0"
+                            <div x-show="(userRole === 'admin' ? leads : myLeads).filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length>0"
                                  class="flex items-center gap-4 px-4 py-2.5 bg-slate-50 dark:bg-[#0d1117] border-t border-slate-100 dark:border-[#21262d]">
                                 <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500"></span><span class="text-[9px] text-slate-400">até 20min</span></div>
                                 <div class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span><span class="text-[9px] text-slate-400">20–60min</span></div>
