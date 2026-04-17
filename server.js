@@ -3658,7 +3658,7 @@ const server = http.createServer(async (req, res) => {
 
             // Leads e fila
             const { data: leads } = await db.from('leads')
-                .select('id, departamento, atendente_nome, atendimento_inicio, atendimento_fim, tma_segundos')
+                .select('id, nome, numero, departamento, atendente_nome, atendimento_inicio, atendimento_fim, tma_segundos, last_interaction, last_msg, foto_url, unread')
                 .eq('instance_name', inst);
             const leadsArr = leads || [];
 
@@ -3702,6 +3702,19 @@ const server = http.createServer(async (req, res) => {
                     const meusAtend = deptAtend7d.filter(a => a.agente_nome === at.nome);
                     const tmas7d = meusAtend.map(a => a.tma_segundos).filter(Boolean);
                     const tmes7d = meusAtend.map(a => a.tme_segundos).filter(Boolean);
+                    // Leads ativos agora (com detalhes para drill-down)
+                    const leadsAtivos = ativos.map(l => ({
+                        id: l.id, nome: l.nome, numero: l.numero, foto_url: l.foto_url,
+                        last_msg: l.last_msg, unread: l.unread,
+                        inicio: l.atendimento_inicio,
+                        duracao_seg: Math.round((agora - new Date(l.atendimento_inicio).getTime()) / 1000),
+                        last_interaction: l.last_interaction
+                    }));
+                    // Leads encerrados hoje (resumo)
+                    const leadsEncerradosHoje = encerradosHoje.slice(0, 20).map(l => ({
+                        id: l.id, nome: l.nome, numero: l.numero,
+                        tma: l.tma_segundos, fim: l.atendimento_fim
+                    }));
                     return {
                         id: at.id, nome: at.nome,
                         ativos: ativos.length,
@@ -3711,6 +3724,8 @@ const server = http.createServer(async (req, res) => {
                         encerrados7d: meusAtend.filter(a => a.status === 'encerrado').length,
                         tma7d: tmas7d.length ? Math.round(tmas7d.reduce((a,b)=>a+b,0)/tmas7d.length) : 0,
                         tme7d: tmes7d.length ? Math.round(tmes7d.reduce((a,b)=>a+b,0)/tmes7d.length) : 0,
+                        leadsAtivos,
+                        leadsEncerradosHoje,
                     };
                 });
 
