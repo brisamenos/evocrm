@@ -2195,9 +2195,12 @@
                                     <div class="p-3 rounded-2xl bg-slate-50 dark:bg-[#0d1117] space-y-2">
                                         <div class="flex items-center justify-between">
                                             <span class="text-xs font-black text-slate-700 dark:text-white" x-text="s.dept"></span>
-                                            <span class="text-[10px] font-bold text-slate-400" x-text="s.total + ' conversa(s)'"></span>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-[10px] font-bold text-slate-400" x-text="s.total + ' conversa(s)'"></span>
+                                                <span x-show="s.fila_agora > 0" class="text-[9px] font-bold text-red-500 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full" x-text="s.fila_agora + ' na fila'"></span>
+                                            </div>
                                         </div>
-                                        <!-- TME -->
+                                        <!-- TME do dept -->
                                         <div class="flex items-center gap-2">
                                             <span class="text-[9px] font-black uppercase text-[#6366f1] w-8">TME</span>
                                             <div class="flex-1 bg-slate-200 dark:bg-[#21262d] rounded-full h-2 overflow-hidden">
@@ -2206,7 +2209,7 @@
                                             </div>
                                             <span class="text-[11px] font-black text-[#6366f1] w-16 text-right" x-text="s.tme_fmt"></span>
                                         </div>
-                                        <!-- TMA -->
+                                        <!-- TMA do dept -->
                                         <div class="flex items-center gap-2">
                                             <span class="text-[9px] font-black uppercase text-emerald-500 w-8">TMA</span>
                                             <div class="flex-1 bg-slate-200 dark:bg-[#21262d] rounded-full h-2 overflow-hidden">
@@ -2215,6 +2218,42 @@
                                             </div>
                                             <span class="text-[11px] font-black text-emerald-500 w-16 text-right" x-text="s.tma_fmt"></span>
                                         </div>
+
+                                        <!-- Atendentes do departamento -->
+                                        <template x-if="s.atendentes && s.atendentes.length > 0">
+                                            <div class="mt-2 pt-2 border-t border-slate-200/60 dark:border-[#21262d] space-y-2">
+                                                <p class="text-[9px] font-black uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                                                    <i data-lucide="headset" class="w-3 h-3"></i> Por Atendente
+                                                </p>
+                                                <template x-for="at in s.atendentes" :key="at.nome">
+                                                    <div class="bg-white dark:bg-[#161b22] rounded-xl p-2.5 border border-gray-100 dark:border-[#21262d]">
+                                                        <div class="flex items-center justify-between mb-1.5">
+                                                            <span class="text-[11px] font-bold dark:text-white flex items-center gap-1.5">
+                                                                <i data-lucide="user" class="w-3 h-3 text-amber-500"></i>
+                                                                <span x-text="at.nome"></span>
+                                                            </span>
+                                                            <span class="text-[9px] text-slate-400 font-bold" x-text="at.total + ' conv.'"></span>
+                                                        </div>
+                                                        <div class="grid grid-cols-2 gap-2">
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-[8px] font-black uppercase text-[#6366f1] w-6">TME</span>
+                                                                <div class="flex-1 bg-slate-100 dark:bg-[#21262d] rounded-full h-1.5 overflow-hidden">
+                                                                    <div class="h-1.5 rounded-full bg-[#6366f1] transition-all" :style="'width:' + (at.tme_seg ? Math.min(100, (at.tme_seg / 3600) * 100) : 0) + '%'"></div>
+                                                                </div>
+                                                                <span class="text-[10px] font-black text-[#6366f1] w-12 text-right" x-text="at.tme_fmt"></span>
+                                                            </div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="text-[8px] font-black uppercase text-emerald-500 w-6">TMA</span>
+                                                                <div class="flex-1 bg-slate-100 dark:bg-[#21262d] rounded-full h-1.5 overflow-hidden">
+                                                                    <div class="h-1.5 rounded-full bg-emerald-500 transition-all" :style="'width:' + (at.tma_seg ? Math.min(100, (at.tma_seg / 7200) * 100) : 0) + '%'"></div>
+                                                                </div>
+                                                                <span class="text-[10px] font-black text-emerald-500 w-12 text-right" x-text="at.tma_fmt"></span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
                                     </div>
                                 </template>
                             </div>
