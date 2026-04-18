@@ -3599,8 +3599,10 @@ const server = http.createServer(async (req, res) => {
                 } catch(e2) { /* tabela pode não existir, segue */ }
 
                 // ── Pesquisa de satisfação automática ──
-                // Só dispara se NÃO é ADM Principal e tem número do cliente
-                if (agenteDoAtend && agenteDoAtend !== 'ADM Principal' && deptDoAtend !== 'ADM Principal' && lead.numero) {
+                // Dispara se tem número e o departamento não é ADM Principal
+                const _devePesquisa = deptDoAtend !== 'ADM Principal' && lead.numero;
+                log(instBody, 'info', `[Satisfação] Check: agente=${agenteDoAtend} dept=${deptDoAtend} numero=${lead.numero} devePesquisa=${_devePesquisa}`);
+                if (_devePesquisa) {
                     try {
                         // Salva dados do último atendimento no lead para referência ao receber resposta
                         await db.from('leads').update({
@@ -3624,11 +3626,13 @@ const server = http.createServer(async (req, res) => {
                         } catch(e3) {}
 
                         // Envia via WhatsApp
-                        await fetch(`${EVO_URL}/message/sendText/${instBody}`, {
+                        const pesqResp = await fetch(`${EVO_URL}/message/sendText/${instBody}`, {
                             method: 'POST',
                             headers: { 'apikey': EVO_KEY, 'Content-Type': 'application/json' },
                             body: JSON.stringify({ number: lead.numero, text: msgPesquisa })
                         });
+                        const pesqJson = await pesqResp.json().catch(() => ({}));
+                        log(instBody, 'ok', `[Satisfação] Pesquisa enviada → ${lead.numero} | status=${pesqResp.status} | resp=${JSON.stringify(pesqJson).substring(0,100)}`);
                         // Salva no histórico de mensagens
                         await db.from('messages').insert({
                             instance_name: instBody, lead_id: lead_id,
