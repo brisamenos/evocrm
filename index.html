@@ -112,7 +112,7 @@
 
 <body class="bg-[#f1f4f9] text-[#0d1117] dark:bg-[#0d1117] dark:text-[#e6edf3] antialiased font-sans overflow-hidden transition-colors duration-300 bg-pattern">
 
-    <div x-show="showDeptModal" class="fixed inset-0 z-[800] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="showDeptModal" @click.self="showDeptModal = false" class="fixed inset-0 z-[800] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl border border-gray-100 dark:border-[#21262d]">
             <div class="w-20 h-20 bg-[#e0e7ff] dark:bg-[#3730a3]/30 text-[#6366f1] rounded-3xl flex items-center justify-center mx-auto mb-6 transform rotate-3"><i data-lucide="briefcase" class="w-10 h-10"></i></div>
             <h3 class="font-black text-2xl dark:text-white mb-2 tracking-tight">Modo Atendente</h3>
@@ -129,7 +129,7 @@
         </div>
     </div>
 
-    <div x-show="showKeyModal" class="fixed inset-0 z-[850] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="showKeyModal" @click.self="showKeyModal = false; showDeptModal = true;" class="fixed inset-0 z-[850] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl border border-gray-100 dark:border-[#21262d]">
             <div class="w-16 h-16 bg-amber-50 dark:bg-amber-900/30 text-amber-600 rounded-2xl flex items-center justify-center mx-auto mb-4"><i data-lucide="key" class="w-8 h-8"></i></div>
             <h3 class="font-black text-xl dark:text-white mb-1">Acesso ao Setor</h3>
@@ -145,7 +145,7 @@
         </div>
     </div>
 
-    <div x-show="isObsModalOpen" class="fixed inset-0 z-[600] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="isObsModalOpen" @click.self="isObsModalOpen = false" class="fixed inset-0 z-[600] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div @click.away="isObsModalOpen = false" class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2rem] shadow-2xl border border-gray-200 dark:border-[#21262d] p-6 transform transition-all" x-transition>
             <h3 class="font-black text-xl text-slate-900 dark:text-white mb-1 flex items-center gap-2"><i data-lucide="tag" class="w-5 h-5 text-[#6366f1]"></i> Observações</h3>
             <p class="text-xs text-slate-500 mb-5 font-bold" x-text="'Lead: ' + getLeadName(activeLeadForObs)"></p>
@@ -157,7 +157,7 @@
         </div>
     </div>
 
-    <div x-show="isEtiquetaModalOpen" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="isEtiquetaModalOpen" @click.self="isEtiquetaModalOpen = false" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div @click.away="isEtiquetaModalOpen = false" class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2rem] shadow-2xl border border-gray-200 dark:border-[#21262d] p-6 transform transition-all" x-transition>
             <h3 class="font-black text-xl text-slate-900 dark:text-white mb-1 flex items-center gap-2"><i data-lucide="bookmark" class="w-5 h-5 text-purple-500"></i> Etiquetas (Origem)</h3>
             <p class="text-[11px] text-slate-500 mb-5 font-bold" x-text="'Gerindo: ' + getLeadName(activeLeadForEtiqueta)"></p>
@@ -191,7 +191,7 @@
         </div>
     </div>
 
-    <div x-show="isQuickFlowOpen" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="isQuickFlowOpen" @click.self="isQuickFlowOpen = false" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div @click.away="isQuickFlowOpen = false" class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2rem] shadow-2xl border border-gray-200 dark:border-[#21262d] p-6 transform transition-all" x-transition>
             <h3 class="font-black text-xl text-slate-900 dark:text-white mb-2 flex items-center gap-2"><i data-lucide="zap" class="w-5 h-5 text-yellow-500"></i> Enviar Automação</h3>
             <p class="text-xs text-slate-500 mb-5">Atirar funil instantâneo para <b x-text="getLeadName(activeLeadForAction)"></b>.</p>
@@ -210,7 +210,7 @@
         </div>
     </div>
 
-    <div x-show="isQuickScheduleOpen" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="isQuickScheduleOpen" @click.self="isQuickScheduleOpen = false" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div @click.away="isQuickScheduleOpen = false" class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2rem] shadow-2xl border border-gray-200 dark:border-[#21262d] p-6 transform transition-all" x-transition>
             <h3 class="font-black text-xl text-slate-900 dark:text-white mb-2 flex items-center gap-2"><i data-lucide="clock" class="w-5 h-5 text-blue-500"></i> Agendar Mensagem</h3>
             <p class="text-[11px] text-slate-500 mb-5 font-bold">Programar envio para <b x-text="getLeadName(activeLeadForAction)"></b>.</p>
@@ -242,7 +242,7 @@
         </div>
     </div>
 
-    <div x-show="isSaveFlowModalOpen" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="isSaveFlowModalOpen" @click.self="isSaveFlowModalOpen = false" class="fixed inset-0 z-[650] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div @click.away="isSaveFlowModalOpen = false" class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2rem] shadow-2xl border border-gray-200 dark:border-[#21262d] p-6 transform transition-all" x-transition>
             <h3 class="font-black text-xl text-slate-900 dark:text-white mb-2">Salvar Automação</h3>
             <p class="text-xs text-slate-500 mb-5">Dê um nome para identificar este fluxo.</p>
@@ -950,7 +950,7 @@
                      class="absolute inset-0 flex flex-col">
 
                     <!-- Painel flutuante da Fila -->
-                    <div x-show="filaAguardando > 0" x-cloak
+                    <div x-show="filaAguardando > 0" x-cloak @click.away="filaPainelAberto = false"
                          class="absolute top-14 right-3 z-30 w-64 bg-white dark:bg-[#161b22] rounded-xl shadow-lg border border-amber-200 dark:border-amber-500/30 overflow-hidden">
                         <button @click="filaPainelAberto = !filaPainelAberto"
                                 class="w-full flex items-center justify-between px-3 py-2 hover:bg-amber-50 dark:hover:bg-amber-500/5 transition-colors">
@@ -1156,6 +1156,7 @@
 
                     <!-- ── Modal Nova Tarefa ── -->
                     <div x-show="showTaskModal" x-transition x-cloak
+                         @click.self="showTaskModal=false"
                          class="fixed inset-0 z-[700] bg-black/70 flex items-end md:items-center justify-center"
                          style="height: 100dvh; height: calc(var(--vh, 1vh) * 100);">
                         <div class="modal-sheet shadow-2xl border-t border-[#e6edf3] dark:border-[#21262d] md:border md:mx-4">
@@ -1232,6 +1233,7 @@
 
                     <!-- ── Modal Nova Notificação ── -->
                     <div x-show="showNotifModal" x-transition x-cloak
+                         @click.self="showNotifModal=false"
                          class="fixed inset-0 z-[700] bg-black/70 flex items-end md:items-center justify-center"
                          style="height: 100dvh; height: calc(var(--vh, 1vh) * 100);">
                         <div class="modal-sheet shadow-2xl border-t border-[#e6edf3] dark:border-[#21262d] md:border md:mx-4">
@@ -5268,7 +5270,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
             </section>
             
             <!-- ══ MODAL DE TRANSFERÊNCIA ══ -->
-            <div x-show="showTransferModal" x-cloak x-transition.opacity class="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div x-show="showTransferModal" x-cloak x-transition.opacity @click.self="showTransferModal = false" class="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
                 <div @click.away="showTransferModal = false" x-transition class="bg-white dark:bg-[#161b22] rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-[#21262d] overflow-hidden">
                     <div class="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-[#21262d]">
                         <h3 class="text-base font-black text-slate-800 dark:text-white flex items-center gap-2">
@@ -5308,7 +5310,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                 </div>
             </div>
 
-            <div x-show="lightboxOpen" x-cloak class="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm" x-transition.opacity>
+            <div x-show="lightboxOpen" x-cloak @click.self="lightboxOpen = false" class="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm" x-transition.opacity>
                 <button @click="lightboxOpen = false" class="absolute top-5 right-5 text-white/70 hover:text-white p-2 transition-colors bg-black/50 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
                 <img :src="lightboxUrl" class="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" @click.away="lightboxOpen = false">
             </div>
@@ -5834,6 +5836,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
 
                 <!-- ════ PAINEL DE AUTOMAÇÕES (desliza de baixo para cima) ════ -->
                 <div x-show="autoOpen"
+                     @click.away="autoOpen = false"
                      x-transition:enter="transition ease-out duration-220"
                      x-transition:enter-start="opacity-0 translate-y-4"
                      x-transition:enter-end="opacity-100 translate-y-0"
@@ -6234,6 +6237,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
 
     <!-- ── Modal: Salvar Modelo de Disparo ── -->
     <div x-show="showSaveModeloModal" x-transition x-cloak
+         @click.self="showSaveModeloModal=false"
          class="fixed inset-0 z-[750] bg-black/70 flex items-end md:items-center justify-center"
          style="height: 100dvh; height: calc(var(--vh, 1vh) * 100);">
         <div class="modal-sheet shadow-2xl border-t border-[#e6edf3] dark:border-[#21262d] md:border md:mx-4">
@@ -6282,6 +6286,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
 
     <!-- ── Modal: Carregar Modelos de Disparo ── -->
     <div x-show="showModelosModal" x-transition x-cloak
+         @click.self="showModelosModal=false"
          class="fixed inset-0 z-[750] bg-black/70 flex items-end md:items-center justify-center"
          style="height: 100dvh; height: calc(var(--vh, 1vh) * 100);">
         <div class="modal-sheet shadow-2xl border-t border-[#e6edf3] dark:border-[#21262d] md:border md:mx-4">
@@ -6363,6 +6368,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
          x-transition:enter-end="opacity-100" x-transition:leave="transition ease-in duration-150"
          x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
          x-cloak
+         @click.self="iaShowModal = false"
          class="ia-modal-overlay fixed z-[960] bg-black/75">
         <div x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
              x-transition:enter-end="opacity-100 scale-100"
