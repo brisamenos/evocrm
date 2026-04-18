@@ -85,6 +85,12 @@
     <script src="https://bernardo-castilho.github.io/DragDropTouch/DragDropTouch.js"></script>
 
     <!-- app.js SEM defer: crmApp() precisa estar definido antes do Alpine inicializar -->
+    <script src="app-sons.js"></script>
+    <script src="app-docs.js"></script>
+    <script src="app-agenda.js"></script>
+    <script src="app-disparo.js"></script>
+    <script src="app-autoreply.js"></script>
+    <script src="app-ia-atend.js"></script>
     <script src="app.js"></script>
 
     <!-- Alpine com defer: inicializa depois que crmApp() já está disponível -->
@@ -895,27 +901,7 @@
 
                     <!-- ── Configurações de Notificação ── -->
                     <div class="mt-4 bg-white dark:bg-[#161b22] p-6 md:p-8 rounded-[2.5rem] border border-gray-100 dark:border-[#21262d] shadow-sm"
-                         x-data="{
-                            somAtual: localStorage.getItem('evo_som_notif') || 'whatsapp',
-                            volume: parseFloat(localStorage.getItem('evo_som_volume') || '1'),
-                            sons: [
-                                { id: 'whatsapp', label: 'WhatsApp', desc: 'Ping duplo clássico' },
-                                { id: 'pop',      label: 'Pop',      desc: 'Bolha suave' },
-                                { id: 'chime',    label: 'Chime',    desc: 'Três notas ascendentes' },
-                                { id: 'ping',     label: 'Ping',     desc: 'Tom único cristalino' },
-                                { id: 'ding',     label: 'Ding',     desc: 'Campainha leve' },
-                                { id: 'none',     label: 'Sem som',  desc: 'Silencioso' },
-                            ],
-                            setSom(id) {
-                                this.somAtual = id;
-                                localStorage.setItem('evo_som_notif', id);
-                                if (id !== 'none') previewSom(id);
-                            },
-                            setVolume(v) {
-                                this.volume = v;
-                                localStorage.setItem('evo_som_volume', v);
-                            }
-                         }">
+                         x-data="somConfig()">
                         <div class="flex items-center gap-3 mb-5">
                             <div class="w-10 h-10 bg-[#e0e7ff] dark:bg-[#3730a3]/30 text-[#6366f1] rounded-xl flex items-center justify-center shrink-0">
                                 <i data-lucide="bell" class="w-5 h-5"></i>
@@ -1159,143 +1145,7 @@
                 <div x-show="screen === 'dash'" x-cloak
                      class="absolute inset-0 overflow-y-auto no-scrollbar scroll-elegant"
                      style="padding-bottom:max(calc(env(safe-area-inset-bottom) + 80px),90px);"
-                     x-data="{
-                        dashTab: 'overview',
-                        tasks: [],
-                        dashNotifs: [],
-                        taskForm: { title: '', desc: '', priority: 'media', due: '', tag: 'geral' },
-                        notifForm: { title: '', body: '', type: 'info', scheduled: '' },
-                        taskFilter: 'todas',
-                        showTaskModal: false,
-                        showNotifModal: false,
-                        showNotifDetail: false,
-                        notifDetail: null,
-                        editTaskId: null,
-                        _dbClient() { return window._evoSupabase || null; },
-                        _inst() { return instanceName || ''; },
-                        async saveTasks() {
-                            /* Sincroniza localmente — o Supabase já foi atualizado na ação */
-                        },
-                        async saveDashNotifs() {
-                            /* Sincroniza localmente — o Supabase já foi atualizado na ação */
-                        },
-                        async refreshDashNotifs() {
-                            try {
-                                const db = window._evoSupabase;
-                                if (!db || !this._inst()) return;
-                                const { data } = await db.from('dash_notifs').select('*').eq('instance_name', this._inst()).order('created_at', { ascending: false }).limit(200);
-                                if (data) this.dashNotifs = data.map(r => ({ id: r.id, title: r.title, body: r.body, type: r.type, scheduled: r.scheduled || '', read: r.read, createdAt: r.created_at, criadoPorIA: r.criado_por_ia, leadId: r.lead_id, tipoAgenda: r.tipo_agenda }));
-                            } catch(e) { console.warn('[dashNotifs]', e); }
-                        },
-                        async refreshTasks() {
-                            try {
-                                const db = window._evoSupabase;
-                                if (!db || !this._inst()) return;
-                                const { data } = await db.from('dash_tasks').select('*').eq('instance_name', this._inst()).order('created_at', { ascending: false }).limit(500);
-                                if (data) this.tasks = data.map(r => ({ id: r.id, title: r.title, desc: r.desc || '', priority: r.priority, due: r.due || '', tag: r.tag || 'geral', done: r.done, createdAt: r.created_at, criadoPorIA: r.criado_por_ia, leadId: r.lead_id }));
-                            } catch(e) { console.warn('[dashTasks]', e); }
-                        },
-                        async addTask() {
-                            if (!this.taskForm.title.trim()) return;
-                            const db = window._evoSupabase;
-                            if (this.editTaskId) {
-                                const idx = this.tasks.findIndex(t => t.id === this.editTaskId);
-                                if (idx !== -1) {
-                                    this.tasks[idx] = { ...this.tasks[idx], ...this.taskForm };
-                                    if (db) await db.from('dash_tasks').update({ title: this.taskForm.title, desc: this.taskForm.desc, priority: this.taskForm.priority, due: this.taskForm.due || null, tag: this.taskForm.tag }).eq('id', this.editTaskId);
-                                }
-                                this.editTaskId = null;
-                            } else {
-                                const newTask = { id: Date.now(), ...this.taskForm, done: false, createdAt: new Date().toISOString() };
-                                this.tasks.unshift(newTask);
-                                if (db && this._inst()) await db.from('dash_tasks').insert({ instance_name: this._inst(), title: newTask.title, desc: newTask.desc, priority: newTask.priority, due: newTask.due || null, tag: newTask.tag, done: false, criado_por_ia: false });
-                            }
-                            this.taskForm = { title: '', desc: '', priority: 'media', due: '', tag: 'geral' };
-                            this.showTaskModal = false;
-                            setTimeout(() => lucide.createIcons(), 50);
-                        },
-                        async deleteTask(id) {
-                            this.tasks = this.tasks.filter(t => t.id !== id);
-                            const db = window._evoSupabase;
-                            if (db) await db.from('dash_tasks').delete().eq('id', id);
-                        },
-                        async toggleTask(id) {
-                            const t = this.tasks.find(t => t.id === id);
-                            if (t) {
-                                t.done = !t.done;
-                                const db = window._evoSupabase;
-                                if (db) await db.from('dash_tasks').update({ done: t.done }).eq('id', id);
-                            }
-                        },
-                        editTask(t) { this.taskForm = { title: t.title, desc: t.desc, priority: t.priority, due: t.due, tag: t.tag }; this.editTaskId = t.id; this.showTaskModal = true; setTimeout(() => lucide.createIcons(), 50); },
-                        filteredTasks() {
-                            let t = this.tasks;
-                            if (this.taskFilter === 'pendentes') t = t.filter(x => !x.done);
-                            if (this.taskFilter === 'concluidas') t = t.filter(x => x.done);
-                            if (this.taskFilter === 'urgente') t = t.filter(x => x.priority === 'alta' && !x.done);
-                            return t;
-                        },
-                        async addDashNotif() {
-                            if (!this.notifForm.title.trim()) return;
-                            const newNotif = { id: Date.now(), ...this.notifForm, read: false, createdAt: new Date().toISOString() };
-                            this.dashNotifs.unshift(newNotif);
-                            const db = window._evoSupabase;
-                            if (db && this._inst()) await db.from('dash_notifs').insert({ instance_name: this._inst(), title: newNotif.title, body: newNotif.body, type: newNotif.type, scheduled: newNotif.scheduled || null, read: false, criado_por_ia: false, lead_id: null });
-                            this.notifForm = { title: '', body: '', type: 'info', scheduled: '' };
-                            this.showNotifModal = false;
-                            setTimeout(() => lucide.createIcons(), 50);
-                        },
-                        async openNotifDetail(notif) {
-                            this.notifDetail = notif;
-                            this.showNotifDetail = true;
-                            if (!notif.read) {
-                                notif.read = true;
-                                const db = window._evoSupabase;
-                                if (db) await db.from('dash_notifs').update({ read: true }).eq('id', notif.id);
-                            }
-                            setTimeout(() => lucide.createIcons(), 50);
-                        },
-                        abrirChatDaNotif(notif) {
-                            if (!notif.leadId) return;
-                            const lead = myLeads.find(l => l.id === notif.leadId);
-                            if (lead) { this.showNotifDetail = false; screen = 'chats'; this.$nextTick(() => openChat(lead)); }
-                        },
-                        async markRead(id) {
-                            const n = this.dashNotifs.find(n => n.id === id);
-                            if (n) {
-                                n.read = true;
-                                const db = window._evoSupabase;
-                                if (db) await db.from('dash_notifs').update({ read: true }).eq('id', id);
-                            }
-                        },
-                        async markAllRead() {
-                            this.dashNotifs.forEach(n => n.read = true);
-                            const db = window._evoSupabase;
-                            if (db && this._inst()) await db.from('dash_notifs').update({ read: true }).eq('instance_name', this._inst()).eq('read', false);
-                        },
-                        async deleteNotif(id) {
-                            this.dashNotifs = this.dashNotifs.filter(n => n.id !== id);
-                            if (this.notifDetail?.id === id) this.showNotifDetail = false;
-                            const db = window._evoSupabase;
-                            if (db) await db.from('dash_notifs').delete().eq('id', id);
-                        },
-                        unreadCount() { return this.dashNotifs.filter(n => !n.read).length; },
-                        iaNotifs() { return this.dashNotifs.filter(n => n.criadoPorIA); },
-                        iaUnreadCount() { return this.dashNotifs.filter(n => n.criadoPorIA && !n.read).length; },
-                        tasksDoneToday() { const today = new Date().toDateString(); return this.tasks.filter(t => t.done && new Date(t.createdAt).toDateString() === today).length; },
-                        tasksOverdue() { const now = new Date(); return this.tasks.filter(t => !t.done && t.due && new Date(t.due) < now).length; },
-                        priorityColor(p) { return p==='alta' ? 'text-red-500' : p==='media' ? 'text-amber-500' : 'text-[#6366f1]'; },
-                        priorityBg(p) { return p==='alta' ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/40' : p==='media' ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/40' : 'bg-[#e0e7ff] dark:bg-[#3730a3]/20 border-[#e0e7ff] dark:border-[#3730a3]/40'; },
-                        tagColor(tag) { const m={geral:'bg-slate-100 dark:bg-[#21262d] text-slate-600 dark:text-slate-300',vendas:'bg-blue-50 dark:bg-blue-900/20 text-blue-600',suporte:'bg-purple-50 dark:bg-purple-900/20 text-purple-600',marketing:'bg-pink-50 dark:bg-pink-900/20 text-pink-600',financeiro:'bg-amber-50 dark:bg-amber-900/20 text-amber-600',ti:'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600'}; return m[tag]||m.geral; },
-                        notifIcon(type) { return type==='success'?'check-circle':type==='error'?'alert-circle':type==='warning'?'alert-triangle':'bell'; },
-                        notifBorder(type) { return type==='success'?'border-l-[#6366f1]':type==='error'?'border-l-red-500':type==='warning'?'border-l-amber-500':'border-l-blue-500'; },
-                        notifIconColor(type) { return type==='success'?'text-[#6366f1]':type==='error'?'text-red-500':type==='warning'?'text-amber-500':'text-blue-500'; },
-                        notifBg(type) { return type==='success'?'bg-[#e0e7ff] dark:bg-[#3730a3]/30':type==='error'?'bg-red-50 dark:bg-red-900/20':type==='warning'?'bg-amber-50 dark:bg-amber-900/20':'bg-blue-50 dark:bg-blue-900/20'; },
-                        formatDue(due) { if (!due) return ''; const d=new Date(due); const now=new Date(); const diff=Math.ceil((d-now)/(1000*60*60*24)); if (diff<0) return 'Atrasada'; if (diff===0) return 'Hoje'; if (diff===1) return 'Amanhã'; return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}); },
-                        isDueUrgent(due) { if (!due) return false; const d=new Date(due); const now=new Date(); return (d-now)/(1000*60*60*24) <= 1; },
-                        iaAgendamentosPendentes() { return (agendamentos||[]).filter(a => !a.sent && a.criadoPorIA); },
-                        iaTarefasPendentes() { return this.tasks.filter(t => !t.done && t.criadoPorIA); }
-                     }"
+                     x-data="dashComponent()"
                      x-init="
                         refreshTasks();
                         refreshDashNotifs();
@@ -4756,50 +4606,7 @@ CREATE POLICY "allow all" ON dash_notifs FOR ALL USING (true) WITH CHECK (true);
 
                     <!-- ═══ ABA: GERADOR DE PROMPT ═══ -->
                     <div x-show="iaTab === 'gerador'" x-transition class="space-y-4"
-                         x-data="{
-                            geradorForm: { nicho: '', objetivo: '', tom: 'profissional', restricoes: '', extras: '' },
-                            geradorResultado: '',
-                            geradorLoading: false,
-                            async gerarPrompt() {
-                                if (!this.geradorForm.nicho || !this.geradorForm.objetivo) { alert('Preencha ao menos o nicho e o objetivo.'); return; }
-                                if (!iaApiKey) { iaTab = 'config'; addNotification('API Key necessária', 'Configure sua chave OpenAI para continuar.', 'info'); return; }
-                                this.geradorLoading = true;
-                                this.geradorResultado = '';
-                                try {
-                                    const instrucao = `Você é especialista em criar prompts de sistema para assistentes de atendimento ao cliente via WhatsApp.
-Crie um prompt de sistema completo, detalhado e profissional com as seguintes características:
-- Nicho/Empresa: ${this.geradorForm.nicho}
-- Objetivo principal: ${this.geradorForm.objetivo}
-- Tom de comunicação: ${this.geradorForm.tom}
-- Restrições/Regras: ${this.geradorForm.restricoes || 'Nenhuma específica'}
-- Extras: ${this.geradorForm.extras || 'Nenhum'}
-
-O prompt deve:
-1. Definir claramente o papel e identidade da IA
-2. Estabelecer tom e estilo de comunicação
-3. Listar o que pode e não pode fazer
-4. Incluir instruções sobre como lidar com situações comuns
-5. Ter formatação clara com emojis onde apropriado
-6. Ser escrito em português brasileiro
-
-Retorne APENAS o prompt pronto para ser usado, sem explicações adicionais.`;
-                                    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + iaApiKey },
-                                        body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: instrucao }], temperature: 0.8, max_tokens: 2048 })
-                                    });
-                                    const data = await resp.json();
-                                    this.geradorResultado = data?.choices?.[0]?.message?.content || data?.error?.message || 'Erro ao gerar.';
-                                } catch(e) {
-                                    this.geradorResultado = 'Erro: ' + e.message;
-                                }
-                                this.geradorLoading = false;
-                            },
-                            copiarPrompt() {
-                                navigator.clipboard.writeText(this.geradorResultado);
-                                $dispatch('notify', { title: 'Copiado!', message: 'Prompt copiado para a área de transferência.' });
-                            }
-                         }">
+                         x-data="iaGerador()">
                         <div class="bg-white dark:bg-[#161b22] rounded-[2rem] border border-[#e6edf3] dark:border-[#21262d] shadow-sm overflow-hidden">
                             <div class="px-6 py-4 border-b border-[#e6edf3] dark:border-[#21262d] flex items-center gap-2">
                                 <div class="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
@@ -4867,69 +4674,7 @@ Retorne APENAS o prompt pronto para ser usado, sem explicações adicionais.`;
 
                     <!-- ═══ ABA: TRANSCRIÇÃO ═══ -->
                     <div x-show="iaTab === 'transcricao' && _temFeature('audio_ia')" x-transition class="space-y-4"
-                         x-data="{
-                            transcricaoTab: 'audio',
-                            audioFile: null, audioFileName: '', audioTranscricao: '', audioLoading: false,
-                            imgFile: null, imgPreview: '', imgTranscricao: '', imgLoading: false,
-                            async transcreverAudio() {
-                                if (!this.audioFile) { alert('Selecione um arquivo de áudio.'); return; }
-                                if (!iaApiKey) { iaTab = 'config'; addNotification('API Key necessária', 'Configure sua chave OpenAI para continuar.', 'info'); return; }
-                                this.audioLoading = true;
-                                this.audioTranscricao = '';
-                                try {
-                                    const formData = new FormData();
-                                    formData.append('file', this.audioFile);
-                                    formData.append('model', 'whisper-1');
-                                    formData.append('language', 'pt');
-                                    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-                                        method: 'POST',
-                                        headers: { 'Authorization': 'Bearer ' + iaApiKey },
-                                        body: formData
-                                    });
-                                    const data = await resp.json();
-                                    this.audioTranscricao = data?.text || data?.error?.message || 'Não foi possível transcrever.';
-                                } catch(e) { this.audioTranscricao = 'Erro: ' + e.message; }
-                                this.audioLoading = false;
-                            },
-                            async transcreverImagem() {
-                                if (!this.imgFile) { alert('Selecione uma imagem.'); return; }
-                                if (!iaApiKey) { iaTab = 'config'; addNotification('API Key necessária', 'Configure sua chave OpenAI para continuar.', 'info'); return; }
-                                this.imgLoading = true;
-                                this.imgTranscricao = '';
-                                try {
-                                    const toBase64 = f => new Promise((res,rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
-                                    const dataUrl = await toBase64(this.imgFile);
-                                    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + iaApiKey },
-                                        body: JSON.stringify({
-                                            model: 'gpt-4o-mini',
-                                            messages: [{ role: 'user', content: [
-                                                { type: 'image_url', image_url: { url: dataUrl } },
-                                                { type: 'text', text: 'Analise esta imagem e extraia todo o texto visível (OCR). Descreva também o conteúdo visual de forma detalhada. Responda em português.' }
-                                            ]}],
-                                            max_tokens: 2048
-                                        })
-                                    });
-                                    const data = await resp.json();
-                                    this.imgTranscricao = data?.choices?.[0]?.message?.content || data?.error?.message || 'Não foi possível analisar.';
-                                } catch(e) { this.imgTranscricao = 'Erro: ' + e.message; }
-                                this.imgLoading = false;
-                            },
-                            handleAudioFile(e) {
-                                const f = e.target.files[0];
-                                if (f) { this.audioFile = f; this.audioFileName = f.name; }
-                            },
-                            handleImgFile(e) {
-                                const f = e.target.files[0];
-                                if (f) {
-                                    this.imgFile = f;
-                                    const reader = new FileReader();
-                                    reader.onload = ev => this.imgPreview = ev.target.result;
-                                    reader.readAsDataURL(f);
-                                }
-                            }
-                         }">
+                         x-data="iaTranscricao()">
                         <!-- Sub-tabs -->
                         <div class="flex gap-2 mb-4">
                             <button @click="transcricaoTab = 'audio'; $nextTick(()=>lucide.createIcons())"
