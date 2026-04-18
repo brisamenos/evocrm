@@ -2416,11 +2416,11 @@
                                     Conversas em Atendimento
                                 </p>
                                 <span class="text-[10px] font-black bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-full"
-                                      x-text="(userRole === 'admin' ? leads : myLeads).filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length+' ativo(s)'"></span>
+                                      x-text="(userRole === 'admin' ? leads : myLeads).filter(l=>l.atendimento_inicio&&!l.atendimento_fim&&(l.departamento||'ADM Principal')!=='ADM Principal').length+' ativo(s)'"></span>
                             </div>
 
                             <!-- Sem ativos -->
-                            <div x-show="(userRole === 'admin' ? leads : myLeads).filter(l=>l.atendimento_inicio&&!l.atendimento_fim).length===0"
+                            <div x-show="(userRole === 'admin' ? leads : myLeads).filter(l=>l.atendimento_inicio&&!l.atendimento_fim&&(l.departamento||'ADM Principal')!=='ADM Principal').length===0"
                                  class="text-center py-8">
                                 <i data-lucide="coffee" class="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto mb-2"></i>
                                 <p class="text-sm text-slate-400">Nenhum atendimento ativo no momento</p>
