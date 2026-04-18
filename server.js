@@ -3231,7 +3231,31 @@ const server = http.createServer(async (req, res) => {
                 const { data: rows } = await db.from('fila_atendimento')
                     .select('id').eq('instance_name', inst).eq('lead_id', lead_id).eq('status', 'aguardando');
                 if (!rows || rows.length === 0) {
-                    // Nada na fila — tudo bem, lead pode ter sido atendido sem passar pela fila
+                    // Nada na fila — registra início do atendimento direto na tabela atendimentos
+                    if (agente_nome) {
+                        try {
+                            const { data: exist } = await db.from('atendimentos')
+                                .select('id').eq('lead_id', lead_id).eq('status', 'ativo').limit(1);
+                            if (!exist || exist.length === 0) {
+                                const { data: lead } = await db.from('leads')
+                                    .select('departamento, nome, numero, atendimento_inicio').eq('id', lead_id).single();
+                                if (lead) {
+                                    const crypto = require('crypto');
+                                    await db.from('atendimentos').insert({
+                                        id: crypto.randomUUID(),
+                                        instance_name: inst,
+                                        lead_id,
+                                        departamento: lead.departamento || 'ADM Principal',
+                                        agente_nome: agente_nome,
+                                        numero: lead.numero,
+                                        nome: lead.nome,
+                                        inicio: lead.atendimento_inicio || new Date().toISOString(),
+                                        status: 'ativo',
+                                    });
+                                }
+                            }
+                        } catch(e2) { /* tabela pode não existir */ }
+                    }
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ ok: true, semFila: true }));
                     return;
@@ -3270,6 +3294,28 @@ const server = http.createServer(async (req, res) => {
                     await db.from('fila_atendimento').delete()
                         .eq('instance_name', inst).eq('lead_id', lead_id);
                 } catch(e) { /* ok */ }
+                // Encerra atendimento ativo na tabela atendimentos (preserva histórico)
+                try {
+                    const agora = new Date().toISOString();
+                    const { data: atAtivo } = await db.from('atendimentos')
+                        .select('id, inicio').eq('lead_id', lead_id).eq('status', 'ativo').limit(1);
+                    if (atAtivo && atAtivo.length > 0) {
+                        const tma = Math.round((Date.now() - new Date(atAtivo[0].inicio).getTime()) / 1000);
+                        await db.from('atendimentos').update({
+                            fim: agora, tma_segundos: tma, status: 'encerrado',
+                        }).eq('id', atAtivo[0].id);
+                    } else if (lead.atendimento_inicio && lead.atendente_nome) {
+                        // Não tinha registro — cria um encerrado para preservar histórico
+                        const crypto = require('crypto');
+                        const tma = Math.round((Date.now() - new Date(lead.atendimento_inicio).getTime()) / 1000);
+                        await db.from('atendimentos').insert({
+                            id: crypto.randomUUID(), instance_name: inst, lead_id,
+                            departamento: lead.departamento || 'ADM Principal',
+                            agente_nome: lead.atendente_nome, numero: lead.numero, nome: lead.nome,
+                            inicio: lead.atendimento_inicio, fim: agora, tma_segundos: tma, status: 'encerrado',
+                        });
+                    }
+                } catch(e) { /* tabela pode não existir */ }
                 // Limpa atendimento ativo deste lead
                 try {
                     await db.from('leads').update({ atendimento_inicio: null, atendimento_fim: null, tma_segundos: null, atendente_nome: null })
@@ -3416,6 +3462,66 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // POST /api/registrar-inicio-atendimento  { inst, lead_id, agente_nome }
+    // Garante que todo início de atendimento tenha registro na tabela atendimentos.
+    // Chamado pelo frontend quando atendente é atribuído (sem passar pela fila).
+    if (req.url === '/api/registrar-inicio-atendimento' && req.method === 'POST') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const { inst: instBody, lead_id, agente_nome } = JSON.parse(body || '{}');
+                if (!instBody || !lead_id || !agente_nome) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'inst, lead_id, agente_nome obrigatórios' }));
+                    return;
+                }
+                // Verifica se já existe atendimento ativo para este lead
+                let jaExiste = false;
+                try {
+                    const { data: exist } = await db.from('atendimentos')
+                        .select('id').eq('lead_id', lead_id).eq('status', 'ativo').limit(1);
+                    jaExiste = exist && exist.length > 0;
+                } catch(e) {}
+                if (jaExiste) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true, ja_existe: true }));
+                    return;
+                }
+                // Busca dados do lead
+                const { data: lead } = await db.from('leads')
+                    .select('departamento, nome, numero, atendimento_inicio')
+                    .eq('id', lead_id).single();
+                if (!lead) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'Lead não encontrado' }));
+                    return;
+                }
+                const agora = new Date().toISOString();
+                const inicio = lead.atendimento_inicio || agora;
+                const crypto = require('crypto');
+                await db.from('atendimentos').insert({
+                    id: crypto.randomUUID(),
+                    instance_name: instBody,
+                    lead_id,
+                    departamento: lead.departamento || 'ADM Principal',
+                    agente_nome,
+                    numero: lead.numero,
+                    nome: lead.nome,
+                    inicio,
+                    status: 'ativo',
+                });
+                log(instBody, 'ok', `[Atend] Início registrado — lead ${lead_id} | agente=${agente_nome}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
+            } catch(e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
     // POST /api/encerrar-atendimento  { inst, lead_id }
     // Grava atendimento_fim e calcula tma_segundos. Idempotente (não sobrescreve se já encerrado).
     if (req.url === '/api/encerrar-atendimento' && req.method === 'POST') {
@@ -3505,7 +3611,7 @@ const server = http.createServer(async (req, res) => {
                     res.end(JSON.stringify({ ok: false, error: 'inst e lead_id obrigatórios' }));
                     return;
                 }
-                const { data: lead } = await db.from('leads').select('atendimento_fim').eq('id', lead_id).single();
+                const { data: lead } = await db.from('leads').select('atendimento_fim, atendente_nome, departamento, nome, numero').eq('id', lead_id).single();
                 if (!lead) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ ok: false, error: 'Lead não encontrado' }));
@@ -3524,6 +3630,23 @@ const server = http.createServer(async (req, res) => {
                     tma_segundos:       null,
                     updated_at:         agora,
                 }).eq('id', lead_id);
+
+                // Cria novo registro na tabela atendimentos
+                try {
+                    const crypto = require('crypto');
+                    await db.from('atendimentos').insert({
+                        id: crypto.randomUUID(),
+                        instance_name: instBody,
+                        lead_id,
+                        departamento: lead.departamento || 'ADM Principal',
+                        agente_nome: lead.atendente_nome || 'ADM Principal',
+                        numero: lead.numero,
+                        nome: lead.nome,
+                        inicio: agora,
+                        status: 'ativo',
+                    });
+                } catch(e2) { /* tabela pode não existir */ }
+
                 log(instBody, 'ok', `[Atend] Atendimento reiniciado — lead ${lead_id}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ ok: true, atendimento_inicio: agora }));
@@ -3550,7 +3673,7 @@ const server = http.createServer(async (req, res) => {
 
             // Leads da instância (básico)
             const { data: leads } = await db.from('leads')
-                .select('id, departamento, atendimento_inicio, atendimento_fim, tma_segundos, updated_at')
+                .select('id, departamento, atendente_nome, atendimento_inicio, atendimento_fim, tma_segundos, updated_at')
                 .eq('instance_name', inst);
             const leadsArr = leads || [];
 
@@ -3611,7 +3734,7 @@ const server = http.createServer(async (req, res) => {
                 return { ...g, tmaMed, status };
             }).sort((a,b) => (b.atendendo + b.aguardando) - (a.atendendo + a.aguardando));
 
-            // ── Ranking de atendentes (últimos 7 dias via atendimentos) ──────
+            // ── Ranking de atendentes (últimos 7 dias via atendimentos + fallback leads) ──────
             let ranking = [];
             try {
                 const desde7 = new Date(Date.now() - 7*86400000).toISOString();
@@ -3626,6 +3749,19 @@ const server = http.createServer(async (req, res) => {
                     mapa[a.agente_nome].total++;
                     if (a.status === 'encerrado') mapa[a.agente_nome].encerrados++;
                     if (a.tma_segundos) mapa[a.agente_nome].tmas.push(a.tma_segundos);
+                }
+                // Fallback: se tabela atendimentos está vazia, usar leads com atendente_nome
+                if (Object.keys(mapa).length === 0) {
+                    const desde7d = new Date(Date.now() - 7*86400000);
+                    for (const l of leadsArr) {
+                        if (!l.atendente_nome) continue;
+                        if (!mapa[l.atendente_nome]) mapa[l.atendente_nome] = { nome: l.atendente_nome, total: 0, encerrados: 0, tmas: [] };
+                        if (l.atendimento_inicio) mapa[l.atendente_nome].total++;
+                        if (l.atendimento_fim && new Date(l.atendimento_fim) >= desde7d) {
+                            mapa[l.atendente_nome].encerrados++;
+                            if (l.tma_segundos) mapa[l.atendente_nome].tmas.push(l.tma_segundos);
+                        }
+                    }
                 }
                 ranking = Object.values(mapa).map(r => ({
                     nome: r.nome, total: r.total, encerrados: r.encerrados,
@@ -3731,9 +3867,14 @@ const server = http.createServer(async (req, res) => {
                     const meusLeads = deptLeads.filter(l => l.atendente_nome === at.nome);
                     const ativos = meusLeads.filter(l => l.atendimento_inicio && !l.atendimento_fim);
 
-                    // Encerrados hoje: usar tabela atendimentos (confiável mesmo após reatribuição)
+                    // Encerrados hoje: tabela atendimentos primeiro, fallback para leads
                     const meusAtendHoje = deptAtendHoje.filter(a => a.agente_nome === at.nome);
-                    const tmasHoje = meusAtendHoje.map(a => a.tma_segundos).filter(Boolean);
+                    const meusLeadsEncHoje = meusLeads.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje);
+                    const encHojeList = meusAtendHoje.length > 0 ? meusAtendHoje : meusLeadsEncHoje;
+                    const encHojeCount = Math.max(meusAtendHoje.length, meusLeadsEncHoje.length);
+                    const tmasHojeAtend = meusAtendHoje.map(a => a.tma_segundos).filter(Boolean);
+                    const tmasHojeLeads = meusLeadsEncHoje.map(l => l.tma_segundos).filter(Boolean);
+                    const tmasHoje = tmasHojeAtend.length > 0 ? tmasHojeAtend : tmasHojeLeads;
 
                     const meusAtend = deptAtend7d.filter(a => a.agente_nome === at.nome);
                     const tmas7d = meusAtend.map(a => a.tma_segundos).filter(Boolean);
@@ -3746,15 +3887,14 @@ const server = http.createServer(async (req, res) => {
                         duracao_seg: Math.round((agora - new Date(l.atendimento_inicio).getTime()) / 1000),
                         last_interaction: l.last_interaction
                     }));
-                    // Leads encerrados hoje (da tabela atendimentos)
-                    const leadsEncerradosHoje = meusAtendHoje.slice(0, 20).map(a => ({
-                        id: a.lead_id, nome: a.nome, numero: a.numero,
-                        tma: a.tma_segundos, fim: a.fim
-                    }));
+                    // Leads encerrados hoje (tabela atendimentos ou fallback leads)
+                    const leadsEncerradosHoje = meusAtendHoje.length > 0
+                        ? meusAtendHoje.slice(0, 20).map(a => ({ id: a.lead_id, nome: a.nome, numero: a.numero, tma: a.tma_segundos, fim: a.fim }))
+                        : meusLeadsEncHoje.slice(0, 20).map(l => ({ id: l.id, nome: l.nome, numero: l.numero, tma: l.tma_segundos, fim: l.atendimento_fim }));
                     return {
                         id: at.id, nome: at.nome,
                         ativos: ativos.length,
-                        encerradosHoje: meusAtendHoje.length,
+                        encerradosHoje: encHojeCount,
                         tmaHoje: tmasHoje.length ? Math.round(tmasHoje.reduce((a,b)=>a+b,0)/tmasHoje.length) : 0,
                         total7d: meusAtend.length,
                         encerrados7d: meusAtend.filter(a => a.status === 'encerrado').length,
