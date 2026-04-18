@@ -3704,10 +3704,11 @@ const server = http.createServer(async (req, res) => {
                 encerradosHoje = at || [];
             } catch(e) { /* sem tabela atendimentos */ }
 
-            // ── KPIs globais ─────────────────────────────────────────────────
-            const ativos       = leadsArr.filter(l => l.atendimento_inicio && !l.atendimento_fim);
+            // ── KPIs globais (exclui ADM Principal — TMA/TME é só dos atendentes) ──
+            const _naoAdm = l => (l.departamento || 'ADM Principal') !== 'ADM Principal';
+            const ativos       = leadsArr.filter(l => l.atendimento_inicio && !l.atendimento_fim && _naoAdm(l));
             const aguardando   = filaArr.length;
-            const encerradosH  = leadsArr.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje);
+            const encerradosH  = leadsArr.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje && _naoAdm(l));
             const tmasHoje     = encerradosH.map(l => l.tma_segundos).filter(Boolean);
             const tmaMedioHoje = tmasHoje.length ? Math.round(tmasHoje.reduce((a,b)=>a+b,0)/tmasHoje.length) : 0;
             // TME: aproximação do tempo que os que estão aguardando já esperam
@@ -3779,7 +3780,7 @@ const server = http.createServer(async (req, res) => {
             // ── Atendimentos iniciados por hora (hoje) ───────────────────────
             const porHora = Array(24).fill(0);
             for (const l of leadsArr) {
-                if (!l.atendimento_inicio) continue;
+                if (!l.atendimento_inicio || !_naoAdm(l)) continue;
                 const d = new Date(l.atendimento_inicio);
                 if (d < hoje) continue;
                 porHora[d.getHours()]++;
