@@ -1670,7 +1670,7 @@ function crmApp() {
 
                 get ativosAgoraPorDept() {
                     void this._tickSegundo;
-                    const ativos = this.leads.filter(l => l.instance_name === this.instanceName && l.atendimento_inicio && !l.atendimento_fim);
+                    const ativos = this.leads.filter(l => l.instance_name === this.instanceName && l.atendimento_inicio && !l.atendimento_fim && (l.departamento || 'ADM Principal') !== 'ADM Principal');
                     const grupos = {};
                     for (const l of ativos) {
                         const dept = l.departamento || 'ADM Principal';
