@@ -828,6 +828,8 @@ function crmApp() {
                 modeloSalvando: false,
                 
                 isObsModalOpen: false, activeLeadForObs: null, obsInput: '',
+                // Modal de transferência
+                showTransferModal: false, transferLeadId: null, transferDeptSelecionado: '', transferMotivo: '',
                 agendaTarget: 'manual', agendaFunil: 'novo_lead', agendaTab: 'pendentes', agendaSearch: '',
                 agendaForm: { leadIds: [], numeroAvulso: '', tipo: 'simples', flowId: '', texto: '', dataHora: '' },
                 agendamentos: [],
@@ -1363,17 +1365,32 @@ function crmApp() {
                     } catch(e) {}
                 },
 
-                async transferLead(leadId, novoDept) {
-                    if(!confirm(`Transferir cliente para a fila de ${novoDept}?`)) return;
+                abrirTransferModal(leadId) {
+                    this.transferLeadId = leadId;
+                    this.transferDeptSelecionado = '';
+                    this.transferMotivo = '';
+                    this.showTransferModal = true;
+                    this.$nextTick(() => lucide.createIcons());
+                },
+                async confirmarTransferencia() {
+                    const leadId = this.transferLeadId;
+                    const novoDept = this.transferDeptSelecionado;
+                    const motivo = this.transferMotivo.trim();
+                    if (!leadId || !novoDept) return;
+                    this.showTransferModal = false;
+
                     const idx = this.leads.findIndex(l => l.id === leadId);
                     if (idx !== -1) {
                         this.leads[idx].departamento = novoDept;
                         this.leads[idx].atendente_nome = null;
+                        this.leads[idx].transfer_motivo = motivo;
+                        this.leads[idx].transfer_de = this.currentUserDept;
                         this.leads = [...this.leads];
-                        await this.client.from('leads').update({ departamento: novoDept, atendente_nome: null }).eq('id', leadId);
+                        await this.client.from('leads').update({ departamento: novoDept, atendente_nome: null, transfer_motivo: motivo, transfer_de: this.currentUserDept }).eq('id', leadId);
                         this.addNotification('Transferido', `Cliente enviado para fila de ${novoDept}.`, 'success');
                         
-                        const sysMsg = `*Transferência de Setor*\nO cliente foi transferido de ${this.currentUserDept} para: *${novoDept}*.`;
+                        const motivoTxt = motivo ? `\nMotivo: _${motivo}_` : '';
+                        const sysMsg = `*Transferência de Setor*\nO cliente foi transferido de ${this.currentUserDept} para: *${novoDept}*.${motivoTxt}`;
                         const tempId = 'sys-' + Date.now();
                         const tempMsgObj = { id: tempId, lead_id: leadId, content: sysMsg, from_me: true, type: 'text', status: 'sent', timestamp: new Date().toISOString() };
                         
@@ -1394,7 +1411,7 @@ function crmApp() {
                                 numero: this.leads[idx]?.numero || '',
                                 nome: this.leads[idx]?.nome || '',
                                 departamento: novoDept,
-                                motivo: 'Transferência manual'
+                                motivo: motivo || 'Transferência manual'
                             })
                         }).then(() => this.carregarFila()).catch(() => {});
 

@@ -5267,6 +5267,47 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                     </div>
             </section>
             
+            <!-- ══ MODAL DE TRANSFERÊNCIA ══ -->
+            <div x-show="showTransferModal" x-cloak x-transition.opacity class="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                <div @click.away="showTransferModal = false" x-transition class="bg-white dark:bg-[#161b22] rounded-2xl shadow-2xl w-full max-w-sm border border-gray-200 dark:border-[#21262d] overflow-hidden">
+                    <div class="px-5 pt-5 pb-3 border-b border-gray-100 dark:border-[#21262d]">
+                        <h3 class="text-base font-black text-slate-800 dark:text-white flex items-center gap-2">
+                            <i data-lucide="arrow-right-left" class="w-5 h-5 text-[#6366f1]"></i> Transferir Cliente
+                        </h3>
+                        <p class="text-[11px] text-slate-400 mt-1">Selecione o setor de destino e descreva o motivo</p>
+                    </div>
+                    <div class="p-5 space-y-4">
+                        <div>
+                            <label class="text-[10px] font-black uppercase text-slate-500 mb-1.5 block">Setor de destino</label>
+                            <div class="space-y-1.5">
+                                <template x-for="dept in allDepartments.filter(d => d !== (selectedLead?.departamento || 'ADM Principal'))" :key="dept">
+                                    <button @click="transferDeptSelecionado = dept; $nextTick(()=>lucide.createIcons())"
+                                            :class="transferDeptSelecionado === dept ? 'bg-[#6366f1] text-white border-[#6366f1]' : 'bg-slate-50 dark:bg-[#21262d] text-slate-700 dark:text-slate-200 border-gray-200 dark:border-[#30363d] hover:border-[#6366f1]'"
+                                            class="w-full text-left px-4 py-3 rounded-xl text-sm font-bold border transition-all flex items-center gap-2">
+                                        <i data-lucide="building-2" class="w-4 h-4 shrink-0"></i>
+                                        <span x-text="dept"></span>
+                                        <i x-show="transferDeptSelecionado === dept" data-lucide="check" class="w-4 h-4 ml-auto"></i>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black uppercase text-slate-500 mb-1.5 block">Motivo da transferência</label>
+                            <textarea x-model="transferMotivo" rows="3" placeholder="Ex: Cliente precisa de suporte técnico..."
+                                      class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-xl p-3 text-sm dark:text-white outline-none resize-none focus:ring-2 focus:ring-[#6366f1] transition-all placeholder:text-slate-400"></textarea>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 px-5 pb-5">
+                        <button @click="showTransferModal = false" class="flex-1 bg-slate-100 dark:bg-[#21262d] text-slate-600 dark:text-slate-300 py-3 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors">Cancelar</button>
+                        <button @click="confirmarTransferencia()" :disabled="!transferDeptSelecionado"
+                                :class="transferDeptSelecionado ? 'bg-[#6366f1] hover:bg-[#4f46e5]' : 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed'"
+                                class="flex-1 text-white py-3 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
+                            <i data-lucide="send" class="w-4 h-4"></i> Transferir
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div x-show="lightboxOpen" x-cloak class="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm" x-transition.opacity>
                 <button @click="lightboxOpen = false" class="absolute top-5 right-5 text-white/70 hover:text-white p-2 transition-colors bg-black/50 rounded-full"><i data-lucide="x" class="w-6 h-6"></i></button>
                 <img :src="lightboxUrl" class="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl" @click.away="lightboxOpen = false">
@@ -5300,6 +5341,19 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Banner de transferência -->
+                <div x-show="selectedLead?.transfer_motivo" x-transition class="mt-1.5 flex items-start gap-2 bg-amber-50 dark:bg-amber-900/15 border border-amber-200/50 dark:border-amber-700/30 rounded-lg px-3 py-2">
+                    <i data-lucide="arrow-right-left" class="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5"></i>
+                    <div class="min-w-0">
+                        <p class="text-[10px] font-black text-amber-700 dark:text-amber-400">Transferido de <span x-text="selectedLead?.transfer_de || '?'"></span></p>
+                        <p class="text-[11px] text-amber-600 dark:text-amber-300 mt-0.5" x-text="selectedLead?.transfer_motivo"></p>
+                    </div>
+                    <button @click="client.from('leads').update({transfer_motivo:null,transfer_de:null}).eq('id',selectedLead.id); selectedLead.transfer_motivo=null; selectedLead.transfer_de=null; const i=leads.findIndex(l=>l.id===selectedLead.id); if(i!==-1){leads[i].transfer_motivo=null;leads[i].transfer_de=null;leads=[...leads];}"
+                            class="text-amber-400 hover:text-amber-600 shrink-0 ml-auto" title="Dispensar">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
                 </div>
 
                 <!-- Linha 2: Ferramentas inline -->
@@ -5372,13 +5426,11 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                              class="absolute right-0 top-10 bg-white dark:bg-[#161b22] shadow-2xl rounded-xl p-2.5 min-w-[220px] border border-gray-200 dark:border-[#21262d] z-50">
 
                             <!-- Transferir Setor -->
-                            <template x-for="dept in allDepartments.filter(d => d !== (selectedLead?.departamento || 'ADM Principal'))" :key="dept">
-                                <button @click="transferLead(selectedLead.id, dept); toolsOpen=false;"
-                                        class="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-[#21262d] rounded-lg text-[11px] font-bold dark:text-white transition-colors flex items-center gap-2">
-                                    <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-[#6366f1]"></i>
-                                    <span x-text="'Transferir → ' + dept"></span>
-                                </button>
-                            </template>
+                            <button @click="abrirTransferModal(selectedLead.id); toolsOpen=false;"
+                                    class="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-[#21262d] rounded-lg text-[11px] font-bold dark:text-white transition-colors flex items-center gap-2">
+                                <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-[#6366f1]"></i>
+                                <span>Transferir para outro setor</span>
+                            </button>
 
                             <div class="h-px bg-gray-100 dark:bg-[#21262d] my-1.5"></div>
 
