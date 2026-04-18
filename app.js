@@ -4118,163 +4118,87 @@ document.addEventListener('alpine:init', () => {
         lembretes: [],
         showLembreteModal: false,
         editingLembreteId: null,
-        lembreteForm: {
-            titulo: '', mensagem: '', tipo: 'info',
-            destinatarios: [], horario: '09:00',
-            recorrencia: 'diario', dias_semana: [], dia_mes: 1
+        lembForm: { titulo: '', mensagem: '', tipo: 'info', destinatarios: [], horario: '09:00', recorrencia: 'diario', dias_semana: [], dia_mes: 1 },
+
+        async carregarLembretes() {
+            try {
+                const inst = this._inst(); if (!inst) return;
+                const r = await fetch(`/api/lembretes?inst=${encodeURIComponent(inst)}`);
+                const d = await r.json();
+                if (!d.ok) return;
+                let lista = d.lembretes || [];
+                const meuDept = localStorage.getItem('evo_user_dept') || '';
+                const isSup = localStorage.getItem('evo_is_supervisor') === 'true';
+                const isAdmin = meuDept === 'ADM Principal';
+                if (isSup && !isAdmin) lista = lista.filter(l => l.criado_por_dept === meuDept);
+                else if (!isAdmin && !isSup) lista = [];
+                this.lembretes = lista;
+            } catch(e) { console.warn('[Lembretes]', e); }
         },
 
-        _lembreteFormReset() {
-            this.lembreteForm = { titulo: '', mensagem: '', tipo: 'info', destinatarios: [], horario: '09:00', recorrencia: 'diario', dias_semana: [], dia_mes: 1 };
+        abrirNovoLembrete() {
             this.editingLembreteId = null;
-        },
-
-        abrirLembreteModal() {
-            this._lembreteFormReset();
+            this.lembForm = { titulo: '', mensagem: '', tipo: 'info', destinatarios: [], horario: '09:00', recorrencia: 'diario', dias_semana: [], dia_mes: 1 };
             this.showLembreteModal = true;
-            setTimeout(() => lucide.createIcons(), 50);
+            setTimeout(() => lucide.createIcons(), 60);
         },
 
         editarLembrete(lem) {
             this.editingLembreteId = lem.id;
-            this.lembreteForm = {
-                titulo: lem.titulo,
-                mensagem: lem.mensagem || '',
-                tipo: lem.tipo || 'info',
-                destinatarios: JSON.parse(lem.destinatarios || '[]'),
-                horario: lem.horario || '09:00',
-                recorrencia: lem.recorrencia || 'diario',
-                dias_semana: JSON.parse(lem.dias_semana || '[]'),
-                dia_mes: lem.dia_mes || 1,
-            };
+            let dest = lem.destinatarios; try { dest = JSON.parse(dest); } catch(e) { dest = []; }
+            let dsem = lem.dias_semana; try { dsem = JSON.parse(dsem); } catch(e) { dsem = []; }
+            this.lembForm = { titulo: lem.titulo, mensagem: lem.mensagem || '', tipo: lem.tipo || 'info', destinatarios: dest, horario: lem.horario || '09:00', recorrencia: lem.recorrencia || 'diario', dias_semana: dsem, dia_mes: lem.dia_mes || 1 };
             this.showLembreteModal = true;
-            setTimeout(() => lucide.createIcons(), 50);
-        },
-
-        async carregarLembretes() {
-            try {
-                const inst = this._inst();
-                if (!inst) return;
-                const r = await fetch(`/api/lembretes?inst=${encodeURIComponent(inst)}`);
-                const d = await r.json();
-                if (d.ok) {
-                    let lista = d.lembretes || [];
-                    const role = typeof userRole !== 'undefined' ? userRole : 'admin';
-                    const meuDept = (typeof currentUserDept !== 'undefined' ? currentUserDept : '') || localStorage.getItem('evo_user_dept') || '';
-                    if (role === 'supervisor') {
-                        lista = lista.filter(l => l.criado_por_dept === meuDept);
-                    } else if (role === 'atendente') {
-                        lista = [];
-                    }
-                    this.lembretes = lista;
-                }
-            } catch(e) { console.warn('[Lembretes]', e); }
+            setTimeout(() => lucide.createIcons(), 60);
         },
 
         async salvarLembrete() {
-            if (!this.lembreteForm.titulo.trim()) return;
-            const inst = this._inst();
-            if (!inst) return;
+            if (!this.lembForm.titulo.trim() || !this.lembForm.destinatarios.length) return;
+            const inst = this._inst(); if (!inst) return;
             try {
                 if (this.editingLembreteId) {
-                    await fetch('/api/lembretes', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: this.editingLembreteId, ...this.lembreteForm }),
-                    });
+                    await fetch('/api/lembretes', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: this.editingLembreteId, ...this.lembForm }) });
                 } else {
-                    await fetch('/api/lembretes', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            inst,
-                            ...this.lembreteForm,
-                            criado_por: (typeof loggedUserName !== 'undefined' ? loggedUserName : '') || localStorage.getItem('evo_user_name') || 'Admin',
-                            criado_por_dept: (typeof currentUserDept !== 'undefined' ? currentUserDept : '') || localStorage.getItem('evo_user_dept') || 'ADM Principal',
-                        }),
-                    });
+                    await fetch('/api/lembretes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inst, ...this.lembForm, criado_por: localStorage.getItem('evo_user_name') || 'Admin', criado_por_dept: localStorage.getItem('evo_user_dept') || 'ADM Principal' }) });
                 }
                 this.showLembreteModal = false;
-                this._lembreteFormReset();
                 await this.carregarLembretes();
-                this.$root.__app && this.$root.__app.addNotification && this.$root.__app.addNotification('Lembrete Salvo', 'Lembrete configurado com sucesso!', 'success');
             } catch(e) { console.error('[Lembretes]', e); }
         },
 
         async deletarLembrete(id) {
             if (!confirm('Excluir este lembrete?')) return;
-            try {
-                await fetch('/api/lembretes', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id }),
-                });
-                await this.carregarLembretes();
-            } catch(e) { console.error('[Lembretes]', e); }
+            await fetch('/api/lembretes', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {});
+            await this.carregarLembretes();
         },
 
-        async toggleLembrete(lem) {
-            try {
-                await fetch('/api/lembretes', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: lem.id, ativo: !lem.ativo }),
-                });
-                lem.ativo = !lem.ativo;
-            } catch(e) { console.error('[Lembretes]', e); }
+        async toggleLembreteAtivo(lem) {
+            await fetch('/api/lembretes', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lem.id, ativo: !lem.ativo }) }).catch(() => {});
+            lem.ativo = !lem.ativo;
         },
 
-        toggleDestino(val) {
-            const idx = this.lembreteForm.destinatarios.indexOf(val);
-            if (idx === -1) this.lembreteForm.destinatarios.push(val);
-            else this.lembreteForm.destinatarios.splice(idx, 1);
-        },
+        lembToggleDest(val) { const i = this.lembForm.destinatarios.indexOf(val); if (i === -1) this.lembForm.destinatarios.push(val); else this.lembForm.destinatarios.splice(i, 1); },
+        lembToggleDia(d) { const i = this.lembForm.dias_semana.indexOf(d); if (i === -1) this.lembForm.dias_semana.push(d); else this.lembForm.dias_semana.splice(i, 1); },
 
-        toggleDiaSemana(dia) {
-            const idx = this.lembreteForm.dias_semana.indexOf(dia);
-            if (idx === -1) this.lembreteForm.dias_semana.push(dia);
-            else this.lembreteForm.dias_semana.splice(idx, 1);
-        },
-
-        get destinatariosDisponiveis() {
-            const role = typeof userRole !== 'undefined' ? userRole : 'admin';
-            const meuDept = (typeof currentUserDept !== 'undefined' ? currentUserDept : '') || localStorage.getItem('evo_user_dept') || '';
-            const depts = typeof allDepartments !== 'undefined' ? allDepartments : [];
-            const atends = typeof deptAtendentes !== 'undefined' ? deptAtendentes : [];
+        get lembDestinosOpcoes() {
+            const meuDept = localStorage.getItem('evo_user_dept') || '';
+            const isAdmin = meuDept === 'ADM Principal';
+            const isSup = localStorage.getItem('evo_is_supervisor') === 'true';
             const lista = [];
-
-            if (role === 'admin') {
-                lista.push({ value: 'todos', label: 'Todos' });
-                for (const d of depts) {
-                    if (d !== 'ADM Principal') lista.push({ value: `dept:${d}`, label: `Setor: ${d}` });
-                }
-            } else if (role === 'supervisor') {
-                lista.push({ value: `dept:${meuDept}`, label: `Todo o setor: ${meuDept}` });
+            if (isAdmin) {
+                lista.push({ v: 'todos', l: 'Todos' });
+                try { const depts = typeof allDepartments !== 'undefined' ? allDepartments : []; for (const d of depts) { if (d !== 'ADM Principal') lista.push({ v: 'dept:' + d, l: 'Setor: ' + d }); } } catch(e) {}
+            } else if (isSup) {
+                lista.push({ v: 'dept:' + meuDept, l: 'Todo setor: ' + meuDept });
             }
-
-            // Atendentes individuais visíveis
-            for (const at of atends) {
-                if (role === 'admin' || (at.departamento === meuDept)) {
-                    lista.push({ value: `user:${at.nome}`, label: at.nome });
-                }
-            }
+            try { const at = typeof deptAtendentes !== 'undefined' ? deptAtendentes : []; for (const a of at) { if (isAdmin || a.departamento === meuDept) lista.push({ v: 'user:' + a.nome, l: a.nome }); } } catch(e) {}
             return lista;
         },
 
-        recorrenciaLabel(r) {
-            return { diario: 'Diário', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal' }[r] || r;
-        },
+        lembRecLabel(r) { return { diario: 'Diário', semanal: 'Semanal', quinzenal: 'Quinzenal', mensal: 'Mensal' }[r] || r; },
+        lembDiasLabel(d) { try { const arr = typeof d === 'string' ? JSON.parse(d) : d; return (arr||[]).map(x => ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][x]).join(', '); } catch(e) { return ''; } },
+        lembDestResumo(d) { try { const arr = typeof d === 'string' ? JSON.parse(d) : d; if ((arr||[]).includes('todos')) return 'Todos'; return (arr||[]).map(x => x.replace('dept:','').replace('user:','')).join(', ') || '—'; } catch(e) { return '—'; } }
 
-        diasSemanaLabel(dias) {
-            const nomes = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-            return (dias || []).map(d => nomes[d] || d).join(', ');
-        },
-
-        destinatariosResumo(dest) {
-            const arr = typeof dest === 'string' ? JSON.parse(dest || '[]') : (dest || []);
-            if (arr.includes('todos')) return 'Todos';
-            return arr.map(d => d.replace('dept:', '').replace('user:', '')).join(', ') || '—';
-        }
     }));
 
     // ── Som de notificação ──
