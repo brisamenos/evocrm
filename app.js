@@ -3873,6 +3873,20 @@ function crmApp() {
                         }
                         this.selectedLead.atendente_nome = meuNome;
                         this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', leadId);
+                    } else if (this.userRole !== 'admin') {
+                        // Sem fila — registra início para contabilizar TMA/TME
+                        const meuNome = this.loggedUserName || this.currentUserDept || 'Atendente';
+                        if (!this.selectedLead.atendente_nome || this.selectedLead.atendente_nome !== meuNome) {
+                            this.selectedLead.atendente_nome = meuNome;
+                            const idx = this.leads.findIndex(l => l.id === leadId);
+                            if (idx !== -1) { this.leads[idx].atendente_nome = meuNome; this.leads = [...this.leads]; }
+                            this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', leadId);
+                        }
+                        fetch('/api/registrar-inicio-atendimento', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ inst: this.instanceName, lead_id: leadId, agente_nome: meuNome })
+                        }).catch(() => {});
                     }
 
                     // Aplica mesma lógica de pausa do WhatsApp direto
@@ -3914,7 +3928,20 @@ function crmApp() {
                         if (idx !== -1) { this.leads[idx].atendente_nome = meuNome; this.leads = [...this.leads]; }
                         this.selectedLead.atendente_nome = meuNome;
                         this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', leadId);
-                    } 
+                    } else if (this.userRole !== 'admin') {
+                        const meuNome = this.loggedUserName || this.currentUserDept || 'Atendente';
+                        if (!this.selectedLead.atendente_nome || this.selectedLead.atendente_nome !== meuNome) {
+                            this.selectedLead.atendente_nome = meuNome;
+                            const idx = this.leads.findIndex(l => l.id === leadId);
+                            if (idx !== -1) { this.leads[idx].atendente_nome = meuNome; this.leads = [...this.leads]; }
+                            this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', leadId);
+                        }
+                        fetch('/api/registrar-inicio-atendimento', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ inst: this.instanceName, lead_id: leadId, agente_nome: meuNome })
+                        }).catch(() => {});
+                    }
                     const tempId = 'temp-' + Date.now(); const fakeUrl = `http://supabase.co/fake_${Date.now()}.${file.name.split('.').pop()}`; const tempMsg = { id: tempId, lead_id: this.selectedLead.id, content: fakeUrl, from_me: true, type: type, status: 'sent', timestamp: new Date().toISOString() };
                     this.messages = [...this.messages, tempMsg]; this.updateLeadLocalInteraction(this.selectedLead.id, fakeUrl, type); this.scrollToBottom(); this._refreshIcons();
                     try { 
