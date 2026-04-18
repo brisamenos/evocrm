@@ -2638,8 +2638,13 @@ log('sistema', 'ok', 'Fila de atendimento inicializada');
 // - Cria entrada na fila (se ainda não existe)
 // - Avisa o cliente via WhatsApp com a posição
 // - Broadcast WS já é feito dentro do fila_manager
+const _enfileirandoSet = new Set();
 async function enfileirarLead(inst, lead, departamento, motivo) {
     if (!inst || !lead?.id || !departamento) return null;
+    // Guard contra race condition (chamadas concorrentes p/ mesmo lead)
+    const chave = `${inst}:${lead.id}`;
+    if (_enfileirandoSet.has(chave)) return null;
+    _enfileirandoSet.add(chave);
     try {
         const r = await filaMgr.entrarNaFila(inst, lead, departamento, motivo || '');
         if (!r || r.jaEstava) return r;
@@ -2673,6 +2678,8 @@ async function enfileirarLead(inst, lead, departamento, motivo) {
     } catch(e) {
         log(inst, 'warn', `[Fila] Falha ao enfileirar lead: ${e.message}`);
         return null;
+    } finally {
+        _enfileirandoSet.delete(chave);
     }
 }
 
@@ -3744,7 +3751,7 @@ const server = http.createServer(async (req, res) => {
                     .gte('inicio', desde7);
                 const mapa = {};
                 for (const a of (at7 || [])) {
-                    if (!a.agente_nome) continue;
+                    if (!a.agente_nome || a.agente_nome === 'ADM Principal') continue;
                     if (!mapa[a.agente_nome]) mapa[a.agente_nome] = { nome: a.agente_nome, total: 0, encerrados: 0, tmas: [] };
                     mapa[a.agente_nome].total++;
                     if (a.status === 'encerrado') mapa[a.agente_nome].encerrados++;
@@ -3754,7 +3761,7 @@ const server = http.createServer(async (req, res) => {
                 if (Object.keys(mapa).length === 0) {
                     const desde7d = new Date(Date.now() - 7*86400000);
                     for (const l of leadsArr) {
-                        if (!l.atendente_nome) continue;
+                        if (!l.atendente_nome || l.atendente_nome === 'ADM Principal') continue;
                         if (!mapa[l.atendente_nome]) mapa[l.atendente_nome] = { nome: l.atendente_nome, total: 0, encerrados: 0, tmas: [] };
                         if (l.atendimento_inicio) mapa[l.atendente_nome].total++;
                         if (l.atendimento_fim && new Date(l.atendimento_fim) >= desde7d) {
