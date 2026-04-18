@@ -3591,23 +3591,15 @@ function crmApp() {
                     this.carregarChatInterno(lead.id);
 
                     // Admin: tira da fila ao abrir (comportamento original)
-                    // Supervisor/Atendente: NÃO tira da fila aqui — só ao enviar a primeira mensagem
+                    // Admin: NÃO registra atendimento próprio (TMA/TME é só dos atendentes)
                     if (this.userRole === 'admin') {
-                        fetch('/api/fila/iniciar', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                inst: this.instanceName,
-                                lead_id: lead.id,
-                                agente_nome: this.loggedUserName || this.currentUserDept || 'ADM Principal'
-                            })
-                        }).catch(() => {});
-                        const meuNome = this.loggedUserName || this.currentUserDept || 'ADM Principal';
-                        if (leadRef.atendente_nome !== meuNome) {
-                            leadRef.atendente_nome = meuNome;
-                            this.selectedLead.atendente_nome = meuNome;
-                            this.leads = [...this.leads];
-                            this.client.from('leads').update({ atendente_nome: meuNome }).eq('id', lead.id);
+                        // Apenas tira da fila se estava aguardando, sem registrar como atendente
+                        if (this.filaPorLead && this.filaPorLead[lead.id]) {
+                            fetch('/api/fila/iniciar', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ inst: this.instanceName, lead_id: lead.id, agente_nome: '' })
+                            }).catch(() => {});
                         }
                     }
 
