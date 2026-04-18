@@ -322,22 +322,6 @@ CREATE TABLE IF NOT EXISTS lead_documentos (
 );
 CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_id);
 
-CREATE TABLE IF NOT EXISTS lembretes (
-  id TEXT PRIMARY KEY, instance_name TEXT NOT NULL,
-  titulo TEXT NOT NULL, mensagem TEXT DEFAULT '',
-  tipo TEXT DEFAULT 'info',
-  criado_por TEXT NOT NULL, criado_por_dept TEXT NOT NULL,
-  destinatarios TEXT DEFAULT '[]',
-  horario TEXT DEFAULT '09:00',
-  recorrencia TEXT DEFAULT 'diario',
-  dias_semana TEXT DEFAULT '[]',
-  dia_mes INTEGER DEFAULT 1,
-  ativo INTEGER DEFAULT 1,
-  ultimo_envio TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_lembretes_inst ON lembretes(instance_name, ativo);
-
     `);
 
     // ── MIGRAÇÕES: adiciona colunas novas em bancos existentes (ALTER TABLE é seguro — ignora se já existe)

@@ -512,24 +512,3 @@ CREATE TABLE IF NOT EXISTS atendimentos (
 );
 CREATE INDEX IF NOT EXISTS idx_atend_inst_dept ON atendimentos(instance_name, departamento);
 CREATE INDEX IF NOT EXISTS idx_atend_fila      ON atendimentos(fila_id);
-
--- ─── LEMBRETES RECORRENTES ───────────────────────────────────────────────────
--- Admin pode enviar para qualquer setor/pessoa. Supervisor apenas para seu setor.
-CREATE TABLE IF NOT EXISTS lembretes (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  instance_name   TEXT NOT NULL,
-  titulo          TEXT NOT NULL,
-  mensagem        TEXT,
-  tipo            TEXT DEFAULT 'info',
-  criado_por      TEXT NOT NULL,
-  criado_por_dept TEXT NOT NULL,
-  destinatarios   TEXT NOT NULL DEFAULT '[]',
-  horario         TEXT NOT NULL DEFAULT '09:00',
-  recorrencia     TEXT NOT NULL DEFAULT 'diario',
-  dias_semana     TEXT DEFAULT '[]',
-  dia_mes         INTEGER DEFAULT 1,
-  ativo           BOOLEAN DEFAULT true,
-  ultimo_envio    TIMESTAMPTZ DEFAULT NULL,
-  created_at      TIMESTAMPTZ DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS idx_lembretes_inst ON lembretes(instance_name, ativo);
