@@ -1681,8 +1681,22 @@ function crmApp() {
                     const dept = this.currentUserDept || '';
                     const meuDept = !dept || dept === 'ADM Principal' || update.departamento === dept;
                     if (!meuDept) return;
-                    // Simplificação: qualquer evento dispara recarregamento leve
-                    this.carregarFila();
+
+                    const filaAntes = this.filaLista.length;
+                    // Recarrega e notifica atendente se houver gente esperando
+                    this.carregarFila().then(() => {
+                        // Se a ação foi encerramento/início e ainda há gente na fila, avisa o atendente
+                        if ((update.acao === 'encerrado' || update.acao === 'inicio' || update.acao === 'reposicao') && this.filaLista.length > 0) {
+                            const prox = this.filaLista[0];
+                            this.addNotification('📋 Próximo na fila', `${prox.nome || prox.numero} está aguardando atendimento.`, 'info');
+                            this.playSound();
+                        }
+                        // Se entrou alguém novo na fila
+                        if (update.acao === 'entrada' && this.filaLista.length > filaAntes) {
+                            this.addNotification('🔔 Nova entrada na fila', `${update.nome || 'Cliente'} entrou na fila.`, 'info');
+                            this.playSound();
+                        }
+                    });
                 },
 
                 get ativosAgoraPorDept() {

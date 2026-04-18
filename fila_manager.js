@@ -46,6 +46,32 @@ function formatarTempo(segundos) {
     return `${s}s`;
 }
 
+// ── NOTIFICAR PRÓXIMO DA FILA VIA WHATSAPP ───────────────────────────────────
+async function notificarProximoWhatsApp(inst, proximo) {
+    if (!proximo || !proximo.numero || !_fetch || !_EVO_URL) return;
+    try {
+        const nomeCliente = (proximo.nome || '').split(' ')[0] || '';
+        const saudacao = nomeCliente ? `Olá, ${nomeCliente}! ` : 'Olá! ';
+        const texto = `${saudacao}Você é o próximo a ser atendido 🙌 Aguarde só um instante, já vamos responder.`;
+
+        await _fetch(`${_EVO_URL}/message/sendText/${inst}`, {
+            method: 'POST',
+            headers: { 'apikey': _EVO_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ number: proximo.numero, text: texto })
+        });
+        // Salvar msg no histórico
+        try {
+            await from('messages').insert({
+                instance_name: inst, lead_id: proximo.lead_id,
+                content: texto, type: 'text',
+                from_me: true, status: 'sent', sent_by_ia: true,
+                timestamp: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+            });
+        } catch(e) {}
+    } catch(e) { /* best effort */ }
+}
+
 // ── POSIÇÃO NA FILA ──────────────────────────────────────────────────────────
 async function calcularPosicao(inst, departamento) {
     const { data } = await from('fila_atendimento')
@@ -151,9 +177,10 @@ async function iniciarAtendimento(inst, filaId, agenteId, agenteNome) {
     }
 
     // Recalcula posições dos demais que estão aguardando no mesmo depto
+    let proximo = null;
     try {
         const { data: aguardando } = await from('fila_atendimento')
-            .select('id, entrada_em, created_at')
+            .select('id, lead_id, numero, nome, entrada_em, created_at')
             .eq('instance_name', inst)
             .eq('departamento', fila.departamento)
             .eq('status', 'aguardando');
@@ -164,6 +191,9 @@ async function iniciarAtendimento(inst, filaId, agenteId, agenteNome) {
         });
         for (let i = 0; i < lista.length; i++) {
             await from('fila_atendimento').update({ posicao: i + 1 }).eq('id', lista[i].id);
+        }
+        if (lista.length > 0) {
+            proximo = { ...lista[0], posicao: 1, departamento: fila.departamento };
         }
     } catch(e) { /* best effort */ }
 
@@ -177,7 +207,7 @@ async function iniciarAtendimento(inst, filaId, agenteId, agenteNome) {
         tme:          tme,
     });
 
-    return { ok: true, tme, tme_fmt: formatarTempo(tme) };
+    return { ok: true, tme, tme_fmt: formatarTempo(tme), proximo };
 }
 
 // ── ENCERRAR ATENDIMENTO ─────────────────────────────────────────────────────
@@ -227,7 +257,28 @@ async function encerrarAtendimento(inst, filaId, agenteId) {
         tma:          tma,
     });
 
-    return { ok: true, tma, tma_fmt: formatarTempo(tma) };
+    // ── Recalcula posições e identifica o próximo da fila ──
+    let proximo = null;
+    try {
+        const { data: aguardando } = await from('fila_atendimento')
+            .select('id, lead_id, numero, nome, entrada_em, created_at')
+            .eq('instance_name', inst)
+            .eq('departamento', fila.departamento)
+            .eq('status', 'aguardando');
+        const lista = (aguardando || []).slice().sort((a,b) => {
+            const ta = new Date(a.entrada_em || a.created_at).getTime();
+            const tb = new Date(b.entrada_em || b.created_at).getTime();
+            return ta - tb;
+        });
+        for (let i = 0; i < lista.length; i++) {
+            await from('fila_atendimento').update({ posicao: i + 1 }).eq('id', lista[i].id);
+        }
+        if (lista.length > 0) {
+            proximo = { ...lista[0], posicao: 1, departamento: fila.departamento };
+        }
+    } catch(e) { /* best effort */ }
+
+    return { ok: true, tma, tma_fmt: formatarTempo(tma), proximo };
 }
 
 // ── TRANSFERIR DEPARTAMENTO ──────────────────────────────────────────────────
@@ -474,6 +525,9 @@ async function handleRequest(req, res, body) {
         const { fila_id, agente_id, agente_nome } = body || {};
         if (!fila_id) return json({ error: 'fila_id obrigatório' }, 400);
         const result = await iniciarAtendimento(inst, fila_id, agente_id, agente_nome || 'Atendente');
+        if (result.ok && result.proximo) {
+            notificarProximoWhatsApp(inst, result.proximo).catch(() => {});
+        }
         return json(result);
     }
 
@@ -482,6 +536,9 @@ async function handleRequest(req, res, body) {
         const { fila_id, agente_id } = body || {};
         if (!fila_id) return json({ error: 'fila_id obrigatório' }, 400);
         const result = await encerrarAtendimento(inst, fila_id, agente_id);
+        if (result.ok && result.proximo) {
+            notificarProximoWhatsApp(inst, result.proximo).catch(() => {});
+        }
         return json(result);
     }
 

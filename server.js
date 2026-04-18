@@ -2637,7 +2637,35 @@ log('sistema', 'ok', 'Fila de atendimento inicializada');
 // Helper: chama ao direcionar um lead a um departamento.
 // - Cria entrada na fila (se ainda não existe)
 // - Avisa o cliente via WhatsApp com a posição
-// - Broadcast WS já é feito dentro do fila_manager
+// ─── NOTIFICAR PRÓXIMO DA FILA VIA WHATSAPP ──────────────────────────────────
+// Chamada sempre que alguém sai da fila (atendimento iniciado ou encerrado)
+// e um novo lead passa a ser o primeiro (posição 1).
+async function notificarProximoFila(inst, proximo) {
+    if (!proximo || !proximo.numero) return;
+    try {
+        const nomeCliente = (proximo.nome || '').split(' ')[0] || '';
+        const saudacao = nomeCliente ? `Olá, ${nomeCliente}! ` : 'Olá! ';
+        const texto = `${saudacao}Você é o próximo a ser atendido 🙌 Aguarde só um instante, já vamos responder.`;
+
+        await fetch(`${EVO_URL}/message/sendText/${inst}`, {
+            method: 'POST',
+            headers: { 'apikey': EVO_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ number: proximo.numero, text: texto })
+        });
+        await db.from('messages').insert({
+            instance_name: inst, lead_id: proximo.lead_id,
+            content: texto, type: 'text',
+            from_me: true, status: 'sent', sent_by_ia: true,
+            timestamp: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+        }).catch(() => {});
+        log(inst, 'ok', `[Fila] Próximo notificado: ${proximo.nome || proximo.numero} (posição 1)`);
+    } catch(e) {
+        log(inst, 'warn', `[Fila] Falha ao notificar próximo: ${e.message}`);
+    }
+}
+
+// Broadcast WS já é feito dentro do fila_manager
 const _enfileirandoSet = new Set();
 async function enfileirarLead(inst, lead, departamento, motivo) {
     if (!inst || !lead?.id || !departamento) return null;
@@ -3268,6 +3296,10 @@ const server = http.createServer(async (req, res) => {
                     return;
                 }
                 const r = await filaMgr.iniciarAtendimento(inst, rows[0].id, null, agente_nome || '');
+                // Notifica próximo da fila via WhatsApp
+                if (r.ok && r.proximo) {
+                    notificarProximoFila(inst, r.proximo).catch(() => {});
+                }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(r));
             } catch(e) {
@@ -3647,6 +3679,40 @@ const server = http.createServer(async (req, res) => {
                 }
 
                 log(instBody, 'ok', `[TMA] Atendimento encerrado — lead ${lead_id} | tma=${tmaSegs}s`);
+
+                // ── Notificar próximo da fila ──
+                // Quando um atendimento encerra, o próximo aguardando no mesmo departamento
+                // precisa ser avisado que agora é a vez dele.
+                try {
+                    const deptFila = lead.departamento || 'ADM Principal';
+                    const { data: aguardando } = await db.from('fila_atendimento')
+                        .select('id, lead_id, numero, nome, entrada_em, created_at')
+                        .eq('instance_name', instBody)
+                        .eq('departamento', deptFila)
+                        .eq('status', 'aguardando');
+                    if (aguardando && aguardando.length > 0) {
+                        const lista = aguardando.slice().sort((a,b) => {
+                            const ta = new Date(a.entrada_em || a.created_at).getTime();
+                            const tb = new Date(b.entrada_em || b.created_at).getTime();
+                            return ta - tb;
+                        });
+                        // Recalcula posições
+                        for (let i = 0; i < lista.length; i++) {
+                            await db.from('fila_atendimento').update({ posicao: i + 1 }).eq('id', lista[i].id);
+                        }
+                        // Notifica o primeiro (novo próximo)
+                        const prox = lista[0];
+                        notificarProximoFila(instBody, { ...prox, posicao: 1, departamento: deptFila }).catch(() => {});
+                        // Broadcast para atualizar UI de todos os atendentes
+                        if (wsClients[instBody]) {
+                            const msg = JSON.stringify({ type: 'fila_update', departamento: deptFila, acao: 'reposicao' });
+                            for (const ws of wsClients[instBody]) { try { ws.send(msg); } catch(e4) {} }
+                        }
+                    }
+                } catch(e3) {
+                    log(instBody, 'warn', `[Fila] Falha ao notificar próximo: ${e3.message}`);
+                }
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ ok: true, tma_segundos: tmaSegs }));
             } catch(e) {
