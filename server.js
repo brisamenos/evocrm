@@ -3711,9 +3711,12 @@ const server = http.createServer(async (req, res) => {
             const encerradosH  = leadsArr.filter(l => l.atendimento_fim && new Date(l.atendimento_fim) >= hoje && _naoAdm(l));
             const tmasHoje     = encerradosH.map(l => l.tma_segundos).filter(Boolean);
             const tmaMedioHoje = tmasHoje.length ? Math.round(tmasHoje.reduce((a,b)=>a+b,0)/tmasHoje.length) : 0;
-            // TME: aproximação do tempo que os que estão aguardando já esperam
+            // TME: média histórica de espera dos atendimentos de hoje (da tabela atendimentos)
+            const tmesHoje = (encerradosHoje || []).map(a => a.tme_segundos).filter(Boolean);
+            const tmeHistorico = tmesHoje.length ? Math.round(tmesHoje.reduce((a,b)=>a+b,0)/tmesHoje.length) : 0;
+            // Se tem gente aguardando agora, mostra espera atual; senão mostra histórico do dia
             const tmesAguard = filaArr.map(f => Math.round((agora - new Date(f.entrada_em || f.created_at).getTime())/1000));
-            const tmeAtualMedio = tmesAguard.length ? Math.round(tmesAguard.reduce((a,b)=>a+b,0)/tmesAguard.length) : 0;
+            const tmeAtualMedio = tmesAguard.length ? Math.round(tmesAguard.reduce((a,b)=>a+b,0)/tmesAguard.length) : tmeHistorico;
             // SLA: % de atendimentos encerrados hoje cujo TMA está abaixo de 1200s (20min)
             const dentroSla = tmasHoje.filter(t => t <= 1200).length;
             const sla = tmasHoje.length ? Math.round(dentroSla/tmasHoje.length*100) : 100;
