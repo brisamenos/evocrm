@@ -5317,6 +5317,10 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
             
         </main>
 
+        <!-- Backdrop: clicar fora do chat fecha o painel -->
+        <div x-show="isChatOpen" @click="isChatOpen = false" x-cloak
+             class="fixed inset-0 z-[99] hidden md:block"></div>
+
         <div x-show="isChatOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full" x-cloak 
              class="fixed inset-0 z-[100] flex flex-col md:left-[320px] md:right-0 md:w-auto md:border-l border-gray-200 dark:border-[#21262d] bg-wa-bg-light dark:bg-wa-bg-dark">
             
