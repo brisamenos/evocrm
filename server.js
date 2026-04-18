@@ -5747,6 +5747,114 @@ ${contexto}`
         return;
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ── LEMBRETES RECORRENTES ──────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // GET /api/lembretes?inst=...
+    if (req.url.startsWith('/api/lembretes') && req.method === 'GET') {
+        try {
+            const urlP = new URL(req.url, 'http://localhost');
+            const inst = urlP.searchParams.get('inst') || '';
+            if (!inst) { res.writeHead(400); res.end(JSON.stringify({ ok: false, error: 'inst obrigatório' })); return; }
+            const { data } = await db.from('lembretes').select('*').eq('instance_name', inst);
+            const lista = (data || []).sort((a,b) => (b.created_at || '').localeCompare(a.created_at || ''));
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, lembretes: lista }));
+        } catch(e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+    }
+
+    // POST /api/lembretes — criar
+    if (req.url === '/api/lembretes' && req.method === 'POST') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const d = JSON.parse(body || '{}');
+                if (!d.inst || !d.titulo || !d.criado_por) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: false, error: 'inst, titulo, criado_por obrigatórios' }));
+                    return;
+                }
+                const crypto = require('crypto');
+                const id = crypto.randomUUID();
+                await db.from('lembretes').insert({
+                    id,
+                    instance_name:   d.inst,
+                    titulo:          d.titulo,
+                    mensagem:        d.mensagem || '',
+                    tipo:            d.tipo || 'info',
+                    criado_por:      d.criado_por,
+                    criado_por_dept: d.criado_por_dept || 'ADM Principal',
+                    destinatarios:   JSON.stringify(d.destinatarios || []),
+                    horario:         d.horario || '09:00',
+                    recorrencia:     d.recorrencia || 'diario',
+                    dias_semana:     JSON.stringify(d.dias_semana || []),
+                    dia_mes:         d.dia_mes || 1,
+                    ativo:           true,
+                });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true, id }));
+            } catch(e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // PUT /api/lembretes — editar
+    if (req.url === '/api/lembretes' && req.method === 'PUT') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const d = JSON.parse(body || '{}');
+                if (!d.id) { res.writeHead(400); res.end(JSON.stringify({ ok: false, error: 'id obrigatório' })); return; }
+                const updates = {};
+                if (d.titulo !== undefined)        updates.titulo = d.titulo;
+                if (d.mensagem !== undefined)      updates.mensagem = d.mensagem;
+                if (d.tipo !== undefined)           updates.tipo = d.tipo;
+                if (d.destinatarios !== undefined)  updates.destinatarios = JSON.stringify(d.destinatarios);
+                if (d.horario !== undefined)        updates.horario = d.horario;
+                if (d.recorrencia !== undefined)    updates.recorrencia = d.recorrencia;
+                if (d.dias_semana !== undefined)    updates.dias_semana = JSON.stringify(d.dias_semana);
+                if (d.dia_mes !== undefined)        updates.dia_mes = d.dia_mes;
+                if (d.ativo !== undefined)          updates.ativo = d.ativo;
+                await db.from('lembretes').update(updates).eq('id', d.id);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
+            } catch(e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
+    // DELETE /api/lembretes — excluir
+    if (req.url === '/api/lembretes' && req.method === 'DELETE') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const { id } = JSON.parse(body || '{}');
+                if (!id) { res.writeHead(400); res.end(JSON.stringify({ ok: false, error: 'id obrigatório' })); return; }
+                await db.from('lembretes').delete().eq('id', id);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: true }));
+            } catch(e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ ok: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
     // Qualquer rota /api/* não tratada → 404 JSON (nunca serve HTML)
     if (req.url.startsWith('/api/')) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -5921,6 +6029,89 @@ server.listen(PORT, async () => {
     setTimeout(() => executarBackup().catch(e => console.error('[Backup] Erro inicial:', e.message)), 10000);
     setInterval(() => executarBackup().catch(e => console.error('[Backup] Erro periódico:', e.message)), 6 * 60 * 60 * 1000);
     console.log('💾 [Backup] Worker agendado (a cada 6h | primeiro em 10s)');
+
+    // ── SCHEDULER DE LEMBRETES RECORRENTES ──────────────────────────────────
+    setInterval(async () => {
+        try {
+            const agora = new Date();
+            const horaAtual = agora.toTimeString().slice(0, 5); // "HH:MM"
+            const diaSemana = agora.getDay(); // 0=dom, 1=seg...6=sab
+            const diaMes = agora.getDate();
+            const hojeStr = agora.toISOString().slice(0, 10); // "YYYY-MM-DD"
+
+            // Calcula semana do ano para quinzenal
+            const inicioAno = new Date(agora.getFullYear(), 0, 1);
+            const semanaDoAno = Math.ceil(((agora - inicioAno) / 86400000 + inicioAno.getDay() + 1) / 7);
+
+            const { data: todos } = await db.from('lembretes').select('*').eq('ativo', true);
+            if (!todos || todos.length === 0) return;
+
+            for (const lem of todos) {
+                // Já enviou hoje neste horário?
+                if (lem.ultimo_envio && lem.ultimo_envio.startsWith(hojeStr) && lem.horario === horaAtual) continue;
+                // Horário bate?
+                if (lem.horario !== horaAtual) continue;
+
+                let deveEnviar = false;
+                const recorrencia = lem.recorrencia || 'diario';
+
+                if (recorrencia === 'diario') {
+                    deveEnviar = true;
+                } else if (recorrencia === 'semanal') {
+                    const dias = JSON.parse(lem.dias_semana || '[]');
+                    deveEnviar = dias.includes(diaSemana);
+                } else if (recorrencia === 'quinzenal') {
+                    const dias = JSON.parse(lem.dias_semana || '[]');
+                    deveEnviar = dias.includes(diaSemana) && (semanaDoAno % 2 === 0);
+                } else if (recorrencia === 'mensal') {
+                    deveEnviar = diaMes === (lem.dia_mes || 1);
+                }
+
+                if (!deveEnviar) continue;
+
+                // Destinatários: array de strings tipo "dept:Vendas", "user:João Silva", "todos"
+                const destinatarios = JSON.parse(lem.destinatarios || '[]');
+                const inst = lem.instance_name;
+
+                // Broadcast via WS para todos os clientes da instância
+                if (wsClients[inst]) {
+                    const payload = JSON.stringify({
+                        type: 'lembrete',
+                        id: lem.id,
+                        titulo: lem.titulo,
+                        mensagem: lem.mensagem,
+                        tipo: lem.tipo || 'info',
+                        criado_por: lem.criado_por,
+                        destinatarios: destinatarios,
+                    });
+                    for (const ws of wsClients[inst]) {
+                        try { ws.send(payload); } catch(e) {}
+                    }
+                }
+
+                // Salva como dash_notif para persistir
+                try {
+                    const crypto = require('crypto');
+                    await db.from('dash_notifs').insert({
+                        id: crypto.randomUUID(),
+                        instance_name: inst,
+                        title: `📋 ${lem.titulo}`,
+                        body: lem.mensagem || '',
+                        type: lem.tipo || 'info',
+                        read: false,
+                        criado_por_ia: false,
+                    });
+                } catch(e2) {}
+
+                // Marca como enviado hoje
+                await db.from('lembretes').update({ ultimo_envio: agora.toISOString() }).eq('id', lem.id);
+                log(inst, 'ok', `[Lembrete] Disparado: "${lem.titulo}" → ${destinatarios.join(', ')}`);
+            }
+        } catch(e) {
+            console.warn('[Lembretes] Erro no scheduler:', e.message);
+        }
+    }, 60 * 1000); // checa a cada 1 minuto
+    console.log('🔔 [Lembretes] Scheduler ativo (checa a cada 1 min)');
 });
 
 // ─── GRACEFUL SHUTDOWN ────────────────────────────────────────────────────────
