@@ -601,7 +601,7 @@ function crmApp() {
                 filaPorLead: {},         // { lead_id: { posicao, departamento } }
                 filaAguardando: 0,       // total aguardando no meu depto
                 filaPainelAberto: false, // expansão do painel flutuante na tela Chats
-                chatListTab: 'fila',     // 'fila' | 'historico' (para supervisor/atendente)
+                chatListTab: 'chats',     // 'chats' | 'fila' | 'contatos' (para supervisor/atendente)
                 filaLista: [],           // lista ordenada para o painel
                 _stopVozAudio() {
                     if (this._vozAbort) { this._vozAbort.abort(); this._vozAbort = null; }

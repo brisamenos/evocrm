@@ -998,7 +998,7 @@
                     <div class="bg-[#f1f4f9] dark:bg-[#161b22] shrink-0 border-b border-gray-200 dark:border-[#21262d]/50">
                         <!-- Header -->
                         <div class="p-3.5 flex justify-between items-center">
-                            <h2 class="font-bold text-wa-text-light dark:text-wa-text-dark text-xl" x-text="userRole === 'admin' ? 'Conversas' : (chatListTab === 'fila' ? 'Fila / Atendimento' : 'Conversas Encerradas')"></h2>
+                            <h2 class="font-bold text-wa-text-light dark:text-wa-text-dark text-xl" x-text="userRole === 'admin' ? 'Conversas' : (chatListTab === 'chats' ? 'Chats' : chatListTab === 'fila' ? 'Fila' : 'Contatos')"></h2>
                             <div class="flex gap-4">
                                 <button @click="showDeptModal = true" class="text-[#6366f1] dark:text-[#6366f1] md:hidden"><i data-lucide="briefcase" class="w-5 h-5"></i></button>
                                 <button @click="toggleTheme()" class="text-wa-sub-light dark:text-wa-sub-dark hover:text-[#6366f1] transition-colors"><i :data-lucide="isDarkMode ? 'sun' : 'moon'" class="w-5 h-5"></i></button>
@@ -1007,16 +1007,22 @@
                         </div>
                         <!-- Tabs para Supervisor/Atendente -->
                         <div x-show="userRole !== 'admin'" class="flex border-t border-gray-200 dark:border-[#21262d]">
-                            <button @click="chatListTab = 'fila'; $nextTick(()=>lucide.createIcons())"
-                                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-black uppercase tracking-wide transition-colors border-b-2"
-                                    :class="chatListTab === 'fila' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : 'border-transparent text-slate-400'">
-                                <i data-lucide="clock" class="w-3.5 h-3.5"></i> Fila / Atendimento
-                                <span x-show="filaLista.length > 0" class="bg-amber-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full" x-text="filaLista.length"></span>
+                            <button @click="chatListTab = 'chats'; $nextTick(()=>lucide.createIcons())"
+                                    class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-black uppercase tracking-wide transition-colors border-b-2"
+                                    :class="chatListTab === 'chats' ? 'border-[#6366f1] text-[#6366f1]' : 'border-transparent text-slate-400'">
+                                <i data-lucide="message-circle" class="w-4 h-4"></i> Chats
+                                <span x-show="myLeads.filter(l => l.atendente_nome && !l.atendimento_fim && !filaPorLead[l.id]).length > 0" class="bg-[#6366f1] text-white text-[8px] font-black px-1.5 py-0.5 rounded-full" x-text="myLeads.filter(l => l.atendente_nome && !l.atendimento_fim && !filaPorLead[l.id]).length"></span>
                             </button>
-                            <button @click="chatListTab = 'historico'; $nextTick(()=>lucide.createIcons())"
-                                    class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-black uppercase tracking-wide transition-colors border-b-2"
-                                    :class="chatListTab === 'historico' ? 'border-[#6366f1] text-[#6366f1]' : 'border-transparent text-slate-400'">
-                                <i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Conversas
+                            <button @click="chatListTab = 'fila'; $nextTick(()=>lucide.createIcons())"
+                                    class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-black uppercase tracking-wide transition-colors border-b-2"
+                                    :class="chatListTab === 'fila' ? 'border-amber-500 text-amber-600 dark:text-amber-400' : 'border-transparent text-slate-400'">
+                                <i data-lucide="clock" class="w-4 h-4"></i> Fila
+                                <span x-show="filaLista.length > 0" class="bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full" x-text="filaLista.length"></span>
+                            </button>
+                            <button @click="chatListTab = 'contatos'; $nextTick(()=>lucide.createIcons())"
+                                    class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-black uppercase tracking-wide transition-colors border-b-2"
+                                    :class="chatListTab === 'contatos' ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400' : 'border-transparent text-slate-400'">
+                                <i data-lucide="users" class="w-4 h-4"></i> Contatos
                             </button>
                         </div>
                     </div>
@@ -1066,77 +1072,65 @@
                             </div>
                         </template>
 
-                        <!-- ══ MODO EQUIPE (supervisor/atendente): abas Fila/Atendimento + Conversas ══ -->
+                        <!-- ══ MODO EQUIPE (supervisor/atendente): Chats · Fila · Contatos ══ -->
                         <template x-if="userRole !== 'admin'">
                             <div>
-                                <!-- ═══ ABA: FILA / ATENDIMENTO ═══ -->
-                                <div x-show="chatListTab === 'fila'">
-                                    <!-- FILA DE ESPERA -->
-                                    <div class="bg-amber-50/50 dark:bg-amber-900/5 border-b-2 border-amber-200/50 dark:border-amber-800/30">
-                                        <div class="flex items-center justify-between px-3 py-2">
-                                            <p class="text-[10px] font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
-                                                <i data-lucide="clock" class="w-3 h-3"></i> Aguardando na Fila
-                                            </p>
-                                            <span class="text-[10px] font-black text-amber-600 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 rounded-full"
-                                                  x-text="filaLista.filter(f => !chatSearch || (f.nome||'').toLowerCase().includes(chatSearch.toLowerCase()) || (f.numero||'').includes(chatSearch)).length"></span>
-                                        </div>
-                                        <template x-for="item in filaLista.filter(f => !chatSearch || (f.nome||'').toLowerCase().includes(chatSearch.toLowerCase()) || (f.numero||'').includes(chatSearch))" :key="item.id">
-                                            <div @click="(() => { const l = leads.find(x => x.id === item.lead_id); if (l) openChat(l); })()"
-                                                 class="flex items-center px-3 py-2.5 hover:bg-amber-100/50 dark:hover:bg-amber-900/10 cursor-pointer transition-colors group border-b border-amber-100/50 dark:border-amber-800/20 last:border-0">
-                                                <div class="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center mr-3 shrink-0">
-                                                    <span class="text-xs font-black text-amber-700 dark:text-amber-300" x-text="item.posicao"></span>
+                                <!-- ═══ ABA: CHATS (em atendimento) ═══ -->
+                                <div x-show="chatListTab === 'chats'">
+                                    <template x-for="lead in myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).filter(l => !chatSearch || getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).sort((a,b) => new Date(b.last_interaction || b.created_at || 0).getTime() - new Date(a.last_interaction || a.created_at || 0).getTime())" :key="lead.id">
+                                        <div @click="openChat(lead)" class="flex items-center px-3 py-2 hover:bg-[#f5f6f6] dark:hover:bg-[#21262d] cursor-pointer transition-colors group relative">
+                                            <img :src="(lead.foto_url && lead.foto_url !== 'default' && lead.foto_url.startsWith('http')) ? lead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" referrerpolicy="no-referrer" :class="['w-[49px] h-[49px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]', privacy.fotos && 'blur-foto']" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" loading="lazy">
+                                            <div class="flex-1 border-b border-[#f2f2f2] dark:border-[#21262d]/60 pb-2.5 pt-1 group-last:border-0 overflow-hidden">
+                                                <div class="flex justify-between items-center mb-0.5">
+                                                    <h4 class="font-normal text-[17px] text-wa-text-light dark:text-wa-text-dark truncate" :class="lead.unread > 0 ? 'font-bold' : ''" x-text="getLeadName(lead)"></h4>
+                                                    <span class="text-xs text-wa-sub-light dark:text-wa-sub-dark shrink-0" :class="lead.unread > 0 ? 'text-[#6366f1] font-bold' : ''" x-text="new Date(lead.last_interaction || lead.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})"></span>
                                                 </div>
-                                                <img :src="(() => { const l = leads.find(x => x.id === item.lead_id); return (l?.foto_url && l.foto_url !== 'default' && l.foto_url.startsWith('http')) ? l.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (item.numero || item.lead_id); })()"
-                                                     class="w-[42px] h-[42px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]" loading="lazy"
-                                                     @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (item.numero || item.lead_id)">
-                                                <div class="flex-1 min-w-0">
-                                                    <h4 class="font-bold text-[15px] text-wa-text-light dark:text-wa-text-dark truncate" x-text="item.nome || item.numero"></h4>
-                                                    <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-0.5 mt-0.5">
-                                                        <i data-lucide="timer" class="w-3 h-3"></i> TME:
-                                                        <span x-text="(() => { void _tickSegundo; const s = Math.round((Date.now() - new Date(item.entrada_em || item.created_at).getTime()) / 1000); return s < 60 ? s+'s' : s < 3600 ? Math.floor(s/60)+'min' : Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m'; })()"></span>
-                                                    </span>
-                                                </div>
-                                                <div class="shrink-0 ml-2">
-                                                    <span class="text-[9px] bg-amber-500 text-white px-2.5 py-1.5 rounded-lg font-black uppercase shadow-sm">Atender</span>
+                                                <div class="flex items-center justify-between">
+                                                    <p class="text-[13px] text-wa-sub-light dark:text-wa-sub-dark truncate pr-2" :class="lead.unread > 0 ? 'font-medium' : ''">
+                                                        <span class="truncate" x-text="lead.last_msg ? formatText(lead.last_msg) : lead.numero"></span>
+                                                    </p>
+                                                    <span x-show="lead.unread > 0" class="bg-[#6366f1] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center shadow-sm shrink-0" x-text="lead.unread"></span>
                                                 </div>
                                             </div>
-                                        </template>
-                                        <div x-show="filaLista.length === 0" class="px-3 py-6 text-center text-[11px] text-amber-500/60 font-medium">Nenhum cliente na fila.</div>
-                                    </div>
-
-                                    <!-- EM ATENDIMENTO (leads com atendente, fora da fila, não encerrados) -->
-                                    <div>
-                                        <div class="flex items-center justify-between px-3 py-2 border-b border-[#f2f2f2] dark:border-[#21262d]">
-                                            <p class="text-[10px] font-black uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                                                <i data-lucide="headset" class="w-3 h-3"></i> Em Atendimento
-                                            </p>
-                                            <span class="text-[10px] font-black text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-300 px-2 py-0.5 rounded-full"
-                                                  x-text="myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).filter(l => !chatSearch || getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).length"></span>
                                         </div>
-                                        <template x-for="lead in myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).filter(l => !chatSearch || getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).sort((a,b) => new Date(b.last_interaction || b.created_at || 0).getTime() - new Date(a.last_interaction || a.created_at || 0).getTime())" :key="lead.id">
-                                            <div @click="openChat(lead)" class="flex items-center px-3 py-2 hover:bg-[#f5f6f6] dark:hover:bg-[#21262d] cursor-pointer transition-colors group relative">
-                                                <img :src="(lead.foto_url && lead.foto_url !== 'default' && lead.foto_url.startsWith('http')) ? lead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" referrerpolicy="no-referrer" :class="['w-[49px] h-[49px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]', privacy.fotos && 'blur-foto']" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" loading="lazy">
-                                                <div class="flex-1 border-b border-[#f2f2f2] dark:border-[#21262d]/60 pb-2.5 pt-1 group-last:border-0 overflow-hidden">
-                                                    <div class="flex justify-between items-center mb-0.5">
-                                                        <h4 class="font-normal text-[17px] text-wa-text-light dark:text-wa-text-dark truncate" :class="lead.unread > 0 ? 'font-bold' : ''" x-text="getLeadName(lead)"></h4>
-                                                        <span class="text-xs text-wa-sub-light dark:text-wa-sub-dark shrink-0" :class="lead.unread > 0 ? 'text-[#6366f1] font-bold' : ''" x-text="new Date(lead.last_interaction || lead.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})"></span>
-                                                    </div>
-                                                    <div class="flex items-center justify-between">
-                                                        <p class="text-[13px] text-wa-sub-light dark:text-wa-sub-dark truncate pr-2 flex items-center gap-1" :class="lead.unread > 0 ? 'font-medium' : ''">
-                                                            <span class="text-[9px] bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 px-1 py-0.5 rounded font-bold shrink-0" x-text="lead.atendente_nome"></span>
-                                                            <span class="truncate" x-text="lead.last_msg ? formatText(lead.last_msg) : lead.numero"></span>
-                                                        </p>
-                                                        <span x-show="lead.unread > 0" class="bg-[#6366f1] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center shadow-sm shrink-0" x-text="lead.unread"></span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </template>
-                                        <div x-show="myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).length === 0" class="text-center py-6 text-wa-sub-light dark:text-wa-sub-dark text-[11px]">Nenhum atendimento ativo.</div>
+                                    </template>
+                                    <div x-show="myLeads.filter(l => l.atendente_nome && !filaPorLead[l.id] && !l.atendimento_fim).length === 0" class="flex flex-col items-center justify-center py-16 text-center">
+                                        <i data-lucide="message-circle" class="w-12 h-12 text-slate-200 dark:text-slate-700 mb-3"></i>
+                                        <p class="text-sm text-slate-400">Nenhum chat ativo</p>
+                                        <p class="text-[11px] text-slate-300 mt-1">Atenda um cliente da fila para começar</p>
                                     </div>
                                 </div>
 
-                                <!-- ═══ ABA: CONVERSAS (historico/encerradas) ═══ -->
-                                <div x-show="chatListTab === 'historico'">
+                                <!-- ═══ ABA: FILA ═══ -->
+                                <div x-show="chatListTab === 'fila'">
+                                    <template x-for="item in filaLista.filter(f => !chatSearch || (f.nome||'').toLowerCase().includes(chatSearch.toLowerCase()) || (f.numero||'').includes(chatSearch))" :key="item.id">
+                                        <div @click="(() => { const l = leads.find(x => x.id === item.lead_id); if (l) openChat(l); })()"
+                                             class="flex items-center px-3 py-2.5 hover:bg-amber-50/50 dark:hover:bg-amber-900/10 cursor-pointer transition-colors group border-b border-[#f2f2f2] dark:border-[#21262d]/60 last:border-0">
+                                            <div class="w-7 h-7 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center mr-2 shrink-0">
+                                                <span class="text-[10px] font-black text-amber-700 dark:text-amber-300" x-text="item.posicao"></span>
+                                            </div>
+                                            <img :src="(() => { const l = leads.find(x => x.id === item.lead_id); return (l?.foto_url && l.foto_url !== 'default' && l.foto_url.startsWith('http')) ? l.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (item.numero || item.lead_id); })()"
+                                                 class="w-[45px] h-[45px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]" loading="lazy"
+                                                 @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (item.numero || item.lead_id)">
+                                            <div class="flex-1 min-w-0">
+                                                <h4 class="font-bold text-[15px] text-wa-text-light dark:text-wa-text-dark truncate" x-text="item.nome || item.numero"></h4>
+                                                <span class="text-[10px] text-amber-600 dark:text-amber-400 font-bold flex items-center gap-0.5 mt-0.5">
+                                                    <i data-lucide="timer" class="w-3 h-3"></i>
+                                                    <span x-text="(() => { void _tickSegundo; const s = Math.round((Date.now() - new Date(item.entrada_em || item.created_at).getTime()) / 1000); return s < 60 ? s+'s' : s < 3600 ? Math.floor(s/60)+'min' : Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m'; })()"></span>
+                                                </span>
+                                            </div>
+                                            <span class="text-[9px] bg-amber-500 text-white px-2.5 py-1.5 rounded-lg font-black uppercase shadow-sm shrink-0">Atender</span>
+                                        </div>
+                                    </template>
+                                    <div x-show="filaLista.length === 0" class="flex flex-col items-center justify-center py-16 text-center">
+                                        <i data-lucide="check-circle" class="w-12 h-12 text-emerald-200 dark:text-emerald-900 mb-3"></i>
+                                        <p class="text-sm text-slate-400">Fila vazia</p>
+                                        <p class="text-[11px] text-slate-300 mt-1">Nenhum cliente aguardando</p>
+                                    </div>
+                                </div>
+
+                                <!-- ═══ ABA: CONTATOS (histórico/encerrados) ═══ -->
+                                <div x-show="chatListTab === 'contatos'">
                                     <template x-for="lead in myLeads.filter(l => l.atendimento_fim || (!l.atendente_nome && !filaPorLead[l.id])).filter(l => !chatSearch || getLeadName(l).toLowerCase().includes(chatSearch.toLowerCase()) || (l.numero || '').includes(chatSearch)).sort((a,b) => new Date(b.last_interaction || b.created_at || 0).getTime() - new Date(a.last_interaction || a.created_at || 0).getTime())" :key="lead.id">
                                         <div @click="openChat(lead)" class="flex items-center px-3 py-2 hover:bg-[#f5f6f6] dark:hover:bg-[#21262d] cursor-pointer transition-colors group relative">
                                             <img :src="(lead.foto_url && lead.foto_url !== 'default' && lead.foto_url.startsWith('http')) ? lead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" referrerpolicy="no-referrer" :class="['w-[49px] h-[49px] rounded-full object-cover mr-3 shrink-0 bg-slate-100 dark:bg-[#21262d]', privacy.fotos && 'blur-foto']" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (lead.numero || lead.id)" loading="lazy">
@@ -1146,8 +1140,7 @@
                                                     <span class="text-xs text-wa-sub-light dark:text-wa-sub-dark shrink-0" x-text="new Date(lead.last_interaction || lead.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})"></span>
                                                 </div>
                                                 <div class="flex items-center justify-between">
-                                                    <p class="text-[13px] text-wa-sub-light dark:text-wa-sub-dark truncate pr-2 flex items-center gap-1">
-                                                        <span x-show="lead.atendente_nome" class="text-[9px] bg-slate-100 text-slate-500 dark:bg-[#21262d] dark:text-slate-400 px-1 py-0.5 rounded font-bold shrink-0" x-text="lead.atendente_nome"></span>
+                                                    <p class="text-[13px] text-wa-sub-light dark:text-wa-sub-dark truncate pr-2">
                                                         <span class="truncate" x-text="lead.last_msg ? formatText(lead.last_msg) : lead.numero"></span>
                                                     </p>
                                                     <span x-show="lead.tma_segundos" class="text-[9px] text-slate-400 shrink-0" x-text="'TMA: ' + _fmtTempo(lead.tma_segundos)"></span>
@@ -5537,172 +5530,158 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
         </main>
 
         <div x-show="isChatOpen" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="translate-x-full" x-transition:enter-end="translate-x-0" x-transition:leave="transition ease-in duration-150" x-transition:leave-start="translate-x-0" x-transition:leave-end="translate-x-full" x-cloak 
-             class="fixed inset-0 z-[100] flex flex-col md:left-auto md:right-0 md:w-[500px] md:border-l border-gray-200 dark:border-[#21262d] bg-wa-bg-light dark:bg-wa-bg-dark">
+             class="fixed inset-0 z-[100] flex flex-col md:left-[320px] md:right-0 md:w-auto md:border-l border-gray-200 dark:border-[#21262d] bg-wa-bg-light dark:bg-wa-bg-dark">
             
-            <header class="h-16 px-4 border-b border-gray-200 dark:border-[#21262d] flex items-center bg-wa-header-light dark:bg-wa-header-dark shrink-0 justify-between relative z-20">
-                <div class="flex items-center overflow-hidden">
-                    <button @click="isChatOpen = false" class="p-2 -ml-2 mr-1 text-wa-sub-light dark:text-wa-sub-dark"><i data-lucide="arrow-left" class="w-6 h-6"></i></button>
-                    <div class="relative mr-3 cursor-pointer group" @click="forceUpdateProfilePic(selectedLead)" title="Puxar foto do WhatsApp">
-                        <img :src="(selectedLead?.foto_url && selectedLead?.foto_url !== 'default' && selectedLead?.foto_url.startsWith('http')) ? selectedLead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (selectedLead?.numero || selectedLead?.id)" referrerpolicy="no-referrer" :class="['w-10 h-10 rounded-full border border-gray-200 dark:border-[#21262d] object-cover transition-all bg-slate-100 dark:bg-[#21262d]', isUpdatingPic ? 'opacity-50' : 'opacity-100', privacy.fotos && 'blur-foto']" loading="lazy" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (selectedLead?.numero || selectedLead?.id)">
-                        <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="refresh-cw" class="w-4 h-4 text-white" :class="isUpdatingPic ? 'animate-spin opacity-100' : ''"></i></div>
-                    </div>
-                    <div class="truncate">
-                        <h3 class="font-bold text-base text-wa-text-light dark:text-wa-text-dark truncate flex items-center gap-1">
-                            <span :class="_blurNome(selectedLead) && 'blur-field'" x-text="getLeadName(selectedLead)"></span>
-                        </h3>
-                        <div class="flex items-center gap-2">
-                            <p class="text-[11px] text-wa-sub-light dark:text-wa-sub-dark font-medium" :class="privacy.numeros && 'blur-field'" x-text="selectedLead?.numero"></p>
-                            <span x-show="selectedLead?.atendente_nome" class="text-[9px] bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
-                                <i data-lucide="headset" class="w-2.5 h-2.5"></i>
-                                <span x-text="selectedLead?.atendente_nome"></span>
-                            </span>
+            <header class="h-auto px-4 py-2 border-b border-gray-200 dark:border-[#21262d] bg-wa-header-light dark:bg-wa-header-dark shrink-0 relative z-20">
+                <!-- Linha 1: Info do cliente + fechar -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center overflow-hidden">
+                        <button @click="isChatOpen = false" class="p-2 -ml-2 mr-1 text-wa-sub-light dark:text-wa-sub-dark md:hidden"><i data-lucide="arrow-left" class="w-6 h-6"></i></button>
+                        <button @click="isChatOpen = false" class="p-2 -ml-2 mr-1 text-wa-sub-light dark:text-wa-sub-dark hidden md:block"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
+                        <div class="relative mr-3 cursor-pointer group" @click="forceUpdateProfilePic(selectedLead)" title="Puxar foto do WhatsApp">
+                            <img :src="(selectedLead?.foto_url && selectedLead?.foto_url !== 'default' && selectedLead?.foto_url.startsWith('http')) ? selectedLead.foto_url : 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (selectedLead?.numero || selectedLead?.id)" referrerpolicy="no-referrer" :class="['w-10 h-10 rounded-full border border-gray-200 dark:border-[#21262d] object-cover transition-all bg-slate-100 dark:bg-[#21262d]', isUpdatingPic ? 'opacity-50' : 'opacity-100', privacy.fotos && 'blur-foto']" loading="lazy" @error="$el.src = 'https://api.dicebear.com/8.x/notionists/svg?seed=' + (selectedLead?.numero || selectedLead?.id)">
+                            <div class="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="refresh-cw" class="w-4 h-4 text-white" :class="isUpdatingPic ? 'animate-spin opacity-100' : ''"></i></div>
+                        </div>
+                        <div class="truncate">
+                            <h3 class="font-bold text-base text-wa-text-light dark:text-wa-text-dark truncate flex items-center gap-1">
+                                <span :class="_blurNome(selectedLead) && 'blur-field'" x-text="getLeadName(selectedLead)"></span>
+                            </h3>
+                            <div class="flex items-center gap-2">
+                                <p class="text-[11px] text-wa-sub-light dark:text-wa-sub-dark font-medium" :class="privacy.numeros && 'blur-field'" x-text="selectedLead?.numero"></p>
+                                <span x-show="selectedLead?.atendente_nome" class="text-[9px] bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 px-1.5 py-0.5 rounded font-bold flex items-center gap-0.5">
+                                    <i data-lucide="headset" class="w-2.5 h-2.5"></i>
+                                    <span x-text="selectedLead?.atendente_nome"></span>
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- ✨ MENU DE FERRAMENTAS UNIFICADO -->
-                <div class="relative" x-data="{ toolsOpen: false }">
-                    <!-- Botão Principal -->
-                    <button @click="toolsOpen = !toolsOpen" 
-                            class="bg-[#6366f1] hover:bg-[#4f46e5] text-white p-2.5 rounded-xl transition-all active:scale-95 shadow-lg flex items-center gap-2 font-black text-xs"
-                            title="Ferramentas">
-                        <i data-lucide="settings" class="w-4 h-4"></i>
-                        <span class="hidden sm:inline">Ferramentas</span>
-                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform" :class="toolsOpen && 'rotate-180'"></i>
+
+                <!-- Linha 2: Ferramentas inline -->
+                <div x-show="selectedLead?.status !== 'grupo'" class="flex items-center gap-1.5 mt-2 flex-wrap" x-data="{ toolsOpen: false }">
+                    <!-- Status/Funil -->
+                    <select x-model="selectedLeadStatus"
+                            @mousedown.stop @click.stop
+                            @change="updateStatus(selectedLead.id, $event.target.value || null)"
+                            class="bg-gray-50 dark:bg-[#21262d] text-[10px] font-bold px-2 py-1.5 rounded-lg border border-gray-200 dark:border-[#30363d] dark:text-white outline-none cursor-pointer hover:border-[#6366f1] transition-colors max-w-[120px]">
+                        <option value="">Sem funil</option>
+                        <template x-for="col in columns" :key="col.id">
+                            <option :value="col.id" x-text="col.name"></option>
+                        </template>
+                    </select>
+
+                    <!-- Encerrar/Reiniciar -->
+                    <template x-if="!selectedLead?.atendimento_fim">
+                        <button @click="encerrarAtendimento(selectedLead.id); $nextTick(()=>lucide.createIcons())"
+                                class="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 px-2.5 py-1.5 rounded-lg text-[10px] font-bold hover:bg-emerald-100 transition-colors" title="Encerrar Atendimento">
+                            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Encerrar
+                        </button>
+                    </template>
+                    <template x-if="selectedLead?.atendimento_fim">
+                        <div class="flex items-center gap-1.5">
+                            <span class="flex items-center gap-1 bg-slate-50 dark:bg-[#21262d] text-slate-400 px-2 py-1.5 rounded-lg text-[10px] font-bold">
+                                <i data-lucide="check-circle-2" class="w-3 h-3 text-emerald-500"></i> Encerrado
+                                <span x-text="selectedLead?.tma_segundos ? _fmtTempo(selectedLead.tma_segundos) : ''"></span>
+                            </span>
+                            <button @click="reiniciarAtendimento(selectedLead.id); $nextTick(()=>lucide.createIcons())"
+                                    class="flex items-center gap-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 px-2 py-1.5 rounded-lg text-[10px] font-bold hover:bg-indigo-100 transition-colors" title="Reiniciar">
+                                <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Reabrir
+                            </button>
+                        </div>
+                    </template>
+
+                    <!-- Observações -->
+                    <button @click="activeLeadForObs = selectedLead; obsInput = selectedLead?.observacao || ''; showObsModal = true; $nextTick(()=>lucide.createIcons())"
+                            class="p-1.5 rounded-lg hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/30 text-slate-400 hover:text-[#6366f1] transition-colors" title="Observações">
+                        <i data-lucide="sticky-note" class="w-4 h-4"></i>
                     </button>
 
-                    <!-- Menu Dropdown -->
-                    <div x-show="toolsOpen" 
-                         x-transition:enter="transition ease-out duration-100"
-                         x-transition:enter-start="opacity-0 scale-95"
-                         x-transition:enter-end="opacity-100 scale-100"
-                         x-transition:leave="transition ease-in duration-75"
-                         x-transition:leave-start="opacity-100 scale-100"
-                         x-transition:leave-end="opacity-0 scale-95"
-                         class="absolute right-0 top-14 bg-white dark:bg-[#161b22] shadow-2xl rounded-2xl p-3 min-w-[280px] border-2 border-[#6366f1]/20 dark:border-[#6366f1]/30 z-50 max-h-[80vh] overflow-y-auto"
-                         @click.away="toolsOpen = false">
-                        
-                        <!-- Header -->
-                        <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100 dark:border-[#21262d]">
-                            <h3 class="text-xs font-black uppercase text-gray-500 dark:text-gray-400 tracking-wider"><i data-lucide="settings-2" class="w-3.5 h-3.5 inline mr-1"></i> Ferramentas</h3>
-                            <div class="flex items-center gap-2">
-                                <!-- Botão atalho para Painel Demo -->
-                                <button @click="toolsOpen = false; privacyPanelOpen = true; $nextTick(()=>lucide.createIcons())"
-                                        :title="'Abrir painel de privacidade'"
-                                        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-black transition-all"
-                                        :class="privacyAnyActive ? 'bg-[#6366f1] text-white shadow' : 'bg-gray-100 dark:bg-[#21262d] text-gray-500 dark:text-gray-400 hover:bg-[#e0e7ff] hover:text-[#6366f1]'">
-                                    <i :data-lucide="privacyAnyActive ? 'eye-off' : 'eye'" class="w-3 h-3"></i>
-                                    <span x-text="privacyAnyActive ? 'Demo ON' : 'Demo'"></span>
+                    <!-- Documentos -->
+                    <button @click="docsPanelOpen = true; docsLoad(selectedLead.id); $nextTick(()=>lucide.createIcons())"
+                            class="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-slate-400 hover:text-amber-600 transition-colors relative" title="Documentos">
+                        <i data-lucide="folder-open" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- Base Conhecimento -->
+                    <button @click="kbPanelOpen = true; kbLoadDocs(); $nextTick(()=>lucide.createIcons())"
+                            class="p-1.5 rounded-lg hover:bg-violet-50 dark:hover:bg-violet-900/20 text-slate-400 hover:text-violet-600 transition-colors" title="Base de Conhecimento">
+                        <i data-lucide="brain" class="w-4 h-4"></i>
+                    </button>
+
+                    <!-- IA Pausar/Retomar -->
+                    <template x-if="_temFeature('ia_atendimento') && iaAtivo">
+                        <button @click="if(iaHumanoAtivo[selectedLead?.id]) { _retomarIA(selectedLead.id, getLeadName(selectedLead), 'manual CRM'); } else { iaHumanoAtivo[selectedLead.id]=true; if(iaHumanoTimers[selectedLead.id]){clearTimeout(iaHumanoTimers[selectedLead.id]);} _salvarPausaDB(selectedLead.id, true, 'manual CRM'); } $nextTick(()=>lucide.createIcons())"
+                                :class="iaHumanoAtivo[selectedLead?.id] ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' : 'bg-[#e0e7ff] dark:bg-[#3730a3]/30 text-[#6366f1]'"
+                                class="flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold transition-colors" :title="iaHumanoAtivo[selectedLead?.id] ? 'IA Pausada — Retomar' : 'IA Ativa — Pausar'">
+                            <i :data-lucide="iaHumanoAtivo[selectedLead?.id] ? 'bot-off' : 'bot'" class="w-3.5 h-3.5"></i>
+                            <span x-text="iaHumanoAtivo[selectedLead?.id] ? 'IA Off' : 'IA'"></span>
+                        </button>
+                    </template>
+
+                    <!-- Mais (dropdown) -->
+                    <div class="relative ml-auto">
+                        <button @click="toolsOpen = !toolsOpen" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-[#21262d] text-slate-400 hover:text-slate-600 transition-colors" title="Mais opções">
+                            <i data-lucide="more-vertical" class="w-4 h-4"></i>
+                        </button>
+                        <div x-show="toolsOpen" x-transition @click.away="toolsOpen = false"
+                             class="absolute right-0 top-10 bg-white dark:bg-[#161b22] shadow-2xl rounded-xl p-2.5 min-w-[220px] border border-gray-200 dark:border-[#21262d] z-50">
+
+                            <!-- Transferir Setor -->
+                            <template x-for="dept in allDepartments.filter(d => d !== (selectedLead?.departamento || 'ADM Principal'))" :key="dept">
+                                <button @click="transferLead(selectedLead.id, dept); toolsOpen=false;"
+                                        class="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-[#21262d] rounded-lg text-[11px] font-bold dark:text-white transition-colors flex items-center gap-2">
+                                    <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-[#6366f1]"></i>
+                                    <span x-text="'Transferir → ' + dept"></span>
                                 </button>
-                                <button @click="toolsOpen = false" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                                    <i data-lucide="x" class="w-4 h-4"></i>
-                                </button>
+                            </template>
+
+                            <div class="h-px bg-gray-100 dark:bg-[#21262d] my-1.5"></div>
+
+                            <!-- Follow-up -->
+                            <button x-show="iaFollowupAtivo" @click="toggleFollowupLead(selectedLead); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
+                                    class="w-full flex items-center gap-2 p-2 rounded-lg text-[11px] font-bold hover:bg-gray-50 dark:hover:bg-[#21262d] transition-colors"
+                                    :class="selectedLead?.followup_lead_ativo ? 'text-orange-600' : 'text-slate-500 dark:text-slate-400'">
+                                <i :data-lucide="selectedLead?.followup_lead_ativo ? 'repeat-2' : 'repeat'" class="w-3.5 h-3.5"></i>
+                                <span x-text="selectedLead?.followup_lead_ativo ? 'Desativar Follow-up' : 'Ativar Follow-up'"></span>
+                            </button>
+
+                            <!-- Histórico IA -->
+                            <button @click="openActivityLog(); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
+                                    class="w-full flex items-center gap-2 p-2 rounded-lg text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-[#21262d] transition-colors">
+                                <i data-lucide="activity" class="w-3.5 h-3.5"></i> Histórico IA
+                            </button>
+
+                            <!-- Limpar Histórico -->
+                            <button @click="_limparHistoricoLead(selectedLead.id, getLeadName(selectedLead)); toolsOpen=false"
+                                    class="w-full flex items-center gap-2 p-2 rounded-lg text-[11px] font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                                <i data-lucide="eraser" class="w-3.5 h-3.5"></i> Limpar Histórico IA
+                            </button>
+
+                            <!-- Demo/Privacidade -->
+                            <button @click="toolsOpen = false; privacyPanelOpen = true; $nextTick(()=>lucide.createIcons())"
+                                    class="w-full flex items-center gap-2 p-2 rounded-lg text-[11px] font-bold text-slate-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-[#21262d] transition-colors">
+                                <i :data-lucide="privacyAnyActive ? 'eye-off' : 'eye'" class="w-3.5 h-3.5"></i>
+                                <span x-text="privacyAnyActive ? 'Demo ON' : 'Modo Demo'"></span>
+                            </button>
+
+                            <!-- Prompt por conversa -->
+                            <div x-show="_temFeature('ia_atendimento') && iaAtivo" class="border-t border-gray-100 dark:border-[#21262d] mt-1.5 pt-1.5">
+                                <p class="text-[9px] font-black uppercase text-gray-400 px-2 mb-1">Prompt da conversa</p>
+                                <div class="max-h-32 overflow-y-auto space-y-0.5">
+                                    <template x-for="p in (iaSavedPrompts || [])" :key="p.id">
+                                        <button @click="iaSetLeadPrompt(leadPromptIdPorLead[selectedLead?.id] === p.id ? null : p); $nextTick(()=>lucide.createIcons())"
+                                                :class="leadPromptIdPorLead[selectedLead?.id] === p.id ? 'bg-[#6366f1] text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-[#21262d]'"
+                                                class="w-full flex items-center gap-2 p-1.5 rounded-lg text-[10px] font-bold transition-colors text-left">
+                                            <i :data-lucide="leadPromptIdPorLead[selectedLead?.id] === p.id ? 'check-circle-2' : 'circle'" class="w-3 h-3 shrink-0"></i>
+                                            <span class="truncate" x-text="p.nome"></span>
+                                        </button>
+                                    </template>
+                                </div>
                             </div>
                         </div>
-
-                        <!-- Status -->
-                        <div x-show="selectedLead?.status !== 'grupo'" class="mb-3">
-                            <label class="text-[9px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1.5 block">Status</label>
-                            <select x-model="selectedLeadStatus" 
-                                    @mousedown.stop @click.stop
-                                    @change="updateStatus(selectedLead.id, $event.target.value || null); toolsOpen = false"
-                                    class="w-full bg-gray-50 dark:bg-[#21262d] text-xs font-bold p-2.5 rounded-xl border border-gray-200 dark:border-[#21262d] dark:text-white outline-none cursor-pointer hover:border-[#6366f1] transition-colors">
-                                <option value="">Sem funil</option>
-                                <template x-for="col in columns" :key="col.id">
-                                    <option :value="col.id" x-text="col.name"></option>
-                                </template>
-                            </select>
-                        </div>
-
-                        <!-- Transferir Setor -->
-                        <div x-show="selectedLead?.status !== 'grupo'" class="mb-3">
-                            <label class="text-[9px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1.5 block">Transferir para</label>
-                            <template x-for="dept in allDepartments.filter(d => d !== (selectedLead?.departamento || 'ADM Principal'))" :key="dept">
-                                <button @click="transferLead(selectedLead.id, dept); toolsOpen=false;" 
-                                        class="w-full text-left p-2.5 mb-1 hover:bg-gray-50 dark:hover:bg-[#21262d] rounded-xl text-xs font-bold dark:text-white transition-colors flex items-center gap-2">
-                                    <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-[#6366f1]"></i>
-                                    <span x-text="dept"></span>
-                                </button>
-                            </template>
-                        </div>
-
-                        <!-- Separador -->
-                        <div class="h-px bg-gray-100 dark:bg-[#21262d] my-3"></div>
-
-                        <!-- Encerrar Atendimento -->
-                        <div x-show="selectedLead && selectedLead.status !== 'grupo'" class="mb-3">
-                            <label class="text-[9px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1.5 block"><i data-lucide="check-circle" class="w-3 h-3 inline mr-0.5"></i> Atendimento</label>
-                            <template x-if="!selectedLead?.atendimento_fim">
-                                <button @click="encerrarAtendimento(selectedLead.id); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
-                                        class="w-full flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 p-2.5 rounded-xl text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-all">
-                                    <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                                    <span>Encerrar Atendimento</span>
-                                </button>
-                            </template>
-                            <template x-if="selectedLead?.atendimento_fim">
-                                <div class="space-y-2">
-                                    <div class="w-full flex items-center gap-2 bg-slate-50 dark:bg-[#21262d] text-slate-400 p-2.5 rounded-xl text-xs font-bold">
-                                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>
-                                        <div>
-                                            <span class="block text-slate-500">Atendimento encerrado</span>
-                                            <span class="text-[10px]" x-text="selectedLead?.tma_segundos ? 'TMA: '+_fmtTempo(selectedLead.tma_segundos) : ''"></span>
-                                        </div>
-                                    </div>
-                                    <button @click="reiniciarAtendimento(selectedLead.id); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
-                                            class="w-full flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-400 p-2.5 rounded-xl text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-all">
-                                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
-                                        <span>Iniciar Novamente</span>
-                                    </button>
-                                </div>
-                            </template>
-                        </div>
-
-                        <!-- Separador -->
-                        <div class="h-px bg-gray-100 dark:bg-[#21262d] my-3"></div>
-
-                        <!-- Follow-up -->
-                        <div x-show="iaFollowupAtivo" class="mb-3">
-                            <label class="text-[9px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1.5 block"><i data-lucide="repeat-2" class="w-3 h-3 inline mr-0.5"></i> Follow-up</label>
-                            <button @click="toggleFollowupLead(selectedLead); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
-                                    :class="selectedLead?.followup_lead_ativo ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 hover:bg-orange-200' : 'bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-gray-400 hover:bg-orange-50 hover:text-orange-500'"
-                                    class="w-full flex items-center gap-2 p-2.5 rounded-xl text-xs font-bold transition-all">
-                                <i :data-lucide="selectedLead?.followup_lead_ativo ? 'repeat-2' : 'repeat'" class="w-4 h-4"></i>
-                                <span x-text="selectedLead?.followup_lead_ativo ? 'Follow-up Ativo — Clique para Desativar' : 'Ativar Follow-up para este contato'"></span>
-                            </button>
-                        </div>
-
-                        <!-- Separador -->
-                        <div class="h-px bg-gray-100 dark:bg-[#21262d] my-3"></div>
-
-                        <!-- Controles IA -->
-                        <div x-show="_temFeature('ia_atendimento') && iaAtivo" class="space-y-2">
-                            <label class="text-[9px] font-black uppercase text-gray-400 dark:text-gray-500 mb-1.5 block"><i data-lucide="bot" class="w-3 h-3 inline mr-0.5"></i> Controles da IA</label>
-                            
-                            <!-- Pausar/Retomar IA -->
-                            <button x-show="!iaHumanoAtivo[selectedLead?.id]"
-                                    @click="iaHumanoAtivo[selectedLead.id]=true; if(iaHumanoTimers[selectedLead.id]){clearTimeout(iaHumanoTimers[selectedLead.id]);} _salvarPausaDB(selectedLead.id, true, 'manual CRM'); iaAddLog('info','⏸️ IA pausada manualmente: '+getLeadName(selectedLead)); addNotification('⏸️ IA Pausada','Você assumiu o atendimento. Clique em Retomar para a IA voltar.','info'); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
-                                    class="w-full flex items-center gap-2 bg-[#e0e7ff] dark:bg-[#3730a3]/30 text-[#6366f1] p-2.5 rounded-xl text-xs font-bold hover:bg-[#c2f5c5] dark:hover:bg-[#3730a3]/50 transition-all">
-                                <span class="w-2 h-2 rounded-full bg-[#6366f1] animate-pulse"></span>
-                                <i data-lucide="bot" class="w-4 h-4"></i>
-                                <span>IA Ativa — Clique para Pausar</span>
-                            </button>
-
-                            <button x-show="iaHumanoAtivo[selectedLead?.id]"
-                                    @click="_retomarIA(selectedLead.id, getLeadName(selectedLead), 'manual CRM'); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
-                                    class="w-full flex items-center gap-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 p-2.5 rounded-xl text-xs font-bold hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all">
-                                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                                <i data-lucide="bot-off" class="w-4 h-4"></i>
-                                <span>IA Pausada — Clique para Retomar</span>
-                            </button>
-
-                            <!-- Toggle Áudio TTS -->
-                            <button x-show="_temFeature('audio_ia') && iaTtsMode !== 'off'"
-                                    @click="iaTtsAtivoPorLead[selectedLead?.id] = !(iaTtsAtivoPorLead[selectedLead?.id] ?? true); $nextTick(()=>lucide.createIcons())"
-                                    class="w-full flex items-center gap-2 p-2.5 rounded-xl text-xs font-bold transition-all"
-                                    :class="(iaTtsAtivoPorLead[selectedLead?.id] ?? true) ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200' : 'bg-gray-100 dark:bg-[#21262d] text-gray-600 dark:text-gray-400 hover:bg-gray-200'">
-                                <i :data-lucide="(iaTtsAtivoPorLead[selectedLead?.id] ?? true) ? 'mic-2' : 'mic-off'" class="w-4 h-4"></i>
-                                <span x-text="(iaTtsAtivoPorLead[selectedLead?.id] ?? true) ? 'Áudio IA Ativo' : 'Áudio IA Desativado'"></span>
-                            </button>
+                    </div>
+                </div>
+            </header>
 
                             <!-- Ver histórico de atividades -->
                             <button @click="openActivityLog(); toolsOpen=false; $nextTick(()=>lucide.createIcons())"
