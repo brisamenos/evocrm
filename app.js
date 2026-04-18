@@ -4026,7 +4026,7 @@ document.addEventListener('alpine:init', () => {
         notifDetail: null,
         editTaskId: null,
         _dbClient() { return window._evoSupabase || null; },
-        _inst() { return instanceName || ''; },
+        _inst() { return (typeof instanceName !== 'undefined' ? instanceName : '') || localStorage.getItem('evo_instance') || ''; },
         async saveTasks() {},
         async saveDashNotifs() {},
         async refreshDashNotifs() {
@@ -4159,13 +4159,12 @@ document.addEventListener('alpine:init', () => {
                 const d = await r.json();
                 if (d.ok) {
                     let lista = d.lembretes || [];
-                    // Supervisor filtra: só vê os que ele criou
-                    const role = userRole;
-                    const meuDept = currentUserDept || '';
+                    const role = typeof userRole !== 'undefined' ? userRole : 'admin';
+                    const meuDept = (typeof currentUserDept !== 'undefined' ? currentUserDept : '') || localStorage.getItem('evo_user_dept') || '';
                     if (role === 'supervisor') {
                         lista = lista.filter(l => l.criado_por_dept === meuDept);
                     } else if (role === 'atendente') {
-                        lista = []; // atendente não gerencia
+                        lista = [];
                     }
                     this.lembretes = lista;
                 }
@@ -4190,8 +4189,8 @@ document.addEventListener('alpine:init', () => {
                         body: JSON.stringify({
                             inst,
                             ...this.lembreteForm,
-                            criado_por: loggedUserName || currentUserDept || 'Admin',
-                            criado_por_dept: currentUserDept || 'ADM Principal',
+                            criado_por: (typeof loggedUserName !== 'undefined' ? loggedUserName : '') || localStorage.getItem('evo_user_name') || 'Admin',
+                            criado_por_dept: (typeof currentUserDept !== 'undefined' ? currentUserDept : '') || localStorage.getItem('evo_user_dept') || 'ADM Principal',
                         }),
                     });
                 }
@@ -4238,10 +4237,10 @@ document.addEventListener('alpine:init', () => {
         },
 
         get destinatariosDisponiveis() {
-            const role = userRole;
-            const meuDept = currentUserDept || '';
-            const depts = (typeof allDepartments !== 'undefined' ? allDepartments : []) || [];
-            const atends = (typeof deptAtendentes !== 'undefined' ? deptAtendentes : []) || [];
+            const role = typeof userRole !== 'undefined' ? userRole : 'admin';
+            const meuDept = (typeof currentUserDept !== 'undefined' ? currentUserDept : '') || localStorage.getItem('evo_user_dept') || '';
+            const depts = typeof allDepartments !== 'undefined' ? allDepartments : [];
+            const atends = typeof deptAtendentes !== 'undefined' ? deptAtendentes : [];
             const lista = [];
 
             if (role === 'admin') {
