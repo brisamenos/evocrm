@@ -1367,12 +1367,6 @@
                                       class="absolute top-1 right-2 bg-emerald-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center"
                                       x-text="lembretes.filter(l=>l.ativo).length"></span>
                             </button>
-                            <button @click="dashTab='analytics'; $nextTick(()=>{ renderDashCharts(); lucide.createIcons(); })"
-                                    class="flex-1 flex flex-col items-center gap-0.5 py-2 px-1 text-[10px] font-black uppercase tracking-wide transition-colors border-b-2 min-w-0"
-                                    :class="dashTab==='analytics' ? 'border-[#6366f1] text-[#6366f1]' : 'border-transparent text-[#6b7280] dark:text-[#8b949e]'">
-                                <i data-lucide="bar-chart-2" class="w-4 h-4 shrink-0"></i>
-                                <span class="truncate">Stats</span>
-                            </button>
                         </div>
                     </div>
 
