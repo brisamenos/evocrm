@@ -2371,7 +2371,7 @@
                     <div class="px-4 pt-4 space-y-4 pb-4">
 
                         <!-- KPIs de hoje -->
-                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
                             <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-2xl p-3 shadow-sm">
                                 <div class="flex items-center justify-between mb-1">
                                     <i data-lucide="activity" class="w-4 h-4 opacity-80"></i>
@@ -2422,6 +2422,17 @@
                                    :class="(dashData.kpis.sla ?? 100) >= 80 ? 'text-emerald-500' : (dashData.kpis.sla ?? 100) >= 60 ? 'text-amber-500' : 'text-red-500'"
                                    x-text="(dashData.kpis.sla ?? 100) + '%'"></p>
                                 <p class="text-[10px] text-slate-400 font-bold">&lt; 20min</p>
+                            </div>
+                            <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-gray-100 dark:border-[#21262d] p-3 shadow-sm">
+                                <div class="flex items-center justify-between mb-1">
+                                    <i data-lucide="star" class="w-4 h-4"
+                                       :class="(dashData.kpis.satisfacaoMedia ?? 0) >= 4 ? 'text-amber-400' : (dashData.kpis.satisfacaoMedia ?? 0) >= 3 ? 'text-amber-500' : 'text-red-500'"></i>
+                                    <span class="text-[9px] font-black uppercase text-slate-400">NPS</span>
+                                </div>
+                                <p class="text-2xl font-black"
+                                   :class="(dashData.kpis.satisfacaoMedia ?? 0) >= 4 ? 'text-amber-400' : (dashData.kpis.satisfacaoMedia ?? 0) >= 3 ? 'text-amber-500' : 'text-red-500'"
+                                   x-text="dashData.kpis.satisfacaoMedia ? dashData.kpis.satisfacaoMedia + '/5' : '—'"></p>
+                                <p class="text-[10px] text-slate-400 font-bold" x-text="(dashData.kpis.satisfacaoTotal || 0) + ' avaliações'"></p>
                             </div>
                         </div>
 
@@ -2509,9 +2520,15 @@
                                                 <p class="text-[12px] font-bold text-slate-700 dark:text-slate-200 truncate" x-text="r.nome"></p>
                                                 <p class="text-[10px] text-slate-400" x-text="r.total + ' atend. · ' + r.encerrados + ' encerrados'"></p>
                                             </div>
-                                            <div class="text-right shrink-0">
-                                                <p class="text-[11px] font-black text-[#6366f1]" x-text="_fmtTempo(r.tmaMed)"></p>
-                                                <p class="text-[8px] text-slate-400 font-bold uppercase">TMA</p>
+                                            <div class="text-right shrink-0 flex items-center gap-3">
+                                                <div x-show="r.satisfacao" class="text-center">
+                                                    <p class="text-[11px] font-black" :class="r.satisfacao >= 4 ? 'text-amber-400' : r.satisfacao >= 3 ? 'text-amber-500' : 'text-red-500'" x-text="r.satisfacao + '/5'"></p>
+                                                    <p class="text-[8px] text-slate-400 font-bold uppercase" x-text="'⭐ ' + r.totalAvaliacoes"></p>
+                                                </div>
+                                                <div class="text-center">
+                                                    <p class="text-[11px] font-black text-[#6366f1]" x-text="_fmtTempo(r.tmaMed)"></p>
+                                                    <p class="text-[8px] text-slate-400 font-bold uppercase">TMA</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </template>
@@ -2779,6 +2796,7 @@
                                                             <div class="text-center"><p class="font-black text-[#6366f1]" x-text="at.encerradosHoje"></p><p class="text-slate-400">hoje</p></div>
                                                             <div class="text-center"><p class="font-black text-slate-500" x-text="at.total7d"></p><p class="text-slate-400">7 dias</p></div>
                                                             <div class="text-center"><p class="font-black text-emerald-500" x-text="_fmtTempo(at.tmaHoje)"></p><p class="text-slate-400">TMA</p></div>
+                                                            <div x-show="at.satisfacao" class="text-center"><p class="font-black" :class="(at.satisfacao||0)>=4?'text-amber-400':'text-amber-500'" x-text="at.satisfacao ? at.satisfacao+'/5' : ''"></p><p class="text-slate-400">⭐</p></div>
                                                             <i :data-lucide="expandedAtendente === at.id ? 'chevron-up' : 'chevron-down'" class="w-3.5 h-3.5 text-slate-300"></i>
                                                         </div>
                                                     </button>
@@ -2787,7 +2805,7 @@
                                                     <div x-show="expandedAtendente === at.id" x-transition class="bg-slate-50/50 dark:bg-[#0d1117]/50 px-4 pb-4">
                                                         
                                                         <!-- Stats completos -->
-                                                        <div class="grid grid-cols-4 gap-2 mb-3">
+                                                        <div class="grid grid-cols-5 gap-2 mb-3">
                                                             <div class="bg-white dark:bg-[#161b22] p-2.5 rounded-xl text-center border border-gray-100 dark:border-[#21262d]">
                                                                 <p class="text-sm font-black text-emerald-500" x-text="at.ativos"></p>
                                                                 <p class="text-[8px] text-slate-400 font-bold uppercase">Ativos</p>
@@ -2803,6 +2821,10 @@
                                                             <div class="bg-white dark:bg-[#161b22] p-2.5 rounded-xl text-center border border-gray-100 dark:border-[#21262d]">
                                                                 <p class="text-sm font-black text-emerald-500" x-text="_fmtTempo(at.tma7d)"></p>
                                                                 <p class="text-[8px] text-slate-400 font-bold uppercase">TMA 7d</p>
+                                                            </div>
+                                                            <div class="bg-white dark:bg-[#161b22] p-2.5 rounded-xl text-center border border-gray-100 dark:border-[#21262d]">
+                                                                <p class="text-sm font-black" :class="(at.satisfacao||0) >= 4 ? 'text-amber-400' : (at.satisfacao||0) >= 3 ? 'text-amber-500' : at.satisfacao ? 'text-red-500' : 'text-slate-300'" x-text="at.satisfacao ? at.satisfacao+'/5' : '—'"></p>
+                                                                <p class="text-[8px] text-slate-400 font-bold uppercase">⭐ NPS</p>
                                                             </div>
                                                         </div>
 

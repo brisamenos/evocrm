@@ -459,6 +459,27 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
         )`);
         _db.run(`CREATE INDEX IF NOT EXISTS idx_dept_atend_inst ON dept_atendentes(instance_name, dept_id)`);
     } catch(e) { /* já existe */ }
+
+    // ── Tabela avaliacoes (pesquisa de satisfação) ──
+    try {
+        _db.run(`CREATE TABLE IF NOT EXISTS avaliacoes (
+            id TEXT PRIMARY KEY, instance_name TEXT NOT NULL,
+            lead_id TEXT, atendimento_id TEXT,
+            departamento TEXT, agente_nome TEXT,
+            numero TEXT, nome TEXT,
+            nota INTEGER, comentario TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        )`);
+        _db.run(`CREATE INDEX IF NOT EXISTS idx_aval_inst ON avaliacoes(instance_name)`);
+        _db.run(`CREATE INDEX IF NOT EXISTS idx_aval_dept ON avaliacoes(instance_name, departamento)`);
+        _db.run(`CREATE INDEX IF NOT EXISTS idx_aval_agente ON avaliacoes(instance_name, agente_nome)`);
+    } catch(e) { /* já existe */ }
+    // Campo aguardando_avaliacao no leads
+    try { _db.run("ALTER TABLE leads ADD COLUMN aguardando_avaliacao INTEGER DEFAULT 0"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN ultimo_atendimento_id TEXT"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN ultimo_agente TEXT"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN ultimo_departamento TEXT"); } catch(e) {}
+
     // Copia dados de colunas antigas para novas (crm_tags e departments)
     try { _db.run("UPDATE crm_tags SET name = nome WHERE name IS NULL AND nome IS NOT NULL"); } catch(e) {}
     try { _db.run("UPDATE crm_tags SET color = cor WHERE color IS NULL AND cor IS NOT NULL"); } catch(e) {}

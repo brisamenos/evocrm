@@ -3566,23 +3566,28 @@ const server = http.createServer(async (req, res) => {
                 }).eq('id', lead_id);
 
                 // Gravar/atualizar na tabela atendimentos para histórico confiável
+                let atendimentoId = null;
+                const agenteDoAtend = lead.atendente_nome || '';
+                const deptDoAtend = lead.departamento || 'ADM Principal';
                 try {
                     // Tenta atualizar atendimento ativo existente (criado pela fila)
                     const { data: atExist } = await db.from('atendimentos')
                         .select('id').eq('lead_id', lead_id).eq('status', 'ativo').limit(1);
                     if (atExist && atExist.length > 0) {
+                        atendimentoId = atExist[0].id;
                         await db.from('atendimentos').update({
                             fim: agora, tma_segundos: tmaSegs, status: 'encerrado',
-                        }).eq('id', atExist[0].id);
-                    } else if (lead.atendente_nome) {
+                        }).eq('id', atendimentoId);
+                    } else if (agenteDoAtend) {
                         // Não veio pela fila — insere registro novo para manter histórico
                         const crypto = require('crypto');
+                        atendimentoId = crypto.randomUUID();
                         await db.from('atendimentos').insert({
-                            id: crypto.randomUUID(),
+                            id: atendimentoId,
                             instance_name: instBody,
                             lead_id: lead_id,
-                            departamento: lead.departamento || 'ADM Principal',
-                            agente_nome: lead.atendente_nome,
+                            departamento: deptDoAtend,
+                            agente_nome: agenteDoAtend,
                             numero: lead.numero,
                             nome: lead.nome,
                             inicio: lead.atendimento_inicio,
@@ -3592,6 +3597,50 @@ const server = http.createServer(async (req, res) => {
                         });
                     }
                 } catch(e2) { /* tabela pode não existir, segue */ }
+
+                // ── Pesquisa de satisfação automática ──
+                // Só dispara se NÃO é ADM Principal e tem número do cliente
+                if (agenteDoAtend && agenteDoAtend !== 'ADM Principal' && deptDoAtend !== 'ADM Principal' && lead.numero) {
+                    try {
+                        // Salva dados do último atendimento no lead para referência ao receber resposta
+                        await db.from('leads').update({
+                            aguardando_avaliacao: 1,
+                            ultimo_atendimento_id: atendimentoId,
+                            ultimo_agente: agenteDoAtend,
+                            ultimo_departamento: deptDoAtend,
+                        }).eq('id', lead_id);
+
+                        // Busca prompt de pesquisa de satisfação configurado
+                        let msgPesquisa = `Olá! Seu atendimento foi encerrado.\n\nPoderia avaliar nosso atendimento com uma nota de *1 a 5*?\n\n⭐ 1 — Péssimo\n⭐⭐ 2 — Ruim\n⭐⭐⭐ 3 — Regular\n⭐⭐⭐⭐ 4 — Bom\n⭐⭐⭐⭐⭐ 5 — Excelente\n\nSua opinião é muito importante para nós!`;
+                        try {
+                            const { data: promptPesq } = await db.from('ia_prompts')
+                                .select('conteudo, prompt')
+                                .eq('instance_name', instBody)
+                                .eq('nome', 'Pesquisa de Satisfação')
+                                .limit(1);
+                            if (promptPesq && promptPesq.length > 0 && (promptPesq[0].conteudo || promptPesq[0].prompt)) {
+                                msgPesquisa = promptPesq[0].conteudo || promptPesq[0].prompt;
+                            }
+                        } catch(e3) {}
+
+                        // Envia via WhatsApp
+                        await fetch(`${EVO_URL}/message/sendText/${instBody}`, {
+                            method: 'POST',
+                            headers: { 'apikey': EVO_KEY, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ number: lead.numero, text: msgPesquisa })
+                        });
+                        // Salva no histórico de mensagens
+                        await db.from('messages').insert({
+                            instance_name: instBody, lead_id: lead_id,
+                            content: msgPesquisa, type: 'text',
+                            from_me: true, status: 'sent', sent_by_ia: true,
+                            timestamp: agora, created_at: agora,
+                        }).catch(() => {});
+                        log(instBody, 'ok', `[Satisfação] Pesquisa enviada → ${lead.numero}`);
+                    } catch(e3) {
+                        log(instBody, 'warn', `[Satisfação] Falha ao enviar pesquisa: ${e3.message}`);
+                    }
+                }
 
                 log(instBody, 'ok', `[TMA] Atendimento encerrado — lead ${lead_id} | tma=${tmaSegs}s`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -3774,10 +3823,27 @@ const server = http.createServer(async (req, res) => {
                         }
                     }
                 }
-                ranking = Object.values(mapa).map(r => ({
-                    nome: r.nome, total: r.total, encerrados: r.encerrados,
-                    tmaMed: r.tmas.length ? Math.round(r.tmas.reduce((a,b)=>a+b,0)/r.tmas.length) : 0,
-                })).sort((a,b) => b.total - a.total).slice(0, 10);
+                // Busca avaliações dos últimos 7 dias para o ranking
+                let avalRanking = {};
+                try {
+                    const { data: avals7d } = await db.from('avaliacoes')
+                        .select('agente_nome, nota').eq('instance_name', inst).gte('created_at', desde7);
+                    for (const a of (avals7d || [])) {
+                        if (!a.agente_nome) continue;
+                        if (!avalRanking[a.agente_nome]) avalRanking[a.agente_nome] = [];
+                        avalRanking[a.agente_nome].push(a.nota);
+                    }
+                } catch(e) {}
+
+                ranking = Object.values(mapa).map(r => {
+                    const notasAg = avalRanking[r.nome] || [];
+                    return {
+                        nome: r.nome, total: r.total, encerrados: r.encerrados,
+                        tmaMed: r.tmas.length ? Math.round(r.tmas.reduce((a,b)=>a+b,0)/r.tmas.length) : 0,
+                        satisfacao: notasAg.length ? Math.round(notasAg.reduce((a,b)=>a+b,0)/notasAg.length*10)/10 : null,
+                        totalAvaliacoes: notasAg.length,
+                    };
+                }).sort((a,b) => b.total - a.total).slice(0, 10);
             } catch(e) { /* sem tabela atendimentos */ }
 
             // ── Atendimentos iniciados por hora (hoje) ───────────────────────
@@ -3789,6 +3855,20 @@ const server = http.createServer(async (req, res) => {
                 porHora[d.getHours()]++;
             }
 
+            // ── Satisfação (últimos 30 dias) ─────────────────────────────────
+            let satisfacaoMedia = null;
+            let satisfacaoTotal = 0;
+            try {
+                const desde30 = new Date(Date.now() - 30*86400000).toISOString();
+                const { data: avals } = await db.from('avaliacoes')
+                    .select('nota').eq('instance_name', inst).gte('created_at', desde30);
+                const notasArr = (avals || []).map(a => a.nota).filter(Boolean);
+                if (notasArr.length > 0) {
+                    satisfacaoMedia = Math.round(notasArr.reduce((a,b)=>a+b,0)/notasArr.length*10)/10;
+                    satisfacaoTotal = notasArr.length;
+                }
+            } catch(e) {}
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 ok: true,
@@ -3799,6 +3879,8 @@ const server = http.createServer(async (req, res) => {
                     tmaMedioHoje,
                     tmeAtualMedio,
                     sla,
+                    satisfacaoMedia,
+                    satisfacaoTotal,
                 },
                 departamentos: deptList,
                 ranking,
@@ -3858,6 +3940,19 @@ const server = http.createServer(async (req, res) => {
             // Atendimentos encerrados HOJE (da tabela atendimentos — fonte confiável)
             const atendimentosHoje = atendimentos7d.filter(a => a.fim && new Date(a.fim) >= hoje);
 
+            // Avaliações de satisfação (últimos 7 dias)
+            let avaliacoes7d = {};
+            try {
+                const { data: avals } = await db.from('avaliacoes')
+                    .select('agente_nome, departamento, nota')
+                    .eq('instance_name', inst).gte('created_at', desde7);
+                for (const a of (avals || [])) {
+                    if (!a.agente_nome) continue;
+                    if (!avaliacoes7d[a.agente_nome]) avaliacoes7d[a.agente_nome] = [];
+                    avaliacoes7d[a.agente_nome].push(a.nota);
+                }
+            } catch(e) {}
+
             const result = depts.map(dept => {
                 const deptName = dept.name;
                 const deptAtendentes = (allAtend || []).filter(a => a.dept_id === dept.id);
@@ -3902,6 +3997,7 @@ const server = http.createServer(async (req, res) => {
                     const leadsEncerradosHoje = meusAtendHoje.length > 0
                         ? meusAtendHoje.slice(0, 20).map(a => ({ id: a.lead_id, nome: a.nome, numero: a.numero, tma: a.tma_segundos, fim: a.fim }))
                         : meusLeadsEncHoje.slice(0, 20).map(l => ({ id: l.id, nome: l.nome, numero: l.numero, tma: l.tma_segundos, fim: l.atendimento_fim }));
+                    const notasAt = avaliacoes7d[at.nome] || [];
                     return {
                         id: at.id, nome: at.nome,
                         ativos: ativos.length,
@@ -3911,6 +4007,8 @@ const server = http.createServer(async (req, res) => {
                         encerrados7d: meusAtend.filter(a => a.status === 'encerrado').length,
                         tma7d: tmas7d.length ? Math.round(tmas7d.reduce((a,b)=>a+b,0)/tmas7d.length) : 0,
                         tme7d: tmes7d.length ? Math.round(tmes7d.reduce((a,b)=>a+b,0)/tmes7d.length) : 0,
+                        satisfacao: notasAt.length ? Math.round(notasAt.reduce((a,b)=>a+b,0)/notasAt.length*10)/10 : null,
+                        totalAvaliacoes: notasAt.length,
                         leadsAtivos,
                         leadsEncerradosHoje,
                     };
@@ -3971,6 +4069,55 @@ const server = http.createServer(async (req, res) => {
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true, ativos, porDept, total: ativos.length }));
+        } catch(e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: e.message }));
+        }
+        return;
+    }
+
+    // GET /api/stats/satisfacao?inst=...&periodo=7  — notas de satisfação
+    if (req.url.startsWith('/api/stats/satisfacao') && req.method === 'GET') {
+        try {
+            const urlP = new URL(req.url, 'http://localhost');
+            const inst = urlP.searchParams.get('inst') || '';
+            const dias = parseInt(urlP.searchParams.get('periodo') || '30');
+            if (!inst) { res.writeHead(400); res.end(JSON.stringify({ error: 'inst obrigatório' })); return; }
+            const desde = new Date(Date.now() - dias * 86400000).toISOString();
+            const { data: avaliacoes } = await db.from('avaliacoes')
+                .select('nota, agente_nome, departamento, created_at')
+                .eq('instance_name', inst).gte('created_at', desde);
+            const arr = avaliacoes || [];
+            // Média geral
+            const notas = arr.map(a => a.nota).filter(Boolean);
+            const mediaGeral = notas.length ? Math.round(notas.reduce((a,b)=>a+b,0)/notas.length*10)/10 : null;
+            const totalAvaliacoes = notas.length;
+            // Por departamento
+            const porDept = {};
+            for (const a of arr) {
+                const d = a.departamento || 'Sem dept';
+                if (!porDept[d]) porDept[d] = { dept: d, notas: [], total: 0 };
+                porDept[d].notas.push(a.nota); porDept[d].total++;
+            }
+            const departamentos = Object.values(porDept).map(d => ({
+                dept: d.dept, media: Math.round(d.notas.reduce((a,b)=>a+b,0)/d.notas.length*10)/10, total: d.total,
+            }));
+            // Por atendente
+            const porAgente = {};
+            for (const a of arr) {
+                const ag = a.agente_nome || 'Desconhecido';
+                if (!porAgente[ag]) porAgente[ag] = { nome: ag, notas: [], total: 0 };
+                porAgente[ag].notas.push(a.nota); porAgente[ag].total++;
+            }
+            const atendentes = Object.values(porAgente).map(ag => ({
+                nome: ag.nome, media: Math.round(ag.notas.reduce((a,b)=>a+b,0)/ag.notas.length*10)/10, total: ag.total,
+            })).sort((a,b) => b.media - a.media);
+            // Distribuição (1-5)
+            const distribuicao = [0,0,0,0,0];
+            for (const n of notas) distribuicao[n-1]++;
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true, mediaGeral, totalAvaliacoes, departamentos, atendentes, distribuicao }));
         } catch(e) {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: false, error: e.message }));
@@ -5107,6 +5254,76 @@ const server = http.createServer(async (req, res) => {
                             // Cliente respondeu → desativa followup (gestor reativa manualmente se precisar)
                             updateData.followup_lead_ativo = false;
                             db.from('leads').update(updateData).eq('id', lead.id).then(()=>{},()=>{});
+
+                            // ── Intercepta resposta de pesquisa de satisfação ──
+                            if (lead.aguardando_avaliacao && content && type === 'text') {
+                                try {
+                                    // Extrai nota de 1 a 5 da resposta
+                                    const texto = content.trim();
+                                    let nota = null;
+                                    // Tentativa direta: número puro
+                                    const numMatch = texto.match(/^[1-5]$/);
+                                    if (numMatch) {
+                                        nota = parseInt(numMatch[0]);
+                                    } else {
+                                        // Busca qualquer número de 1-5 no texto
+                                        const nums = texto.match(/\b([1-5])\b/);
+                                        if (nums) nota = parseInt(nums[1]);
+                                    }
+                                    // Fallback: emojis de estrela
+                                    if (!nota) {
+                                        const estrelas = (texto.match(/⭐/g) || []).length;
+                                        if (estrelas >= 1 && estrelas <= 5) nota = estrelas;
+                                    }
+
+                                    if (nota) {
+                                        const crypto = require('crypto');
+                                        await db.from('avaliacoes').insert({
+                                            id: crypto.randomUUID(),
+                                            instance_name: inst,
+                                            lead_id: lead.id,
+                                            atendimento_id: lead.ultimo_atendimento_id || null,
+                                            departamento: lead.ultimo_departamento || lead.departamento || '',
+                                            agente_nome: lead.ultimo_agente || lead.atendente_nome || '',
+                                            numero: lead.numero,
+                                            nome: lead.nome || pushName || '',
+                                            nota,
+                                            comentario: texto,
+                                            created_at: new Date().toISOString(),
+                                        });
+                                        // Limpa flag
+                                        await db.from('leads').update({
+                                            aguardando_avaliacao: 0,
+                                            ultimo_atendimento_id: null,
+                                            ultimo_agente: null,
+                                            ultimo_departamento: null,
+                                        }).eq('id', lead.id);
+                                        lead.aguardando_avaliacao = 0;
+
+                                        // Agradece
+                                        const agradecimento = nota >= 4
+                                            ? `Obrigado pela avaliação! 😊 Ficamos felizes com sua nota *${nota}/5*. Até a próxima!`
+                                            : `Obrigado pela avaliação! Sua nota *${nota}/5* foi registrada. Vamos trabalhar para melhorar nosso atendimento.`;
+                                        try {
+                                            await fetch(`${EVO_URL}/message/sendText/${inst}`, {
+                                                method: 'POST',
+                                                headers: { 'apikey': EVO_KEY, 'Content-Type': 'application/json' },
+                                                body: JSON.stringify({ number: lead.numero, text: agradecimento })
+                                            });
+                                            await db.from('messages').insert({
+                                                instance_name: inst, lead_id: lead.id,
+                                                content: agradecimento, type: 'text',
+                                                from_me: true, status: 'sent', sent_by_ia: true,
+                                                timestamp: new Date().toISOString(), created_at: new Date().toISOString(),
+                                            }).catch(() => {});
+                                        } catch(e4) {}
+
+                                        log(inst, 'ok', `[Satisfação] Nota ${nota}/5 de ${lead.nome || lead.numero} → agente: ${lead.ultimo_agente}`);
+                                        continue; // Não processa mais essa mensagem (não aciona IA)
+                                    }
+                                    // Se não conseguiu extrair nota, ignora e deixa passar para IA normalmente
+                                } catch(e4) { log(inst, 'warn', `[Satisfação] Erro ao processar: ${e4.message}`); }
+                            }
                         }
 
                         // Evita duplicatas
