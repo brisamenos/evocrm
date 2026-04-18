@@ -5389,10 +5389,18 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                         </div>
                     </template>
 
-                    <!-- Observações -->
-                    <button @click="activeLeadForObs = selectedLead; obsInput = selectedLead?.observacao || ''; showObsModal = true; $nextTick(()=>lucide.createIcons())"
-                            class="p-1.5 rounded-lg hover:bg-[#e0e7ff] dark:hover:bg-[#3730a3]/30 text-slate-400 hover:text-[#6366f1] transition-colors" title="Observações">
-                        <i data-lucide="sticky-note" class="w-4 h-4"></i>
+                    <!-- Etiquetas -->
+                    <button @click="openEtiquetaModal(selectedLead); $nextTick(()=>lucide.createIcons())"
+                            class="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 text-slate-400 hover:text-purple-600 transition-colors text-[10px] font-bold" title="Etiquetas">
+                        <i data-lucide="tag" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Tags</span>
+                    </button>
+
+                    <!-- Transferir -->
+                    <button @click="abrirTransferModal(selectedLead.id); $nextTick(()=>lucide.createIcons())"
+                            class="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-400 hover:text-blue-600 transition-colors text-[10px] font-bold" title="Transferir Setor">
+                        <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i>
+                        <span class="hidden sm:inline">Transferir</span>
                     </button>
 
                     <!-- Documentos -->
