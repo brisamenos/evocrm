@@ -133,7 +133,13 @@ async function iniciarAtendimento(inst, filaId, agenteId, agenteNome) {
     if (!fila) return { error: 'Entrada não encontrada' };
     // Idempotente: se já está em atendimento, retorna ok sem erro
     if (fila.status === 'em_atendimento') {
-        return { ok: true, jaAtivo: true, tme: fila.tme_segundos || 0, tme_fmt: formatarTempo(fila.tme_segundos || 0) };
+        return {
+            ok: true,
+            jaAtivo: true,
+            tme: fila.tme_segundos || 0,
+            tme_fmt: formatarTempo(fila.tme_segundos || 0),
+            inicio_atendimento: fila.inicio_atendimento || null,
+        };
     }
     if (fila.status !== 'aguardando') return { error: 'Entrada já encerrada' };
 
@@ -149,22 +155,24 @@ async function iniciarAtendimento(inst, filaId, agenteId, agenteNome) {
         tme_segundos:       tme,
     }).eq('id', filaId);
 
-    try {
-        await from('atendimentos').insert({
-            id:            newId(),
-            instance_name: inst,
-            lead_id:       fila.lead_id,
-            fila_id:       filaId,
-            departamento:  fila.departamento,
-            agente_id:     agenteId,
-            agente_nome:   agenteNome,
-            numero:        fila.numero,
-            nome:          fila.nome,
-            inicio:        agora,
-            tme_segundos:  tme,
-            status:        'ativo',
-        });
-    } catch(e) { /* tabela pode não existir, segue o fluxo */ }
+    if (agenteNome) {
+        try {
+            await from('atendimentos').insert({
+                id:            newId(),
+                instance_name: inst,
+                lead_id:       fila.lead_id,
+                fila_id:       filaId,
+                departamento:  fila.departamento,
+                agente_id:     agenteId,
+                agente_nome:   agenteNome,
+                numero:        fila.numero,
+                nome:          fila.nome,
+                inicio:        agora,
+                tme_segundos:  tme,
+                status:        'ativo',
+            });
+        } catch(e) { /* tabela pode não existir, segue o fluxo */ }
+    }
 
     // Marca agente como ocupado (tolerante: tabela agents pode não existir)
     if (agenteId) {
@@ -207,7 +215,7 @@ async function iniciarAtendimento(inst, filaId, agenteId, agenteNome) {
         tme:          tme,
     });
 
-    return { ok: true, tme, tme_fmt: formatarTempo(tme), proximo };
+    return { ok: true, tme, tme_fmt: formatarTempo(tme), inicio_atendimento: agora, proximo };
 }
 
 // ── ENCERRAR ATENDIMENTO ─────────────────────────────────────────────────────

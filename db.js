@@ -545,6 +545,27 @@ function _runSelect(sql, vals = []) {
     return rows;
 }
 
+const _columnCache = {};
+function _hasColumn(table, col) {
+    if (!_db) return false;
+    const safeTable = String(table).replace(/"/g, '""');
+    if (!_columnCache[safeTable]) {
+        try {
+            const stmt = _db.prepare(`PRAGMA table_info("${safeTable}")`);
+            const cols = new Set();
+            while (stmt.step()) {
+                const row = stmt.getAsObject();
+                if (row.name) cols.add(row.name);
+            }
+            stmt.free();
+            _columnCache[safeTable] = cols;
+        } catch(e) {
+            _columnCache[safeTable] = new Set();
+        }
+    }
+    return _columnCache[safeTable].has(col);
+}
+
 // ── QUERY RAW ─────────────────────────────────────────────────────────────────
 async function query(sql, params = []) {
     await _waitReady();
@@ -651,11 +672,11 @@ class QueryBuilder {
                     if (!row.created_at) row.created_at = new Date().toISOString();
                     // Espelha campos novos→antigos para tabelas que têm colunas legadas NOT NULL
                     if (table === 'crm_tags') {
-                        if (row.name && !row.nome)  row.nome = row.name;
-                        if (row.color && !row.cor)   row.cor  = row.color;
+                        if (_hasColumn(table, 'nome') && row.name && !row.nome)  row.nome = row.name;
+                        if (_hasColumn(table, 'cor') && row.color && !row.cor)   row.cor  = row.color;
                     }
                     if (table === 'departments') {
-                        if (row.name && !row.nome)  row.nome = row.name;
+                        if (_hasColumn(table, 'nome') && row.name && !row.nome)  row.nome = row.name;
                     }
                     const keys = Object.keys(row);
                     const vals = keys.map(k => prepareVal(row[k]));
@@ -710,11 +731,11 @@ class QueryBuilder {
                 for (const row of rows) {
                     if (!row.created_at) row.created_at = new Date().toISOString();
                     if (table === 'crm_tags') {
-                        if (row.name && !row.nome) row.nome = row.name;
-                        if (row.color && !row.cor)  row.cor  = row.color;
+                        if (_hasColumn(table, 'nome') && row.name && !row.nome) row.nome = row.name;
+                        if (_hasColumn(table, 'cor') && row.color && !row.cor)  row.cor  = row.color;
                     }
                     if (table === 'departments') {
-                        if (row.name && !row.nome) row.nome = row.name;
+                        if (_hasColumn(table, 'nome') && row.name && !row.nome) row.nome = row.name;
                     }
                     // 1. Busca linha existente pelos conflictKeys
                     let existing = null;
