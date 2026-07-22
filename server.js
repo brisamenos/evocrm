@@ -189,8 +189,8 @@ function parseMultipart(buffer, boundary) {
 }
 
 // ─── CONFIGURAÇÃO ────────────────────────────────────────────────────────────
-const EVO_URL = process.env.EVO_URL || 'http://projeto-evolution-api:8080';
-const EVO_KEY = process.env.EVO_KEY || '429683C4C977415CAAFCCE10F7D57E11';
+const EVO_URL = process.env.EVO_URL || 'https://app-evolution-api.wzvzyp.easypanel.host';
+const EVO_KEY = process.env.EVO_KEY || '429683C4C977415CAAFCCE10F7D57EVO';
 const PORT    = process.env.PORT          || 3000;
 
 // ─── MERCADO PAGO: tokens armazenados no Supabase (admin_config) ─────────────
