@@ -1476,6 +1476,40 @@ function retomarIA(inst, leadId, leadName, motivo) {
     log(inst, 'ok', `🤖 IA retomou para ${leadName} [${motivo}]`);
 }
 
+// ─── TRANSCRIÇÃO DE ÁUDIO (vale para todos os clientes com IA) ──────────────
+// Lê o arquivo direto do disco quando é um /uploads/ (não depende do domínio público).
+async function lerMidia(url) {
+    const m = String(url || '').match(/\/uploads\/([^?#]+)/);
+    if (m) {
+        try {
+            const fp = pathMod.resolve(UPLOADS_DIR, decodeURIComponent(m[1]));
+            if (fp.startsWith(pathMod.resolve(UPLOADS_DIR) + pathMod.sep) && fsSync.existsSync(fp)) return fsSync.readFileSync(fp);
+        } catch (e) {}
+    }
+    const r = await fetch(String(url).replace(/^https?:\/\/[^/]+(?=\/uploads\/)/, `http://127.0.0.1:${PORT}`));
+    if (!r.ok) throw new Error(`não foi possível baixar o áudio (HTTP ${r.status})`);
+    return Buffer.from(await r.arrayBuffer());
+}
+
+async function transcreverAudio(inst, url, apiKey) {
+    if (!apiKey) throw new Error('API Key da OpenAI não configurada');
+    const buf = await lerMidia(url);
+    let ext = (String(url).split('?')[0].split('.').pop() || 'ogg').toLowerCase();
+    if (!['ogg', 'oga', 'mp3', 'm4a', 'wav', 'webm', 'mp4', 'mpeg', 'mpga', 'flac'].includes(ext)) ext = 'ogg';
+    const formData = new FormData();
+    formData.append('file', buf, { filename: `audio.${ext}`, contentType: ext === 'mp3' ? 'audio/mpeg' : `audio/${ext === 'oga' ? 'ogg' : ext}` });
+    formData.append('model', 'whisper-1');
+    formData.append('language', 'pt');
+    const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST', headers: { 'Authorization': `Bearer ${apiKey}`, ...formData.getHeaders() }, body: formData,
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(d?.error?.message || `OpenAI HTTP ${resp.status}`);
+    const texto = String(d?.text || '').trim();
+    log(inst, 'ok', `🎤 Áudio transcrito: "${texto.substring(0, 60)}"`);
+    return texto;
+}
+
 // ─── BUFFER DE MENSAGENS ─────────────────────────────────────────────────────
 async function bufferAdicionarMsg(inst, lead, msgObj) {
     const s = getState(inst);
@@ -1512,11 +1546,22 @@ async function bufferDisparar(inst, lead) {
         msgFinal = msgs[0];
         log(inst, 'info', `📨 Buffer [${getLeadName(lead)}]: 1 msg — disparando IA`);
     } else {
-        const textos = msgs.filter(m => !m.type || m.type === 'text').map(m => m.content).filter(Boolean);
-        const ultimaNaoTexto = [...msgs].reverse().find(m => m.type && m.type !== 'text');
+        // Áudios no meio do bloco: transcreve cada um e entra como texto, na ordem em que chegaram
+        const partes = [];
+        for (const m of msgs) {
+            if (!m.type || m.type === 'text') { if (m.content) partes.push(m.content); }
+            else if (m.type === 'audio') {
+                try {
+                    const t = await transcreverAudio(inst, m.content, s.config?.apiKey);
+                    partes.push(t ? `[Áudio do cliente: "${t}"]` : '[Cliente enviou um áudio sem fala]');
+                } catch (e) { log(inst, 'warn', `🎤 Transcrição falhou: ${e.message}`); partes.push('[Cliente enviou um áudio]'); }
+            }
+        }
+        const ultimaMidia = [...msgs].reverse().find(m => m.type && m.type !== 'text' && m.type !== 'audio');
         msgFinal = {
-            content: textos.join('\n'),
-            type: ultimaNaoTexto ? ultimaNaoTexto.type : 'text',
+            content: partes.join('\n'),
+            type: ultimaMidia ? ultimaMidia.type : 'text',
+            mediaUrl: ultimaMidia ? ultimaMidia.content : null,
             id: msgs[msgs.length - 1].id,
             timestamp: msgs[msgs.length - 1].ts
         };
@@ -1761,7 +1806,8 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
 
         // ── 2. Montar mensagem atual (suporte a mídia) ──
         const msgType = msgObj?.type || 'text';
-        const msgContent = msgObj?.content || mensagemClienteTexto || '';
+        const msgContent = msgObj?.mediaUrl || msgObj?.content || mensagemClienteTexto || '';
+        if (msgObj?.mediaUrl) mensagemClienteTexto = msgObj.content || '';   // texto do bloco (sem a URL)
         let currentText = mensagemClienteTexto || '';
 
         if (msgType === 'image') {
@@ -1788,27 +1834,19 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
                 currentText = `[Cliente enviou uma imagem${mensagemClienteTexto ? ': ' + mensagemClienteTexto : ''}]`;
             }
         } else if (msgType === 'audio') {
+            // Transcrição é para TODOS os clientes com IA ligada (não depende do "Áudio IA")
             try {
                 log(inst, 'info', '🎤 Transcrevendo áudio (Whisper)...');
-                const audioResp = await fetch(msgContent);
-                if (audioResp.ok) {
-                    const arrayBuf = await audioResp.arrayBuffer();
-                    const audioBuffer = Buffer.from(arrayBuf);
-                    const formData = new FormData();
-                    formData.append('file', audioBuffer, { filename: 'audio.ogg', contentType: 'audio/ogg' });
-                    formData.append('model', 'whisper-1');
-                    formData.append('language', 'pt');
-                    const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${cfg.apiKey}`, ...formData.getHeaders() },
-                        body: formData
-                    });
-                    const wd = await whisperResp.json();
-                    currentText = wd?.text ? `[Áudio transcrito: "${wd.text}"]` : '[Cliente enviou um áudio]';
-                    log(inst, 'ok', '🎤 Áudio transcrito: ' + (wd?.text || '').substring(0, 40));
+                const transcricao = await transcreverAudio(inst, msgContent, cfg.apiKey);
+                if (transcricao) {
+                    currentText = `[O cliente mandou um ÁUDIO. Transcrição: "${transcricao}"]\nResponda normalmente ao que ele disse no áudio.`;
+                    mensagemClienteTexto = transcricao;   // agenda, arquivos gerais e mídias usam o que foi falado
+                } else {
+                    currentText = '[O cliente mandou um áudio sem fala. Peça educadamente para repetir ou escrever.]';
                 }
             } catch (e) {
-                currentText = '[Cliente enviou um áudio]';
+                log(inst, 'warn', `🎤 Transcrição falhou: ${e.message}`);
+                currentText = '[O cliente mandou um áudio que não pôde ser ouvido. Peça educadamente para escrever a mensagem.]';
             }
         } else if (msgType === 'document') {
             try {

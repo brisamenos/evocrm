@@ -628,7 +628,7 @@ function iaAtendMixin() {
                     currentParts = [{ text: '[O cliente enviou uma imagem' + (mensagemClienteTexto ? ': ' + mensagemClienteTexto : '') + ']' }];
                 }
             } else if (msgType === 'audio') {
-                if (this._temFeature('audio_ia')) {
+                if (true) { // transcrição vale para todos (Áudio IA controla só a resposta em voz)
                 try {
                     const audioUrl = msgContent;
                     const audioResp = await fetch(audioUrl);
