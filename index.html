@@ -112,7 +112,7 @@
 
 <body class="bg-[#f1f4f9] text-[#0d1117] dark:bg-[#0d1117] dark:text-[#e6edf3] antialiased font-sans overflow-hidden transition-colors duration-300 bg-pattern">
 
-    <div x-show="showDeptModal" @click.self="showDeptModal = false" class="fixed inset-0 z-[800] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
+    <div x-show="showDeptModal && !isIndividual" @click.self="showDeptModal = false" class="fixed inset-0 z-[800] bg-black/70 flex items-center justify-center p-4" x-transition.opacity x-cloak>
         <div class="bg-white dark:bg-[#161b22] w-full max-w-sm rounded-[2.5rem] p-8 text-center shadow-2xl border border-gray-100 dark:border-[#21262d]">
             <div class="w-20 h-20 bg-[#e0e7ff] dark:bg-[#3730a3]/30 text-[#6366f1] rounded-3xl flex items-center justify-center mx-auto mb-6 transform rotate-3"><i data-lucide="briefcase" class="w-10 h-10"></i></div>
             <h3 class="font-black text-2xl dark:text-white mb-2 tracking-tight">Modo Atendente</h3>
@@ -311,7 +311,7 @@
             <!-- Toggle Admin / Equipe -->
             <div class="flex bg-slate-100 dark:bg-[#0d1117] rounded-2xl p-1 mb-6">
                 <button @click="loginMode = 'admin'; $nextTick(()=>lucide.createIcons())" :class="loginMode === 'admin' ? 'bg-white dark:bg-[#161b22] shadow text-[#6366f1]' : 'text-slate-500'" class="flex-1 py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5">
-                    <i data-lucide="shield" class="w-3.5 h-3.5"></i> Administrador
+                    <i data-lucide="shield" class="w-3.5 h-3.5"></i> Minha Conta
                 </button>
                 <button @click="loginMode = 'staff'; staffError=''; $nextTick(()=>lucide.createIcons())" :class="loginMode === 'staff' ? 'bg-white dark:bg-[#161b22] shadow text-amber-600' : 'text-slate-500'" class="flex-1 py-2.5 rounded-xl font-black text-xs transition-all flex items-center justify-center gap-1.5">
                     <i data-lucide="users" class="w-3.5 h-3.5"></i> Equipe
@@ -320,10 +320,10 @@
 
             <!-- Login Administrador (instância + licença) -->
             <div x-show="loginMode === 'admin'" x-transition>
-                <p class="text-sm text-slate-500 font-medium mb-6">Entre com sua Instância e Licença.</p>
+                <p class="text-sm text-slate-500 font-medium mb-6">Entre com seu usuário e senha de acesso.</p>
                 <div class="space-y-4 mb-6">
-                    <input type="text" x-model="loginInput" placeholder="Ex: nome_da_empresa" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-bold dark:text-white outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-center">
-                    <input type="password" x-model="loginKey" @keydown.enter="doLogin()" placeholder="Sua Licença de Acesso" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-black dark:text-white outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-center tracking-widest">
+                    <input type="text" x-model="loginInput" placeholder="Usuário (ex: nome_da_empresa)" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-bold dark:text-white outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-center">
+                    <input type="password" x-model="loginKey" @keydown.enter="doLogin()" placeholder="Senha / Licença de acesso" class="w-full bg-slate-50 dark:bg-[#0d1117] border border-gray-200 dark:border-[#21262d] rounded-2xl py-4 px-5 text-base font-black dark:text-white outline-none focus:ring-2 focus:ring-[#6366f1] transition-all text-center tracking-widest">
                 </div>
                 <button @click="doLogin()" class="w-full bg-[#6366f1] hover:bg-[#4f46e5] text-white font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all text-base mb-4 flex justify-center items-center gap-2 btn-glow ripple">
                     <span x-show="!isCheckingLicense">Acessar CRM</span> <i x-show="!isCheckingLicense" data-lucide="arrow-right" class="w-5 h-5"></i>
@@ -361,7 +361,16 @@
                 </div>
             </div>
             
-            <div class="px-4 mt-4">
+            <div class="px-4 mt-4" x-show="isIndividual">
+                <div class="w-full flex items-center justify-center gap-2 bg-[#e0e7ff] text-[#3730a3] dark:bg-[#3730a3]/30 dark:text-[#a5b4fc] p-2.5 rounded-xl border border-[#e0e7ff] dark:border-[#3730a3] shadow-sm">
+                    <i data-lucide="user" class="w-4 h-4"></i>
+                    <div class="flex flex-col text-left">
+                        <span class="text-[9px] uppercase font-black text-[#6366f1]">Conta Individual</span>
+                        <span class="text-xs font-bold leading-tight truncate" x-text="loggedUserName || instanceName"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="px-4 mt-4" x-show="!isIndividual">
                 <button @click="showDeptModal = true" class="w-full flex items-center justify-center gap-2 bg-[#e0e7ff] text-[#3730a3] dark:bg-[#3730a3]/30 dark:text-[#a5b4fc] p-2.5 rounded-xl border border-[#e0e7ff] dark:border-[#3730a3] hover:bg-[#c8f5c5] transition-colors shadow-sm cursor-pointer group">
                     <i data-lucide="briefcase" class="w-4 h-4 group-hover:scale-110 transition-transform"></i> 
                     <div class="flex flex-col text-left">
@@ -986,7 +995,7 @@
                         <div class="p-3.5 flex justify-between items-center">
                             <h2 class="font-bold text-wa-text-light dark:text-wa-text-dark text-xl" x-text="userRole === 'admin' ? 'Conversas' : (chatListTab === 'chats' ? 'Chats' : chatListTab === 'fila' ? 'Fila' : 'Contatos')"></h2>
                             <div class="flex gap-4">
-                                <button @click="showDeptModal = true" class="text-[#6366f1] dark:text-[#6366f1] md:hidden"><i data-lucide="briefcase" class="w-5 h-5"></i></button>
+                                <button x-show="!isIndividual" @click="showDeptModal = true" class="text-[#6366f1] dark:text-[#6366f1] md:hidden"><i data-lucide="briefcase" class="w-5 h-5"></i></button>
                                 <button @click="toggleTheme()" class="text-wa-sub-light dark:text-wa-sub-dark hover:text-[#6366f1] transition-colors"><i :data-lucide="isDarkMode ? 'sun' : 'moon'" class="w-5 h-5"></i></button>
                                 <i data-lucide="more-vertical" class="w-5 h-5 text-wa-sub-light dark:text-wa-sub-dark"></i>
                             </div>
@@ -5403,7 +5412,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                     </button>
 
                     <!-- Transferir -->
-                    <button @click="abrirTransferModal(selectedLead.id); $nextTick(()=>lucide.createIcons())"
+                    <button x-show="!isIndividual" @click="abrirTransferModal(selectedLead.id); $nextTick(()=>lucide.createIcons())"
                             class="flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-400 hover:text-blue-600 transition-colors text-[10px] font-bold" title="Transferir Setor">
                         <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i>
                         <span class="hidden sm:inline">Transferir</span>
@@ -5440,7 +5449,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                              class="absolute right-0 top-10 bg-white dark:bg-[#161b22] shadow-2xl rounded-xl p-2.5 min-w-[220px] border border-gray-200 dark:border-[#21262d] z-50">
 
                             <!-- Transferir Setor -->
-                            <button @click="abrirTransferModal(selectedLead.id); toolsOpen=false;"
+                            <button x-show="!isIndividual" @click="abrirTransferModal(selectedLead.id); toolsOpen=false;"
                                     class="w-full text-left p-2 hover:bg-gray-50 dark:hover:bg-[#21262d] rounded-lg text-[11px] font-bold dark:text-white transition-colors flex items-center gap-2">
                                 <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-[#6366f1]"></i>
                                 <span>Transferir para outro setor</span>
@@ -5707,7 +5716,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                     <i data-lucide="message-circle" class="w-3.5 h-3.5"></i>
                     <span>Cliente</span>
                 </button>
-                <button @click="abrirChatInterno()"
+                <button x-show="!isIndividual" @click="abrirChatInterno()"
                         class="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-black border-b-2 transition-colors relative"
                         :class="chatTab==='interno' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'">
                     <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
@@ -5868,7 +5877,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                     </div>
 
                     <!-- Respondendo como (setor) -->
-                    <div class="flex items-center gap-2.5 px-4 py-2 border-b border-[#e6edf3] dark:border-[#21262d]">
+                    <div x-show="!isIndividual" class="flex items-center gap-2.5 px-4 py-2 border-b border-[#e6edf3] dark:border-[#21262d]">
                         <div class="w-6 h-6 rounded-lg bg-[#e0e7ff] dark:bg-[#3730a3]/30 flex items-center justify-center shrink-0">
                             <i data-lucide="briefcase" class="w-3 h-3 text-[#6366f1]"></i>
                         </div>

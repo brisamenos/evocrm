@@ -352,6 +352,8 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
         "ALTER TABLE ia_prompts ADD COLUMN delay_max INTEGER DEFAULT 3",
         "ALTER TABLE ia_prompts ADD COLUMN palavra_chave TEXT DEFAULT ''",
         "ALTER TABLE ia_prompts ADD COLUMN updated_at TEXT",
+        // licenses: tipo de conta (equipe = com setores/atendentes | individual = 1 usuário)
+        "ALTER TABLE licenses ADD COLUMN tipo_conta TEXT DEFAULT 'equipe'",
         // dash_notifs: coluna tipo_agenda
         "ALTER TABLE dash_notifs ADD COLUMN tipo_agenda INTEGER DEFAULT 0",
         // crm_tags: renomear colunas (SQLite não suporta RENAME COLUMN antigo — usar ADD + cópia)
@@ -382,6 +384,7 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
         "ALTER TABLE planos ADD COLUMN popular INTEGER DEFAULT 0",
         "ALTER TABLE planos ADD COLUMN preco_mensal REAL DEFAULT 0",
         "ALTER TABLE planos ADD COLUMN id_slug TEXT",
+        "ALTER TABLE planos ADD COLUMN tipo_conta TEXT DEFAULT 'equipe'",
 
         // fila_atendimento — migrações para bancos existentes
         "ALTER TABLE fila_atendimento ADD COLUMN tme_segundos INTEGER",

@@ -214,6 +214,18 @@ const wuz = createWuzapi({
     uploadsDir:     UPLOADS_DIR,
     dataDir:        pathMod.dirname(process.env.DB_PATH || '/app/data/evocrm.db'),
     log:            (i, t, m) => log(i, t, m),
+    // Apenas instâncias com licença cadastrada no CRM (cache de 15s)
+    allowedInstances: (() => {
+        let cache = { at: 0, set: new Set() };
+        return async (force = false) => {
+            if (!force && Date.now() - cache.at < 15000) return cache.set;
+            try {
+                const { data } = await db.from('licenses').select('instance_name');
+                cache = { at: Date.now(), set: new Set((data || []).map(l => String(l.instance_name || '').trim().toLowerCase()).filter(Boolean)) };
+            } catch (e) { /* mantém o cache anterior se o banco falhar */ }
+            return cache.set;
+        };
+    })(),
 });
 
 // ─── MERCADO PAGO: tokens armazenados no Supabase (admin_config) ─────────────
@@ -4592,7 +4604,7 @@ const server = http.createServer(async (req, res) => {
         req.on('end', async () => {
             try {
                 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'evocrm-admin-2024';
-                const { instance_name, license_key, plano, admin_secret } = JSON.parse(body);
+                let { instance_name, license_key, plano, admin_secret, tipo_conta } = JSON.parse(body);
                 if (admin_secret !== ADMIN_SECRET) {
                     res.writeHead(403, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'Acesso negado' }));
@@ -4601,6 +4613,12 @@ const server = http.createServer(async (req, res) => {
                 const inst  = (instance_name || '').trim().toLowerCase();
                 const key   = (license_key   || 'evocrm2024').trim();
                 const plan  = (plano         || 'platinum').trim();
+                if (tipo_conta !== 'individual' && tipo_conta !== 'equipe') {
+                    try {
+                        const { data: pl } = await db.from('planos').select('tipo_conta').eq('id_slug', plan).single();
+                        if (pl && pl.tipo_conta === 'individual') tipo_conta = 'individual';
+                    } catch (e) {}
+                }
                 if (!inst) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: 'instance_name obrigatório' }));
@@ -4612,7 +4630,8 @@ const server = http.createServer(async (req, res) => {
                     license_key:   key,
                     plano:         plan,
                     status:        'active',
-                    features: JSON.stringify({ bot: true, disparo: true, agenda: true, setores: true, ia_atendimento: true, audio_ia: true })
+                    ...(tipo_conta === 'individual' || tipo_conta === 'equipe' ? { tipo_conta } : {}),
+                    features: JSON.stringify({ bot: true, disparo: true, agenda: true, setores: tipo_conta !== 'individual', ia_atendimento: true, audio_ia: true })
                 }, { onConflict: 'instance_name' });
                 // Garante ia_config
                 const { data: iaEx } = await db.from('ia_config').select('id').eq('instance_name', inst).single();
@@ -4692,7 +4711,7 @@ const server = http.createServer(async (req, res) => {
                         dept.supervisor_key === senhaTrim) {
                         const { data: lic } = await db.from('licenses').select('*')
                             .eq('instance_name', dept.instance_name).single();
-                        if (!lic || lic.status !== 'active') continue;
+                        if (!lic || lic.status !== 'active' || lic.tipo_conta === 'individual') continue; // conta individual não tem equipe
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ role: 'supervisor', nome: dept.supervisor_nome, login_id: dept.supervisor_id, departamento: dept.name, instance_name: dept.instance_name, license: lic }));
                         return;
@@ -4706,7 +4725,7 @@ const server = http.createServer(async (req, res) => {
                         const { data: dept } = await db.from('departments').select('*').eq('id', at.dept_id).single();
                         if (!dept) continue;
                         const { data: lic } = await db.from('licenses').select('*').eq('instance_name', dept.instance_name).single();
-                        if (!lic || lic.status !== 'active') continue;
+                        if (!lic || lic.status !== 'active' || lic.tipo_conta === 'individual') continue; // conta individual não tem equipe
                         res.writeHead(200, { 'Content-Type': 'application/json' });
                         res.end(JSON.stringify({ role: 'atendente', nome: at.nome, login_id: at.id, departamento: dept.name, instance_name: dept.instance_name, license: lic }));
                         return;

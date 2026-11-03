@@ -94,6 +94,16 @@ function createWuzapi(opts = {}) {
     const LOCAL_BASE = String(opts.localBase || '').replace(/\/+$/, '');
     const DATA_DIR = opts.dataDir || '/app/data';
     const log = opts.log || ((i, t, m) => console.log(`[Wuzapi:${i}] ${m}`));
+    // Só instâncias com licença no CRM são visíveis/controláveis. Protege outros
+    // sistemas que usam a mesma Wuzapi (ex: EstimaFood) de aparecer ou ser
+    // desconectados/excluídos pelo painel do CRM.
+    const allowedNames = opts.allowedInstances || null;   // async () => Set<string> (minúsculas)
+    async function isAllowed(name) {
+        if (!allowedNames) return true;
+        const key = String(name || '').trim().toLowerCase();
+        if ((await allowedNames()).has(key)) return true;
+        return (await allowedNames(true)).has(key);   // licença recém-criada: recarrega
+    }
 
     const TOKENS_FILE = pathMod.join(DATA_DIR, 'wuzapi_tokens.json');
     const CHATS_FILE = pathMod.join(DATA_DIR, 'wuzapi_chats.json');
@@ -489,6 +499,10 @@ function createWuzapi(opts = {}) {
             else if (SINGLE_TOKEN) users = [{ name: SINGLE_INST || 'default', token: SINGLE_TOKEN }];
             const filter = query.get('instanceName');
             if (filter) users = users.filter(u => pick(u, 'name') === filter);
+            if (allowedNames) {
+                const set = await allowedNames();
+                users = users.filter(u => set.has(String(pick(u, 'name') || '').trim().toLowerCase()));
+            }
             const out = await Promise.all(users.map(async u => {
                 const name = pick(u, 'name');
                 const tk = pick(u, 'token');
@@ -508,6 +522,7 @@ function createWuzapi(opts = {}) {
         if (route === 'instance/create') {
             const name = body.instanceName || inst;
             if (!name) return fail(400, 'instanceName obrigatório');
+            if (!(await isAllowed(name))) return fail(403, `Não existe licença para "${name}". Cadastre o cliente no painel antes de conectar.`);
             if (SINGLE_TOKEN && !ADMIN) return { status: 201, body: { instance: { instanceName: name, status: 'created', integration: 'WUZAPI' } } };
             const exists = await findUser(name, true);
             if (exists) return fail(403, 'The instance already exists');
@@ -523,6 +538,7 @@ function createWuzapi(opts = {}) {
         }
 
         if (!inst) return fail(400, 'Nome da instância obrigatório');
+        if (!(await isAllowed(inst))) return fail(404, `The "${inst}" instance does not exist`);
 
         if (route === 'instance/connectionState') {
             const token = await tokenFor(inst);

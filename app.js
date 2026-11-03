@@ -106,6 +106,8 @@ function crmApp() {
                 clienteExpiresAt: localStorage.getItem('evo_expires_at') || null,
                 clienteIsTrial: localStorage.getItem('evo_is_trial') === 'true',
                 clienteRenewalUrl: localStorage.getItem('evo_renewal_url') || null,
+                // 'equipe' (setores/atendentes) | 'individual' (1 usuário, sem equipe)
+                clienteTipoConta: localStorage.getItem('evo_tipo_conta') || 'equipe',
                 trialToastDismissed: false,
 
                 // ── MODAL DE RENOVAÇÃO ──
@@ -141,6 +143,23 @@ function crmApp() {
                         return this.clienteFeatures[id] === true;
                     }
                     return (this._planoPadrao[this.clientePlano] || []).includes(id);
+                },
+
+                // ── PLANO INDIVIDUAL ──
+                get isIndividual() { return this.clienteTipoConta === 'individual'; },
+                // Conta individual: o titular entra direto como administrador da própria conta
+                _aplicarTipoConta(lic) {
+                    this.clienteTipoConta = (lic && lic.tipo_conta === 'individual') ? 'individual' : 'equipe';
+                    localStorage.setItem('evo_tipo_conta', this.clienteTipoConta);
+                    if (this.clienteTipoConta === 'individual') {
+                        this.currentUserDept = 'ADM Principal';
+                        this.isSupervisor = false;
+                        this.loggedUserName = this.loggedUserName && this.loggedUserName !== 'ADM Principal' ? this.loggedUserName : this.instanceName;
+                        this.admResponseAs = 'ADM Principal';
+                        localStorage.setItem('evo_user_dept', 'ADM Principal');
+                        localStorage.setItem('evo_is_supervisor', 'false');
+                        localStorage.setItem('evo_user_name', this.loggedUserName);
+                    }
                 },
 
                 // Toast de upgrade para feature bloqueada
@@ -930,8 +949,10 @@ function crmApp() {
 
                 get filteredNavItems() {
                     const role = this.userRole;
+                    const soEquipe = ['setores', 'atendimento'];
                     return [...this.navItems]
                         .filter(item => !item.roles || item.roles.includes(role))
+                        .filter(item => !(this.isIndividual && soEquipe.includes(item.id)))
                         .map(item => ({
                             ...item,
                             bloqueado: !!(item.requerFeature && !this._temFeature(item.id))
@@ -2053,8 +2074,9 @@ function crmApp() {
                     if (this.instanceName) { 
                         // Revalida o plano no banco ao restaurar sessão
                         try {
-                            const { data } = await this.client.from('licenses').select('plano, features, status, expires_at, is_trial, renewal_url').eq('instance_name', this.instanceName).single();
+                            const { data } = await this.client.from('licenses').select('plano, features, status, expires_at, is_trial, renewal_url, tipo_conta').eq('instance_name', this.instanceName).single();
                             if (data) {
+                                this._aplicarTipoConta(data);
                                 this.clientePlano = data.plano || 'basico';
                                 const f = data.features;
                                 this.clienteFeatures = (f && typeof f === 'object' && Object.keys(f).length > 0) ? f : null;
@@ -2102,6 +2124,7 @@ function crmApp() {
                         localStorage.setItem('evo_expires_at', this.clienteExpiresAt || '');
                         localStorage.setItem('evo_is_trial', String(this.clienteIsTrial));
                         localStorage.setItem('evo_renewal_url', this.clienteRenewalUrl || '');
+                        this._aplicarTipoConta(data);
                         this.appState = 'crm';
                         this.initCrm();
                     } catch(e) { alert("Erro ao validar licença."); }
@@ -2156,6 +2179,7 @@ function crmApp() {
                     localStorage.setItem('evo_is_trial', String(this.clienteIsTrial));
                     localStorage.setItem('evo_renewal_url', this.clienteRenewalUrl || '');
 
+                    this.clienteTipoConta = 'equipe'; localStorage.setItem('evo_tipo_conta', 'equipe');
                     this.currentUserDept = result.departamento;
                     this.loggedUserName = result.nome;
                     this.isSupervisor = result.role === 'supervisor';
@@ -2191,8 +2215,8 @@ function crmApp() {
                 },
 
                 doLogout() {
-                    localStorage.removeItem('evo_instance'); localStorage.removeItem('evo_user_dept'); localStorage.removeItem('evo_plano'); localStorage.removeItem('evo_features'); localStorage.removeItem('evo_expires_at'); localStorage.removeItem('evo_is_trial'); localStorage.removeItem('evo_renewal_url'); localStorage.removeItem('evo_is_supervisor'); localStorage.removeItem('evo_user_name');
-                    this.instanceName = ''; this.loginInput = ''; this.loginKey = ''; this.currentUserDept = ''; this.isSupervisor = false; this.loggedUserName = ''; this.deptAtendentes = []; this.clientePlano = 'basico'; this.clienteFeatures = null; this.clienteExpiresAt = null; this.clienteIsTrial = false; this.clienteRenewalUrl = null;
+                    localStorage.removeItem('evo_instance'); localStorage.removeItem('evo_user_dept'); localStorage.removeItem('evo_plano'); localStorage.removeItem('evo_features'); localStorage.removeItem('evo_expires_at'); localStorage.removeItem('evo_is_trial'); localStorage.removeItem('evo_renewal_url'); localStorage.removeItem('evo_is_supervisor'); localStorage.removeItem('evo_user_name'); localStorage.removeItem('evo_tipo_conta');
+                    this.instanceName = ''; this.loginInput = ''; this.loginKey = ''; this.currentUserDept = ''; this.isSupervisor = false; this.loggedUserName = ''; this.deptAtendentes = []; this.clientePlano = 'basico'; this.clienteFeatures = null; this.clienteExpiresAt = null; this.clienteIsTrial = false; this.clienteRenewalUrl = null; this.clienteTipoConta = 'equipe';
                     this.appState = 'login'; this.leads = []; this.messages = []; this.botRules = [];
                 },
                 
@@ -2219,7 +2243,8 @@ function crmApp() {
                     await this.loadUserPrefs();
                     if (this.themeColor !== '#6366f1') this.applyThemeColor();
                     await this.loadDepartments(); 
-                    if (!this.currentUserDept) { this.showDeptModal = true; }
+                    if (this.isIndividual) { this._aplicarTipoConta({ tipo_conta: 'individual' }); }
+                    else if (!this.currentUserDept) { this.showDeptModal = true; }
                     if (this.isSupervisor) this.loadDeptAtendentes();
                     if (this.currentUserDept === 'ADM Principal') this.loadStaffLogins();
                     await this.loadColumns(); 

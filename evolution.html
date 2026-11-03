@@ -227,6 +227,7 @@
                                                     }">
                                                     <span x-text="client.plano === 'premium' ? '🥈 Premium' : (client.plano === 'platinum' ? '🥇 Platinum' : '🥉 Básico')"></span>
                                                 </span>
+                                                <span class="text-[9px] font-black uppercase tracking-wider" :class="client.tipo_conta === 'individual' ? 'text-emerald-400' : 'text-slate-400'" x-text="client.tipo_conta === 'individual' ? '👤 Individual' : '👥 Equipe'"></span>
                                                 <button @click="openChangePlanModal(client)" class="text-[9px] text-slate-500 hover:text-brand-400 underline transition-colors">alterar plano</button>
                                             </div>
                                         </td>
@@ -917,6 +918,17 @@
                         </div>
                     </div>
                     <div>
+                        <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block">Tipo de Conta deste Plano</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" @click="planoForm.tipo_conta = 'individual'"
+                                :class="planoForm.tipo_conta === 'individual' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400'"
+                                class="p-2.5 rounded-xl border-2 text-[11px] font-black transition-all">👤 Individual</button>
+                            <button type="button" @click="planoForm.tipo_conta = 'equipe'"
+                                :class="planoForm.tipo_conta !== 'individual' ? 'border-brand-400 bg-brand-900/30 text-brand-300' : 'border-slate-700 text-slate-400'"
+                                class="p-2.5 rounded-xl border-2 text-[11px] font-black transition-all">👥 Equipe</button>
+                        </div>
+                    </div>
+                    <div>
                         <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block">Destaque como Popular</label>
                         <button type="button" @click="planoForm.popular = !planoForm.popular"
                             class="flex items-center gap-3 mt-2">
@@ -987,6 +999,27 @@
                 <div>
                     <label class="text-[10px] font-black uppercase text-slate-400 mb-2 block ml-1 flex justify-between">Chave de Licença <span class="text-brand-400 cursor-pointer lowercase hover:underline" @click="form.licenseKey = 'LIC-' + Math.random().toString(36).substr(2, 8).toUpperCase()">Gerar Automática</span></label>
                     <input type="text" x-model="form.licenseKey" placeholder="Ex: SENHA-123" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm font-black tracking-widest text-brand-400 outline-none focus:border-brand-500 transition-colors text-center">
+                </div>
+
+                <!-- TIPO DE CONTA -->
+                <div>
+                    <label class="text-[10px] font-black uppercase text-slate-400 mb-3 block ml-1">Tipo de Conta</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" @click="form.tipoConta = 'individual'"
+                            :class="form.tipoConta === 'individual' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
+                            class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
+                            <span class="text-lg mb-1">👤</span>
+                            <span class="text-[11px] font-black">Individual</span>
+                            <span class="text-[9px] text-slate-500 mt-1 leading-tight">1 usuário com login e senha<br>Sem setores e atendentes</span>
+                        </button>
+                        <button type="button" @click="form.tipoConta = 'equipe'"
+                            :class="form.tipoConta === 'equipe' ? 'border-brand-400 bg-brand-900/30 text-brand-300' : 'border-slate-700 text-slate-400 hover:border-brand-600'"
+                            class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
+                            <span class="text-lg mb-1">👥</span>
+                            <span class="text-[11px] font-black">Equipe</span>
+                            <span class="text-[9px] text-slate-500 mt-1 leading-tight">Administrador cria<br>setores e atendentes</span>
+                        </button>
+                    </div>
                 </div>
 
                 <!-- SELEÇÃO DE PLANO -->
@@ -1193,6 +1226,27 @@
 
             <!-- Scroll interno -->
             <div class="overflow-y-auto px-6 pb-2 flex-1" style="-webkit-overflow-scrolling:touch;">
+
+                <!-- TIPO DE CONTA -->
+                <p class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-3">Tipo de conta</p>
+                <div class="mb-5">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" @click="changePlanData.tipoConta = 'individual'"
+                            :class="changePlanData.tipoConta === 'individual' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
+                            class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
+                            <span class="text-lg mb-1">👤</span>
+                            <span class="text-[11px] font-black">Individual</span>
+                            <span class="text-[9px] text-slate-500 mt-1 leading-tight">1 usuário com login e senha<br>Sem setores e atendentes</span>
+                        </button>
+                        <button type="button" @click="changePlanData.tipoConta = 'equipe'"
+                            :class="changePlanData.tipoConta === 'equipe' ? 'border-brand-400 bg-brand-900/30 text-brand-300' : 'border-slate-700 text-slate-400 hover:border-brand-600'"
+                            class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
+                            <span class="text-lg mb-1">👥</span>
+                            <span class="text-[11px] font-black">Equipe</span>
+                            <span class="text-[9px] text-slate-500 mt-1 leading-tight">Administrador cria<br>setores e atendentes</span>
+                        </button>
+                    </div>
+                </div>
 
                 <!-- SELEÇÃO DE PLANO BASE -->
                 <p class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-3">1. Escolha o plano base</p>
@@ -1470,7 +1524,7 @@
                 qrTimer: null,
                 instanceStats: {},
 
-                form: { instanceName: '', licenseKey: '', webhookUrl: '', days: '', plano: 'basico', isTrial: false, renewalUrl: '' },
+                form: { instanceName: '', licenseKey: '', webhookUrl: '', days: '', plano: 'basico', tipoConta: 'equipe', isTrial: false, renewalUrl: '' },
                 isNewClientModalOpen: false,
                 showSummaryModal: false,
                 summaryText: '',
@@ -1482,7 +1536,7 @@
                 editKeyData: { id: '', instanceName: '', newKey: '' },
 
                 isChangePlanModalOpen: false,
-                changePlanData: { id: '', instanceName: '', plano: 'basico', ferramentas: [] },
+                changePlanData: { id: '', instanceName: '', plano: 'basico', ferramentas: [], tipoConta: 'equipe' },
 
                 // Define as ferramentas disponíveis e quais cada plano libera
                 _toolsDef: [
@@ -1506,7 +1560,7 @@
                 planos: [],
                 isLoadingPlanos: false,
                 isPlanoModalOpen: false,
-                planoForm: { id: null, id_slug: '', nome: '', descricao: '', preco_mensal: '', preco_anual: '', cor: '#818cf8', popular: false, features: [] },
+                planoForm: { id: null, id_slug: '', nome: '', descricao: '', preco_mensal: '', preco_anual: '', cor: '#818cf8', popular: false, tipo_conta: 'equipe', features: [] },
 
                 // Mercado Pago
                 MP_ACCESS_TOKEN: '',   // carregado do Supabase no init
@@ -1556,10 +1610,11 @@
                             preco_anual: plano.preco_anual || '',
                             cor: plano.cor || '#818cf8',
                             popular: plano.popular || false,
+                            tipo_conta: plano.tipo_conta === 'individual' ? 'individual' : 'equipe',
                             features: JSON.parse(JSON.stringify(plano.features || [])),
                         };
                     } else {
-                        this.planoForm = { id: null, id_slug: '', nome: '', descricao: '', preco_mensal: '', preco_anual: '', cor: '#818cf8', popular: false, features: [] };
+                        this.planoForm = { id: null, id_slug: '', nome: '', descricao: '', preco_mensal: '', preco_anual: '', cor: '#818cf8', popular: false, tipo_conta: 'equipe', features: [] };
                     }
                     this.isPlanoModalOpen = true;
                     setTimeout(() => lucide.createIcons(), 50);
@@ -1593,6 +1648,7 @@
                             preco_anual: parseFloat(f.preco_anual),
                             cor: f.cor,
                             popular: f.popular ? 1 : 0,
+                            tipo_conta: f.tipo_conta === 'individual' ? 'individual' : 'equipe',
                             features: JSON.stringify(f.features.filter(ft => ft.text.trim())),
                             ordem: this.planos.length + 1,
                         };
@@ -1793,6 +1849,7 @@
                 showMpKey: false,
                 mpKeySalva: false,
                 mpKeyForm: { token: '', email: '', n8n_webhook: '' },
+                isMasterPassModalOpen: false,
                 masterPassForm: { current: '', newPass: '', confirm: '' },
 
                 isExpired(dateString) {
@@ -1817,6 +1874,7 @@
                             license_key: lic.license_key,
                             status: lic.status,
                             plano: lic.plano || 'basico',
+                            tipo_conta: lic.tipo_conta === 'individual' ? 'individual' : 'equipe',
                             features: lic.features || null,
                             created_at: lic.created_at,
                             expires_at: lic.expires_at,
@@ -2008,7 +2066,7 @@
                 },
 
                 openNewClientModal() {
-                    this.form = { instanceName: '', licenseKey: 'LIC-' + Math.random().toString(36).substr(2, 8).toUpperCase(), webhookUrl: '', days: '', plano: 'basico', isTrial: false, renewalUrl: '' };
+                    this.form = { instanceName: '', licenseKey: 'LIC-' + Math.random().toString(36).substr(2, 8).toUpperCase(), webhookUrl: '', days: '', plano: 'basico', tipoConta: 'equipe', isTrial: false, renewalUrl: '' };
                     this.isNewClientModalOpen = true;
                     setTimeout(() => lucide.createIcons(), 50);
                 },
@@ -2036,6 +2094,8 @@
                             acc[t.id] = planDefaults[t.id] === true;
                             return acc;
                         }, {});
+                        const tipoConta = this.form.tipoConta === 'individual' ? 'individual' : 'equipe';
+                        if (tipoConta === 'individual' && 'setores' in initialFeatures) initialFeatures.setores = false;
 
                         // 1. Cria/atualiza licença via /api/admin/criar-licenca
                         const licRes = await fetch('/api/admin/criar-licenca', {
@@ -2045,6 +2105,7 @@
                                 instance_name: instName,
                                 license_key: this.form.licenseKey.trim(),
                                 plano: this.form.plano || 'basico',
+                                tipo_conta: tipoConta,
                                 admin_secret: 'evocrm-admin-2024'
                             })
                         });
@@ -2054,7 +2115,7 @@
                         // Atualiza campos extras (expires_at, features, etc)
                         await dbCall({
                             table: 'licenses', op: 'update',
-                            data: { features: JSON.stringify(initialFeatures), expires_at, is_trial: this.form.isTrial || false, renewal_url: this.form.renewalUrl.trim() || null },
+                            data: { features: JSON.stringify(initialFeatures), expires_at, is_trial: this.form.isTrial || false, renewal_url: this.form.renewalUrl.trim() || null, tipo_conta: tipoConta },
                             filters: [{ op: 'eq', col: 'instance_name', val: instName }]
                         });
 
@@ -2089,7 +2150,9 @@
                         // 4. Texto de resumo para o cliente
                         let baseUrl = window.location.origin + '/';
                         const planLabels = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum' };
-                        this.summaryText = `🚀 *Seja bem-vindo ao EvoCRM!*\nSua conta foi criada com sucesso. Aqui estão os seus dados de acesso:\n\n🔗 *Painel do CRM:* ${baseUrl}\n🏢 *Nome da Empresa:* ${instName}\n🔑 *Chave de Licença:* ${this.form.licenseKey.trim()}\n📦 *Plano:* ${planLabels[this.form.plano] || 'Básico'}\n🛡️ *Senha Master (ADM Principal):* admin123\n\n📱 *Para conectar o seu WhatsApp, acesse o link abaixo pelo computador e leia o QR Code:*\n${baseUrl}conectar.html?i=${instName}\n\nGuarde esta mensagem em segurança!`;
+                        this.summaryText = tipoConta === 'individual'
+                            ? `🚀 *Seja bem-vindo ao EvoCRM!*\nSua conta individual foi criada com sucesso. Aqui estão os seus dados de acesso:\n\n🔗 *Painel:* ${baseUrl}\n👤 *Usuário:* ${instName}\n🔑 *Senha:* ${this.form.licenseKey.trim()}\n📦 *Plano:* ${planLabels[this.form.plano] || 'Básico'} (Individual)\n\n📱 *Para conectar o seu WhatsApp, acesse o link abaixo pelo computador e leia o QR Code:*\n${baseUrl}conectar.html?i=${instName}\n\nGuarde esta mensagem em segurança!`
+                            : `🚀 *Seja bem-vindo ao EvoCRM!*\nSua conta foi criada com sucesso. Aqui estão os seus dados de acesso:\n\n🔗 *Painel do CRM:* ${baseUrl}\n🏢 *Nome da Empresa:* ${instName}\n🔑 *Chave de Licença:* ${this.form.licenseKey.trim()}\n📦 *Plano:* ${planLabels[this.form.plano] || 'Básico'}\n🛡️ *Senha Master (ADM Principal):* admin123\n\n📱 *Para conectar o seu WhatsApp, acesse o link abaixo pelo computador e leia o QR Code:*\n${baseUrl}conectar.html?i=${instName}\n\nGuarde esta mensagem em segurança!`;
 
                         this.addNotification('Show!', `Cliente ${instName} criado com sucesso.`, 'success');
                         this.isNewClientModalOpen = false;
@@ -2357,7 +2420,7 @@
                     } else {
                         ferramentas = this._toolsDef.map(t => ({ ...t, ativo: t.planos.includes(plano) }));
                     }
-                    this.changePlanData = { id: client.id, instanceName: client.instance_name, plano, ferramentas };
+                    this.changePlanData = { id: client.id, instanceName: client.instance_name, plano, ferramentas, tipoConta: client.tipo_conta === 'individual' ? 'individual' : 'equipe' };
                     this.isChangePlanModalOpen = true;
                     setTimeout(() => lucide.createIcons(), 50);
                 },
@@ -2386,7 +2449,7 @@
 
                     const { error } = await dbCall({
                         table: 'licenses', op: 'update',
-                        data: { plano: this.changePlanData.plano, features: JSON.stringify(features) },
+                        data: { plano: this.changePlanData.plano, features: JSON.stringify(features), tipo_conta: this.changePlanData.tipoConta === 'individual' ? 'individual' : 'equipe' },
                         filters: [{ op: 'eq', col: 'id', val: this.changePlanData.id }]
                     });
 
