@@ -295,36 +295,53 @@ const PLANO_INDIVIDUAL = {
         { text: 'Agendamento pela IA', on: true },
         { text: 'Fluxos e automações', on: true },
         { text: 'Disparos / campanhas', on: true },
-        { text: 'Áudio IA (texto para voz)', on: true },
         { text: '1 usuário (login e senha)', on: true },
     ],
 };
 const MP_API = process.env.MP_API_URL || 'https://api.mercadopago.com';
-const FEATURES_INDIVIDUAL = { bot: true, disparo: true, agenda: true, setores: false, ia_atendimento: true, audio_ia: true };
+const FEATURES_INDIVIDUAL = { bot: true, disparo: true, agenda: true, setores: false, ia_atendimento: true, audio_ia: false }; // áudio: botão no painel
 const _ativandoPedido = new Set();
 
 // Ativa (nova assinatura) ou estende (renovação) a licença de um pagamento aprovado.
 // Idempotente: pode ser chamada várias vezes sem duplicar dias.
+// Soma meses mantendo o dia (31/01 + 1 mês = 28 ou 29/02; 31/03 → 30/04)
+function addMeses(data, meses, diaFixo) {
+    const d = new Date(data);
+    const dia = diaFixo || d.getDate();   // diaFixo: dia de cobrança do cliente (ex: 31 volta a ser 31 depois de fevereiro)
+    d.setDate(1);
+    d.setMonth(d.getMonth() + meses);
+    const ultimoDia = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(dia, ultimoDia));
+    return d;
+}
+const mesesDoCiclo = ciclo => (ciclo === 'anual' ? 12 : 1);
+
+// Ativa (nova conta) ou renova (soma 1 mês / 1 ano) a licença de um pagamento aprovado.
+// Serve para checkout, renovação pelo CRM e cobrança automática. Idempotente.
 async function ativarAssinaturaIndividual(pag) {
-    if (!pag || pag.instancia_criada === 1 || pag.instancia_criada === true) return;
+    if (!pag) return;
     if (_ativandoPedido.has(pag.id)) return;
     _ativandoPedido.add(pag.id);
     try {
+        const { data: atual } = await db.from('pagamentos').select('instancia_criada').eq('id', pag.id).single();
+        if (atual && (atual.instancia_criada === 1 || atual.instancia_criada === true)) return; // já processado
         const inst = String(pag.instancia || pag.instance_name || '').trim().toLowerCase();
-        const dias = pag.billing === 'anual' ? PLANO_INDIVIDUAL.dias.anual : PLANO_INDIVIDUAL.dias.mensal;
+        const meses = mesesDoCiclo(pag.billing);
         const { data: lic } = await db.from('licenses').select('*').eq('instance_name', inst).single();
         let expires;
         if (pag.is_renewal && lic) {
-            // Renovação: soma a partir do vencimento atual (se ainda não venceu)
+            // Renovação: soma a partir do vencimento atual (se ainda não venceu) → mantém o dia de cobrança
             const base = lic.expires_at && new Date(lic.expires_at) > new Date() ? new Date(lic.expires_at) : new Date();
-            expires = new Date(base.getTime() + dias * 86400000);
-            await db.from('licenses').update({ status: 'active', expires_at: expires.toISOString(), is_trial: false }).eq('instance_name', inst);
+            expires = addMeses(base, meses, lic.dia_vencimento || null);
+            await db.from('licenses').update({ status: 'active', expires_at: expires.toISOString(), is_trial: false, ciclo: pag.billing === 'anual' ? 'anual' : 'mensal', dia_vencimento: lic.dia_vencimento || new Date(base).getDate() }).eq('instance_name', inst);
         } else {
-            expires = new Date(Date.now() + dias * 86400000);
+            expires = addMeses(new Date(), meses);
             await db.from('licenses').upsert({
                 instance_name: inst, license_key: pag.license_key, plano: 'individual', status: 'active',
                 tipo_conta: 'individual', features: JSON.stringify(FEATURES_INDIVIDUAL),
                 expires_at: expires.toISOString(), is_trial: false,
+                cliente_nome: pag.nome || null, cliente_telefone: pag.whatsapp || null,
+                ciclo: pag.billing === 'anual' ? 'anual' : 'mensal', cobranca_auto: 1, dia_vencimento: new Date().getDate(),
             }, { onConflict: 'instance_name' });
             try {
                 const { data: iaEx } = await db.from('ia_config').select('id').eq('instance_name', inst).single();
@@ -335,6 +352,193 @@ async function ativarAssinaturaIndividual(pag) {
         await db.from('pagamentos').update({ status: 'approved', expires_at: expires.toISOString(), instancia_criada: 1 }).eq('id', pag.id);
         log('sistema', 'ok', `[Assinatura] ✅ ${pag.is_renewal ? 'Renovada' : 'Ativada'}: ${inst} | ${pag.billing} | até ${expires.toLocaleDateString('pt-BR')}`);
     } finally { _ativandoPedido.delete(pag.id); }
+}
+
+// ─── COBRANÇA AUTOMÁTICA DE MENSALIDADE ──────────────────────────────────────
+// Mesmo fluxo do Anotai: 3 dias antes do vencimento gera um PIX no Mercado Pago
+// e envia ao cliente pelo WhatsApp. Pagou → a licença é renovada (+1 mês / +1 ano,
+// mantendo o mesmo dia) e o cliente recebe a confirmação.
+const COBRANCA_DIAS_ANTES = 3;
+const COBRANCA_HORA_INICIO = 9, COBRANCA_HORA_FIM = 20;   // só envia em horário comercial (Brasília)
+
+// Dias de calendário até a data (hoje = 0, amanhã = 1), no fuso de Brasília
+function diasAte(data) {
+    const a = new Date(); a.setHours(0, 0, 0, 0);
+    const b = new Date(data); b.setHours(0, 0, 0, 0);
+    return Math.round((b.getTime() - a.getTime()) / 86400000);
+}
+
+function valorDaCobranca(lic) {
+    const v = Number(lic.valor_cobranca || 0);
+    if (v > 0) return v;
+    if (lic.tipo_conta === 'individual' || lic.plano === 'individual') {
+        return lic.ciclo === 'anual' ? PLANO_INDIVIDUAL.preco_anual : PLANO_INDIVIDUAL.preco_mensal;
+    }
+    return 0;
+}
+
+function telefoneCobranca(tel) {
+    let t = String(tel || '').replace(/\D/g, '');
+    if (t.length === 10 || t.length === 11) t = '55' + t;   // sem DDI → Brasil
+    return t.length >= 12 ? t : '';
+}
+
+async function instanciaCobranca() {
+    try {
+        const { data } = await db.from('admin_config').select('value').eq('key', 'instancia_cobranca').single();
+        if (data?.value) return data.value;
+    } catch (e) {}
+    return process.env.INSTANCE_NAME || '';
+}
+
+// Envia pelo usuário da Wuzapi escolhido em Painel → Cobranças. Pode ser um usuário
+// que o CRM não gerencia (ex: o mesmo WhatsApp do EstimaFood) — só envia texto.
+async function enviarWhatsCobranca(numero, texto) {
+    const inst = await instanciaCobranca();
+    if (!inst) throw new Error('Nenhum WhatsApp de cobrança configurado (Painel → Cobranças)');
+    await wuz.enviarTextoDireto(inst, numero, texto);
+}
+
+function urlNotificacaoMP() {
+    const base = String(process.env.WEBHOOK_BASE_URL || SERVER_PUBLIC_URL || '').replace(/\/+$/, '');
+    return base.startsWith('https://') ? `${base}/api/mp/webhook` : undefined;   // o MP só aceita https
+}
+
+const _cobrandoAgora = new Set();
+
+// Gera (ou reaproveita) a fatura do vencimento atual e envia ao cliente.
+async function enviarCobranca(lic, { manual = false } = {}) {
+    const inst = lic.instance_name;
+    if (_cobrandoAgora.has(inst)) throw new Error('Cobrança já sendo enviada');
+    _cobrandoAgora.add(inst);
+    try {
+        const numero = telefoneCobranca(lic.cliente_telefone);
+        if (!numero) throw new Error('Cliente sem WhatsApp cadastrado');
+        if (!lic.expires_at) throw new Error('Cliente sem data de vencimento (vitalício)');
+        const valor = valorDaCobranca(lic);
+        if (!(valor > 0)) throw new Error('Cliente sem valor de cobrança');
+        const vencimento = new Date(lic.expires_at).toISOString();
+        const ciclo = lic.ciclo === 'anual' ? 'anual' : 'mensal';
+
+        // Fatura pendente do mesmo vencimento → reaproveita o PIX
+        const { data: pend } = await db.from('pagamentos').select('*').eq('instancia', inst).eq('origem', 'cobranca').eq('status', 'pending');
+        let fat = (pend || []).find(p => p.vencimento === vencimento && p.qr_code);
+        if (!fat) {
+            const token = await getMpToken();
+            if (!token) throw new Error('Mercado Pago não configurado (MP_ACCESS_TOKEN)');
+            const nome = lic.cliente_nome || inst;
+            const { data: ins } = await db.from('pagamentos').insert({
+                nome, email: `${inst}@cobranca.evocrm`, whatsapp: numero, instancia: inst, instance_name: inst,
+                plano: lic.plano || 'individual', billing: ciclo, valor, status: 'pending',
+                is_renewal: 1, instancia_criada: 0, origem: 'cobranca', vencimento,
+            });
+            fat = Array.isArray(ins) ? ins[0] : ins;
+            if (!fat) throw new Error('Falha ao registrar a fatura');
+            // PIX vale até 3 dias depois do vencimento (cliente que paga atrasado ainda consegue)
+            const expPix = new Date(Math.max(new Date(vencimento).getTime(), Date.now()) + 3 * 86400000);
+            const mpRes = await fetch(`${MP_API}/v1/payments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Idempotency-Key': fat.id },
+                body: JSON.stringify({
+                    transaction_amount: valor,
+                    description: `EvoCRM - Mensalidade ${ciclo === 'anual' ? 'anual' : 'mensal'} (${inst})`,
+                    payment_method_id: 'pix',
+                    payer: { email: `cobranca+${inst}@evocrm.app`, first_name: nome.split(' ')[0] || 'Cliente', last_name: nome.split(' ').slice(1).join(' ') || 'EvoCRM' },
+                    external_reference: fat.id,
+                    date_of_expiration: expPix.toISOString(),
+                    ...(urlNotificacaoMP() ? { notification_url: urlNotificacaoMP() } : {}),
+                }),
+            });
+            const mp = await mpRes.json().catch(() => ({}));
+            if (!mpRes.ok) {
+                await db.from('pagamentos').update({ status: 'cancelled' }).eq('id', fat.id);
+                throw new Error(mp.message || 'Erro ao gerar PIX no Mercado Pago');
+            }
+            const tx = mp.point_of_interaction?.transaction_data || {};
+            await db.from('pagamentos').update({ mp_payment_id: String(mp.id), qr_code: tx.qr_code || '', qr_base64: tx.qr_code_base64 || '' }).eq('id', fat.id);
+            fat = { ...fat, mp_payment_id: String(mp.id), qr_code: tx.qr_code || '' };
+        }
+
+        const venc = new Date(vencimento);
+        const diasFaltando = diasAte(venc);
+        const quando = diasFaltando > 1 ? `vence em *${diasFaltando} dias*` : diasFaltando === 1 ? 'vence *amanhã*' : diasFaltando === 0 ? 'vence *hoje*' : 'está *vencida*';
+        const planoTxt = (lic.tipo_conta === 'individual' || lic.plano === 'individual') ? 'Individual' : (lic.plano ? lic.plano.charAt(0).toUpperCase() + lic.plano.slice(1) : 'EvoCRM');
+        const msg = [
+            `🧾 *Lembrete: sua mensalidade ${diasFaltando >= 0 ? 'vence em breve' : 'está em aberto'}*`,
+            ``,
+            `Olá, ${lic.cliente_nome || inst}! Seu plano *${planoTxt}* do EvoCRM ${quando}.`,
+            ``,
+            `💰 *Valor:* R$ ${valor.toFixed(2).replace('.', ',')}`,
+            `⏰ *Vencimento:* ${venc.toLocaleDateString('pt-BR')}`,
+            ``,
+            `💸 *Pague via PIX (copia e cola)* — o código vem na próxima mensagem 👇`,
+            ``,
+            `_O pagamento renova seu acesso automaticamente._ ✅`,
+            `⚠️ Se não for pago até o vencimento, o acesso ao sistema fica suspenso até a confirmação.`,
+        ].join('\n');
+        await enviarWhatsCobranca(numero, msg);
+        if (fat.qr_code) { await delay(1500); await enviarWhatsCobranca(numero, fat.qr_code); }
+        const agora = new Date().toISOString();
+        await db.from('pagamentos').update({ cobranca_enviada_em: agora }).eq('id', fat.id);
+        log('sistema', 'ok', `[Cobrança] ${manual ? 'Manual' : 'Automática'} enviada: ${inst} → ${numero} | R$ ${valor.toFixed(2)} | vence ${venc.toLocaleDateString('pt-BR')}`);
+        return { ok: true, pedido_id: fat.id, enviada_em: agora };
+    } finally { _cobrandoAgora.delete(inst); }
+}
+
+// Confirma pagamento de uma fatura/assinatura (usado pelo job e pelo webhook do MP)
+async function processarPagamentoAprovado(pag) {
+    const jaProcessado = pag.instancia_criada === 1 || pag.instancia_criada === true;
+    await ativarAssinaturaIndividual({ ...pag, status: 'approved' });
+    if (!jaProcessado && pag.origem === 'cobranca') {
+        try {
+            const { data: lic } = await db.from('licenses').select('*').eq('instance_name', pag.instancia).single();
+            const numero = telefoneCobranca(lic?.cliente_telefone || pag.whatsapp);
+            if (numero && lic?.expires_at) {
+                await enviarWhatsCobranca(numero, `✅ *Pagamento confirmado!*\n\nObrigado, ${lic.cliente_nome || pag.instancia}! Seu acesso ao EvoCRM foi renovado até *${new Date(lic.expires_at).toLocaleDateString('pt-BR')}*.`);
+            }
+        } catch (e) { log('sistema', 'warn', `[Cobrança] Confirmação não enviada: ${e.message}`); }
+    }
+}
+
+let _jobCobrancaRodando = false;
+async function jobCobranca() {
+    if (_jobCobrancaRodando) return;
+    _jobCobrancaRodando = true;
+    try {
+        // 1) Confere faturas pendentes no Mercado Pago
+        const { data: pend } = await db.from('pagamentos').select('*').eq('origem', 'cobranca').eq('status', 'pending');
+        if (pend && pend.length) {
+            const token = await getMpToken();
+            for (const p of pend) {
+                if (!p.mp_payment_id || !token) continue;
+                try {
+                    const r = await fetch(`${MP_API}/v1/payments/${p.mp_payment_id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                    const d = await r.json().catch(() => ({}));
+                    if (d.status === 'approved') await processarPagamentoAprovado(p);
+                    else if (['cancelled', 'rejected', 'expired'].includes(d.status)) await db.from('pagamentos').update({ status: d.status }).eq('id', p.id);
+                } catch (e) {}
+            }
+        }
+
+        // 2) Envia cobranças de quem vence em até 3 dias (só em horário comercial)
+        const hora = new Date().getHours();
+        if (hora < COBRANCA_HORA_INICIO || hora >= COBRANCA_HORA_FIM) return;
+        const { data: lics } = await db.from('licenses').select('*').eq('status', 'active');
+        const agora = Date.now();
+        for (const lic of (lics || [])) {
+            if (lic.cobranca_auto === 0 || lic.cobranca_auto === false) continue;
+            if (!lic.expires_at || !telefoneCobranca(lic.cliente_telefone) || !(valorDaCobranca(lic) > 0)) continue;
+            const falta = new Date(lic.expires_at).getTime() - agora;
+            if (falta <= 0 || diasAte(lic.expires_at) > COBRANCA_DIAS_ANTES) continue;   // de 3 dias antes até o vencimento
+            const venc = new Date(lic.expires_at).toISOString();
+            // Já cobrado para este vencimento? (uma cobrança automática por vencimento)
+            const { data: ja } = await db.from('pagamentos').select('id, vencimento, cobranca_enviada_em, status').eq('instancia', lic.instance_name).eq('origem', 'cobranca');
+            if ((ja || []).some(p => p.vencimento === venc && p.cobranca_enviada_em && !['cancelled', 'rejected'].includes(p.status))) continue;
+            try { await enviarCobranca(lic); await delay(4000); }
+            catch (e) { log('sistema', 'warn', `[Cobrança] ${lic.instance_name}: ${e.message}`); }
+        }
+    } catch (e) { log('sistema', 'erro', `[Cobrança] Job: ${e.message}`); }
+    finally { _jobCobrancaRodando = false; }
 }
 
 // ─── ESTADO GLOBAL (por instância) ───────────────────────────────────────────
@@ -362,7 +566,7 @@ function getState(inst) {
 const PLANO_FEATURES = {
     basico:   { bot:true, disparo:false, agenda:false, setores:false, ia_atendimento:false, audio_ia:false },
     premium:  { bot:true, disparo:true,  agenda:true,  setores:true,  ia_atendimento:false, audio_ia:false },
-    platinum: { bot:true, disparo:true,  agenda:true,  setores:true,  ia_atendimento:true,  audio_ia:true  },
+    platinum: { bot:true, disparo:true,  agenda:true,  setores:true,  ia_atendimento:true,  audio_ia:false },
 };
 // Default liberal — instâncias sem licença explícita não são bloqueadas
 const FEATURES_DEFAULT = { bot:true, disparo:true, agenda:true, setores:true, ia_atendimento:true, audio_ia:false };
@@ -4784,7 +4988,7 @@ const server = http.createServer(async (req, res) => {
                     plano:         plan,
                     status:        'active',
                     ...(tipo_conta === 'individual' || tipo_conta === 'equipe' ? { tipo_conta } : {}),
-                    features: JSON.stringify({ bot: true, disparo: true, agenda: true, setores: tipo_conta !== 'individual', ia_atendimento: true, audio_ia: true })
+                    features: JSON.stringify({ bot: true, disparo: true, agenda: true, setores: tipo_conta !== 'individual', ia_atendimento: true, audio_ia: false })
                 }, { onConflict: 'instance_name' });
                 // Garante ia_config
                 const { data: iaEx } = await db.from('ia_config').select('id').eq('instance_name', inst).single();
@@ -4994,6 +5198,83 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── MERCADO PAGO: aviso de pagamento (webhook) ───────────────────────────
+    // Configurado automaticamente nos PIX gerados (notification_url). Confirma na API do MP.
+    if (req.url.startsWith('/api/mp/webhook')) {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"ok":true}');
+            try {
+                const u = new URL(req.url, 'http://x');
+                let j = {}; try { j = JSON.parse(body || '{}'); } catch (e) {}
+                const payId = j?.data?.id || u.searchParams.get('data.id') || (u.searchParams.get('topic') === 'payment' ? u.searchParams.get('id') : null);
+                if (!payId) return;
+                const token = await getMpToken();
+                const r = await fetch(`${MP_API}/v1/payments/${payId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const d = await r.json().catch(() => ({}));
+                if (!d.external_reference) return;
+                const { data: pag } = await db.from('pagamentos').select('*').eq('id', d.external_reference).single();
+                if (!pag || String(pag.mp_payment_id) !== String(payId)) return;
+                if (d.status === 'approved') await processarPagamentoAprovado(pag);
+                else if (['cancelled', 'rejected', 'expired'].includes(d.status) && pag.status === 'pending') await db.from('pagamentos').update({ status: d.status }).eq('id', pag.id);
+            } catch (e) { log('sistema', 'warn', `[MP Webhook] ${e.message}`); }
+        });
+        return;
+    }
+
+    // ── COBRANÇAS (Painel Master) ─────────────────────────────────────────────
+    // GET  /api/cobrancas           → clientes com vencimento + situação da cobrança
+    // POST /api/cobrancas/enviar    { instance_name } → envia agora (manual)
+    if (req.url.split('?')[0] === '/api/cobrancas' && req.method === 'GET') {
+        try {
+            const { data: lics } = await db.from('licenses').select('*');
+            const { data: fats } = await db.from('pagamentos').select('id, instancia, vencimento, status, valor, cobranca_enviada_em, created_at').eq('origem', 'cobranca');
+            const lista = (lics || []).map(l => {
+                const venc = l.expires_at ? new Date(l.expires_at) : null;
+                const minhas = (fats || []).filter(f => f.instancia === l.instance_name).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+                const atual = venc ? minhas.find(f => f.vencimento === venc.toISOString() && f.status !== 'cancelled') : null;
+                return {
+                    id: l.id, instance_name: l.instance_name, cliente_nome: l.cliente_nome || '', cliente_telefone: l.cliente_telefone || '',
+                    tipo_conta: l.tipo_conta || 'equipe', plano: l.plano, ciclo: l.ciclo || 'mensal', status: l.status,
+                    cobranca_auto: !(l.cobranca_auto === 0 || l.cobranca_auto === false),
+                    valor: valorDaCobranca(l), expires_at: l.expires_at,
+                    dias: venc ? diasAte(venc) : null,
+                    cobranca: atual ? { status: atual.status, enviada_em: atual.cobranca_enviada_em, pedido_id: atual.id } : null,
+                    ultima_paga: minhas.find(f => f.status === 'approved') || null,
+                };
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ data: lista, instancia_cobranca: await instanciaCobranca(), dias_antes: COBRANCA_DIAS_ANTES }));
+        } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
+        return;
+    }
+    // Lista os WhatsApps (usuários) da Wuzapi para escolher o que envia as cobranças
+    if (req.url.startsWith('/api/cobrancas-whatsapps') && req.method === 'GET') {
+        try {
+            const u = new URL(req.url, 'http://x');
+            if (u.searchParams.get('admin_secret') !== (process.env.ADMIN_SECRET || 'evocrm-admin-2024')) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Acesso negado' })); return; }
+            const lista = await wuz.listarUsuarios();
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ data: lista }));
+        } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
+        return;
+    }
+    if (req.url === '/api/cobrancas/enviar' && req.method === 'POST') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const { instance_name, admin_secret } = JSON.parse(body || '{}');
+                if (admin_secret !== (process.env.ADMIN_SECRET || 'evocrm-admin-2024')) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Acesso negado' })); return; }
+                const { data: lic } = await db.from('licenses').select('*').eq('instance_name', instance_name).single();
+                if (!lic) throw new Error('Cliente não encontrado');
+                const r = await enviarCobranca(lic, { manual: true });
+                res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(r));
+            } catch (e) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
+        });
+        return;
+    }
+
     // ── PLANO INDIVIDUAL: dados públicos (preço fixo) ────────────────────────
     if (req.url === '/api/plano-individual' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -5048,6 +5329,7 @@ const server = http.createServer(async (req, res) => {
                         payer: { email, first_name: nome.split(' ')[0], last_name: nome.split(' ').slice(1).join(' ') || 'Cliente', identification: { type: 'CPF', number: cpf } },
                         external_reference: pedido.id,
                         date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+                        ...(urlNotificacaoMP() ? { notification_url: urlNotificacaoMP() } : {}),
                     }),
                 });
                 const mp = await mpRes.json().catch(() => ({}));
@@ -5080,7 +5362,7 @@ const server = http.createServer(async (req, res) => {
                 if (status !== pag.status && status !== 'approved') await db.from('pagamentos').update({ status }).eq('id', pag.id);
             }
             if (status === 'approved') {
-                await ativarAssinaturaIndividual({ ...pag, status: 'approved' });
+                await processarPagamentoAprovado(pag);
                 ({ data: pag } = await db.from('pagamentos').select('*').eq('id', pedidoId).single());
                 const { data: lic } = await db.from('licenses').select('license_key, expires_at').eq('instance_name', pag.instancia || pag.instance_name).single();
                 return responder(200, {
@@ -6374,7 +6656,7 @@ server.listen(PORT, async () => {
                     status:        'active',
                     features: JSON.stringify({
                         bot: true, disparo: true, agenda: true,
-                        setores: true, ia_atendimento: true, audio_ia: true
+                        setores: true, ia_atendimento: true, audio_ia: false
                     })
                 });
                 console.log(`✅ [AutoSeed] Licença criada: ${autoInst} (${autoPlano})`);
@@ -6390,7 +6672,7 @@ server.listen(PORT, async () => {
                 status:        'active',
                 features: JSON.stringify({
                     bot: true, disparo: true, agenda: true,
-                    setores: true, ia_atendimento: true, audio_ia: true
+                    setores: true, ia_atendimento: true, audio_ia: false
                 })
             }).catch(() => {});
             console.log(`✅ [AutoSeed] Licença criada: ${autoInst} (${autoPlano})`);
@@ -6438,6 +6720,9 @@ server.listen(PORT, async () => {
     // Nao preencher com last_interaction, pois isso mistura espera com TMA.
 
     wuz.hasFfmpeg(); // registra no log se a conversão de áudio está disponível
+    // Cobrança automática: confere pagamentos e envia lembretes (a cada 15 min; primeiro em 1 min)
+    setTimeout(() => jobCobranca(), 60 * 1000);
+    setInterval(() => jobCobranca(), 15 * 60 * 1000);
     setupGlobalDbListener(); // SQLite realtime — deve rodar antes de carregarInstancias
     carregarInstancias();
 

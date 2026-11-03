@@ -598,7 +598,7 @@
                                 { nome: 'Agente de IA 24/7 (OpenAI)',  icon: 'sparkles',          basico: false,premium: false,platinum: true,  desc: 'IA responde seus clientes enquanto você dorme' },
                                 { nome: 'IA Cria Tarefas e Notificações', icon: 'bell',           basico: false,premium: false,platinum: true,  desc: 'IA detecta oportunidades e cria follow-ups' },
                                 { nome: 'IA Move Leads no Kanban',     icon: 'move-right',        basico: false,premium: false,platinum: true,  desc: 'Qualificação automática sem esforço manual' },
-                                { nome: 'Respostas por Áudio (TTS)',    icon: 'mic',              basico: false,premium: false,platinum: true,  desc: 'IA responde com voz natural do assistente' },
+                                { nome: 'Respostas por Áudio (TTS)',    icon: 'mic',              basico: false,premium: false,platinum: _temFeature('audio_ia'),  desc: 'IA responde com voz natural do assistente' },
                                 { nome: 'Histórico Ilimitado',         icon: 'database',          basico: true, premium: true, platinum: true,  desc: 'Todas as conversas salvas no Supabase' },
                                 { nome: 'Servidor 24/7 (EasyPanel)',   icon: 'server',            basico: false,premium: true, platinum: true,  desc: 'Funciona mesmo com o navegador fechado' }
                             ].filter(r => !(isIndividual && r.nome === 'Departamentos / Setores'))" :key="recurso.nome">

@@ -81,6 +81,7 @@
         <nav class="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
             <button @click="activeTab = 'dash'; setTimeout(()=>lucide.createIcons(),50)" :class="activeTab === 'dash' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all"><i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard</button>
             <button @click="activeTab = 'clientes'; setTimeout(()=>lucide.createIcons(),50)" :class="activeTab === 'clientes' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all"><i data-lucide="users" class="w-4 h-4"></i> Meus Clientes</button>
+            <button @click="activeTab = 'cobrancas'; loadCobrancas(); setTimeout(()=>lucide.createIcons(),50)" :class="activeTab === 'cobrancas' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all"><i data-lucide="receipt" class="w-4 h-4"></i> Cobranças</button>
             <button @click="activeTab = 'planos'; loadPlanos(); setTimeout(()=>lucide.createIcons(),50)" :class="activeTab === 'planos' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all"><i data-lucide="package" class="w-4 h-4"></i> Planos</button>
             <button @click="activeTab = 'assinaturas'; loadPagamentos(); setTimeout(()=>lucide.createIcons(),50)" :class="activeTab === 'assinaturas' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800/50 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all">
                 <i data-lucide="credit-card" class="w-4 h-4"></i> Assinaturas
@@ -110,7 +111,7 @@
 
     <main x-show="isAuth" x-cloak class="flex-1 flex flex-col h-screen overflow-hidden relative">
         <header class="h-20 glass border-b border-slate-800 flex items-center justify-between px-6 md:px-10 shrink-0 z-10">
-            <h2 class="font-black text-xl text-white" x-text="activeTab === 'dash' ? 'Visão Geral' : (activeTab === 'assinaturas' ? 'Assinaturas & Pagamentos' : (activeTab === 'planos' ? 'Planos & Preços' : (activeTab === 'conteudo' ? '🎨 Conteúdo do Site (Checkout)' : 'Gestão de Clientes e Licenças')))"></h2>
+            <h2 class="font-black text-xl text-white" x-text="activeTab === 'dash' ? 'Visão Geral' : (activeTab === 'assinaturas' ? 'Assinaturas & Pagamentos' : (activeTab === 'planos' ? 'Planos & Preços' : (activeTab === 'conteudo' ? '🎨 Conteúdo do Site (Checkout)' : (activeTab === 'cobrancas' ? 'Cobranças de Mensalidade' : 'Gestão de Clientes e Licenças'))))"></h2>
             <div class="flex items-center gap-4">
                 <button @click="loadData()" class="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors shadow-sm" title="Atualizar Dados">
                     <i data-lucide="refresh-cw" class="w-4 h-4" :class="isLoading ? 'animate-spin text-brand-500' : ''"></i>
@@ -228,6 +229,14 @@
                                                     <span x-text="client.plano === 'individual' ? '👤 Individual' : client.plano === 'premium' ? '🥈 Premium' : (client.plano === 'platinum' ? '🥇 Platinum' : '🥉 Básico')"></span>
                                                 </span>
                                                 <span class="text-[9px] font-black uppercase tracking-wider" :class="client.tipo_conta === 'individual' ? 'text-emerald-400' : 'text-slate-400'" x-text="client.tipo_conta === 'individual' ? '👤 Individual' : '👥 Equipe'"></span>
+                                                <button @click="toggleAudioIa(client)" :title="audioAtivo(client) ? 'Áudio IA ligado — clique para desligar' : 'Áudio IA desligado — clique para ligar'"
+                                                    :class="audioAtivo(client) ? 'bg-purple-500/15 border-purple-400/50 text-purple-300' : 'bg-slate-800 border-slate-700 text-slate-500'"
+                                                    class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black border transition-colors">
+                                                    <span>🎙️ Áudio IA</span>
+                                                    <span class="relative inline-flex h-3 w-6 items-center rounded-full transition-colors" :class="audioAtivo(client) ? 'bg-purple-500' : 'bg-slate-600'">
+                                                        <span class="inline-block h-2 w-2 transform rounded-full bg-white transition-transform" :class="audioAtivo(client) ? 'translate-x-3.5' : 'translate-x-0.5'"></span>
+                                                    </span>
+                                                </button>
                                                 <button @click="openChangePlanModal(client)" class="text-[9px] text-slate-500 hover:text-brand-400 underline transition-colors">alterar plano</button>
                                             </div>
                                         </td>
@@ -294,6 +303,71 @@
             </div>
 
             <!-- ===== ABA: PLANOS ===== -->
+            <div x-show="activeTab === 'cobrancas'" x-transition>
+                <div class="glass rounded-[2rem] p-5 md:p-6 mb-6">
+                    <div class="flex flex-col md:flex-row md:items-end gap-4">
+                        <div class="flex-1">
+                            <p class="text-sm font-black text-white mb-1">Como funciona</p>
+                            <p class="text-xs text-slate-400 leading-relaxed">Todo dia (das 9h às 20h), quem vence em até <b class="text-white">3 dias</b> recebe no WhatsApp um PIX do Mercado Pago com o valor da mensalidade. Quando paga, a validade é renovada sozinha (+1 mês no mesmo dia, ou +1 ano) e o cliente recebe a confirmação. Cada vencimento é cobrado uma vez — use <b class="text-white">Cobrar agora</b> para reenviar.</p>
+                        </div>
+                        <div class="md:w-72">
+                            <label class="text-[10px] font-black uppercase text-slate-400 mb-1 block">WhatsApp que envia as cobranças</label>
+                            <div class="flex gap-2">
+                                <select x-model="instanciaCobranca" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-sm font-bold text-white outline-none focus:border-brand-500">
+                                    <option value="">— padrão (INSTANCE_NAME) —</option>
+                                    <template x-for="w in whatsappsWuzapi" :key="w.nome">
+                                        <option :value="w.nome" :selected="w.nome === instanciaCobranca" x-text="w.nome + (w.conectado ? '  ✅ conectado' : '  ⚪ desconectado')"></option>
+                                    </template>
+                                </select>
+                                <button @click="salvarInstanciaCobranca()" class="px-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-black">Salvar</button>
+                            </div>
+                            <p class="text-[10px] text-slate-500 mt-1">Pode ser o mesmo WhatsApp do EstimaFood — o CRM só envia as mensagens, sem desconectar nem alterar nada.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-2 mb-4 flex-wrap">
+                    <template x-for="f in [{id:'proximos',l:'Vencem em 7 dias'},{id:'vencidos',l:'Vencidos'},{id:'todos',l:'Todos'},{id:'sem_dados',l:'Faltando dados'}]" :key="f.id">
+                        <button @click="cobrancaFiltro = f.id" :class="cobrancaFiltro === f.id ? 'bg-brand-600 text-white' : 'bg-slate-800 text-slate-400'" class="px-4 py-2 rounded-xl text-xs font-black transition-all" x-text="f.l"></button>
+                    </template>
+                </div>
+
+                <div class="space-y-2">
+                    <template x-if="cobrancasFiltradas.length === 0">
+                        <div class="glass rounded-2xl p-8 text-center text-slate-500 text-sm font-bold">Nenhum cliente neste filtro.</div>
+                    </template>
+                    <template x-for="c in cobrancasFiltradas" :key="c.instance_name">
+                        <div class="glass rounded-2xl p-4 flex flex-col md:flex-row md:items-center gap-3">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-black text-white truncate" x-text="c.cliente_nome || c.instance_name"></p>
+                                <p class="text-[11px] text-slate-400 truncate">
+                                    <span x-text="'@' + c.instance_name"></span> •
+                                    <span x-text="c.cliente_telefone || 'sem WhatsApp'" :class="c.cliente_telefone ? '' : 'text-red-400'"></span> •
+                                    <span x-text="(c.tipo_conta === 'individual' ? 'Individual ' : '') + (c.ciclo === 'anual' ? 'anual' : 'mensal')"></span>
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-4 flex-wrap">
+                                <div class="text-right">
+                                    <p class="text-sm font-black text-white" x-text="c.valor > 0 ? 'R$ ' + Number(c.valor).toFixed(2).replace('.', ',') : 'sem valor'"></p>
+                                    <p class="text-[11px] font-bold" :class="c.dias === null ? 'text-slate-500' : c.dias < 0 ? 'text-red-400' : c.dias <= 3 ? 'text-amber-400' : 'text-slate-400'"
+                                       x-text="!c.expires_at ? 'vitalício' : (new Date(c.expires_at).toLocaleDateString('pt-BR') + (c.dias < 0 ? ' • vencido' : c.dias === 0 ? ' • vence hoje' : ' • em ' + c.dias + 'd'))"></p>
+                                </div>
+                                <div class="text-[10px] font-black min-w-[110px]">
+                                    <span x-show="c.cobranca && c.cobranca.status === 'approved'" class="text-emerald-400">✅ Pago</span>
+                                    <span x-show="c.cobranca && c.cobranca.status !== 'approved' && c.cobranca.enviada_em" class="text-amber-300" x-text="'📤 Enviada ' + (c.cobranca?.enviada_em ? new Date(c.cobranca.enviada_em).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '')"></span>
+                                    <span x-show="!c.cobranca" class="text-slate-500" x-text="c.cobranca_auto ? 'Aguardando (automática)' : 'Automática desligada'"></span>
+                                </div>
+                                <button @click="cobrarAgora(c)" :disabled="cobrancaEnviando[c.instance_name] || !c.cliente_telefone || !(c.valor > 0) || !c.expires_at"
+                                        class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-black flex items-center gap-1.5">
+                                    <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                                    <span x-text="cobrancaEnviando[c.instance_name] ? 'Enviando...' : (c.cobranca?.enviada_em ? 'Reenviar' : 'Cobrar agora')"></span>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
             <div x-show="activeTab === 'planos'" x-transition>
 
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -850,6 +924,7 @@
             <button @click="activeTab = 'dash'; setTimeout(()=>lucide.createIcons(),50)" class="flex flex-col items-center gap-1 transition-all" :class="activeTab === 'dash' ? 'text-brand-500 scale-110 font-black' : 'text-slate-500'"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[9px] uppercase tracking-widest">Dash</span></button>
             <button @click="openNewClientModal()" class="w-12 h-12 bg-brand-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-brand-500/40 -mt-6 border-4 border-slate-900 active:scale-95 transition-transform"><i data-lucide="plus" class="w-6 h-6"></i></button>
             <button @click="activeTab = 'clientes'; setTimeout(()=>lucide.createIcons(),50)" class="flex flex-col items-center gap-1 transition-all" :class="activeTab === 'clientes' ? 'text-brand-500 scale-110 font-black' : 'text-slate-500'"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[9px] uppercase tracking-widest">Clientes</span></button>
+            <button @click="activeTab = 'cobrancas'; loadCobrancas(); setTimeout(()=>lucide.createIcons(),50)" class="flex flex-col items-center gap-1 transition-all" :class="activeTab === 'cobrancas' ? 'text-brand-500 scale-110 font-black' : 'text-slate-500'"><i data-lucide="receipt" class="w-5 h-5"></i><span class="text-[9px] uppercase tracking-widest">Cobrar</span></button>
             <button @click="activeTab = 'assinaturas'; loadPagamentos(); setTimeout(()=>lucide.createIcons(),50)" class="flex flex-col items-center gap-1 transition-all relative" :class="activeTab === 'assinaturas' ? 'text-brand-500 scale-110 font-black' : 'text-slate-500'">
                 <i data-lucide="credit-card" class="w-5 h-5"></i>
                 <span class="text-[9px] uppercase tracking-widest">Pagamentos</span>
@@ -1001,6 +1076,26 @@
                     <input type="text" x-model="form.licenseKey" placeholder="Ex: SENHA-123" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3.5 text-sm font-black tracking-widest text-brand-400 outline-none focus:border-brand-500 transition-colors text-center">
                 </div>
 
+                <!-- DADOS DO CLIENTE (para cobrança) -->
+                <div class="bg-slate-900/60 border border-slate-700 rounded-2xl p-4 space-y-3">
+                    <label class="text-[10px] font-black uppercase text-slate-400 block">Dados do cliente (cobrança)</label>
+                    <input type="text" x-model="form.clienteNome" placeholder="Nome do cliente (ex: João Silva)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-brand-500">
+                    <input type="tel" x-model="form.clienteTelefone" placeholder="WhatsApp com DDD (ex: 88 99999-9999)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-brand-500">
+                    <div x-show="form.tipoConta !== 'individual'" class="grid grid-cols-2 gap-2">
+                        <input type="number" step="0.01" min="0" x-model="form.valorCobranca" placeholder="Valor R$ (ex: 197)" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-brand-500">
+                        <select x-model="form.ciclo" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none">
+                            <option value="mensal">Mensal</option>
+                            <option value="anual">Anual</option>
+                        </select>
+                    </div>
+                    <button type="button" @click="form.cobrancaAuto = !form.cobrancaAuto" class="w-full flex items-center justify-between text-left">
+                        <span class="text-xs text-slate-300 font-bold">Cobrança automática no WhatsApp<br><span class="text-[10px] text-slate-500 font-medium">PIX enviado 3 dias antes do vencimento</span></span>
+                        <span class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0" :class="form.cobrancaAuto ? 'bg-emerald-500' : 'bg-slate-700'">
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform" :class="form.cobrancaAuto ? 'translate-x-6' : 'translate-x-1'"></span>
+                        </span>
+                    </button>
+                </div>
+
                 <!-- TIPO DE CONTA -->
                 <div>
                     <label class="text-[10px] font-black uppercase text-slate-400 mb-3 block ml-1">Tipo de Conta</label>
@@ -1026,19 +1121,19 @@
                 <div x-show="form.tipoConta === 'individual'">
                     <label class="text-[10px] font-black uppercase text-slate-400 mb-3 block ml-1">Plano Individual — período</label>
                     <div class="grid grid-cols-2 gap-2">
-                        <button type="button" @click="form.days = 30"
-                            :class="String(form.days) === '30' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
+                        <button type="button" @click="form.ciclo = 'mensal'; form.days = ''"
+                            :class="form.ciclo !== 'anual' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
                             class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
                             <span class="text-[11px] font-black">Mensal</span>
                             <span class="text-sm font-black mt-1">R$ 49,90</span>
-                            <span class="text-[9px] text-slate-500 mt-1">30 dias</span>
+                            <span class="text-[9px] text-slate-500 mt-1">todo mês no mesmo dia</span>
                         </button>
-                        <button type="button" @click="form.days = 365"
-                            :class="String(form.days) === '365' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
+                        <button type="button" @click="form.ciclo = 'anual'; form.days = ''"
+                            :class="form.ciclo === 'anual' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
                             class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
                             <span class="text-[11px] font-black">Anual</span>
                             <span class="text-sm font-black mt-1">R$ 297</span>
-                            <span class="text-[9px] text-slate-500 mt-1">365 dias</span>
+                            <span class="text-[9px] text-slate-500 mt-1">12 meses</span>
                         </button>
                     </div>
                     <p class="text-[10px] text-slate-500 mt-2 ml-1">Inclui IA, arquivos, agenda, fluxos e disparos. Para teste grátis, digite os dias em "Dias de Acesso" e marque Degustação.</p>
@@ -1270,12 +1365,33 @@
                     </div>
                 </div>
 
+                <!-- DADOS DE COBRANÇA -->
+                <p class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Dados do cliente (cobrança)</p>
+                <div class="space-y-2 mb-5">
+                    <input type="text" x-model="changePlanData.clienteNome" placeholder="Nome do cliente" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-brand-500">
+                    <input type="tel" x-model="changePlanData.clienteTelefone" placeholder="WhatsApp com DDD" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-brand-500">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input x-show="changePlanData.tipoConta !== 'individual'" type="number" step="0.01" min="0" x-model="changePlanData.valorCobranca" placeholder="Valor R$" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none focus:border-brand-500">
+                        <div x-show="changePlanData.tipoConta === 'individual'" class="bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs font-bold text-slate-300" x-text="changePlanData.ciclo === 'anual' ? 'R$ 297 / ano' : 'R$ 49,90 / mês'"></div>
+                        <select x-model="changePlanData.ciclo" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-sm font-bold text-white outline-none">
+                            <option value="mensal">Mensal</option>
+                            <option value="anual">Anual</option>
+                        </select>
+                    </div>
+                    <button type="button" @click="changePlanData.cobrancaAuto = !changePlanData.cobrancaAuto" class="w-full flex items-center justify-between text-left pt-1">
+                        <span class="text-xs text-slate-300 font-bold">Cobrança automática no WhatsApp</span>
+                        <span class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0" :class="changePlanData.cobrancaAuto ? 'bg-emerald-500' : 'bg-slate-700'">
+                            <span class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform" :class="changePlanData.cobrancaAuto ? 'translate-x-6' : 'translate-x-1'"></span>
+                        </span>
+                    </button>
+                </div>
+
                 <!-- VALIDADE -->
                 <p class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Validade</p>
                 <p class="text-xs text-slate-300 mb-2" x-text="changePlanData.expiresAt ? 'Atual: vence em ' + new Date(changePlanData.expiresAt).toLocaleDateString('pt-BR') : 'Atual: vitalício (sem vencimento)'"></p>
                 <div class="grid grid-cols-3 gap-2 mb-5">
-                    <button type="button" @click="changePlanData.addDias = changePlanData.addDias === 30 ? 0 : 30" :class="changePlanData.addDias === 30 ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">+30 dias<br><span class="text-[9px] font-bold">Mensal R$ 49,90</span></button>
-                    <button type="button" @click="changePlanData.addDias = changePlanData.addDias === 365 ? 0 : 365" :class="changePlanData.addDias === 365 ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">+365 dias<br><span class="text-[9px] font-bold">Anual R$ 297</span></button>
+                    <button type="button" @click="changePlanData.addDias = changePlanData.addDias === 30 ? 0 : 30" :class="changePlanData.addDias === 30 ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">+1 mês<br><span class="text-[9px] font-bold">mesmo dia</span></button>
+                    <button type="button" @click="changePlanData.addDias = changePlanData.addDias === 365 ? 0 : 365" :class="changePlanData.addDias === 365 ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">+1 ano<br><span class="text-[9px] font-bold">12 meses</span></button>
                     <button type="button" @click="changePlanData.addDias = changePlanData.addDias === -1 ? 0 : -1" :class="changePlanData.addDias === -1 ? 'border-amber-400 bg-amber-900/30 text-amber-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">Vitalício<br><span class="text-[9px] font-bold">sem vencimento</span></button>
                 </div>
 
@@ -1555,7 +1671,8 @@
                 qrTimer: null,
                 instanceStats: {},
 
-                form: { instanceName: '', licenseKey: '', webhookUrl: '', days: '', plano: 'basico', tipoConta: 'equipe', isTrial: false, renewalUrl: '' },
+                form: { instanceName: '', licenseKey: '', webhookUrl: '', days: '', plano: 'basico', tipoConta: 'equipe', isTrial: false, renewalUrl: '', clienteNome: '', clienteTelefone: '', valorCobranca: '', ciclo: 'mensal', cobrancaAuto: true },
+                cobrancas: [], cobrancaFiltro: 'proximos', instanciaCobranca: '', cobrancaEnviando: {}, whatsappsWuzapi: [],
                 isNewClientModalOpen: false,
                 showSummaryModal: false,
                 summaryText: '',
@@ -1567,7 +1684,7 @@
                 editKeyData: { id: '', instanceName: '', newKey: '' },
 
                 isChangePlanModalOpen: false,
-                changePlanData: { id: '', instanceName: '', plano: 'basico', ferramentas: [], tipoConta: 'equipe' },
+                changePlanData: { id: '', instanceName: '', plano: 'basico', ferramentas: [], tipoConta: 'equipe', clienteNome: '', clienteTelefone: '', valorCobranca: '', ciclo: 'mensal', cobrancaAuto: true, addDias: 0 },
 
                 // Define as ferramentas disponíveis e quais cada plano libera
                 _toolsDef: [
@@ -1576,7 +1693,6 @@
                     { id: 'disparo',       emoji: '📣', label: 'Disparo em Massa',  desc: 'Envio de campanhas para múltiplos contatos',  planos: ['premium','platinum'] },
                     { id: 'agenda',        emoji: '📅', label: 'Agenda',            desc: 'Agendamento de mensagens e follow-ups',       planos: ['premium','platinum'] },
                     { id: 'ia_atendimento',emoji: '✨', label: 'IA de Atendimento', desc: 'Resposta automática com inteligência artificial', planos: ['platinum'] },
-                    { id: 'audio_ia',      emoji: '🎙️', label: 'Áudio IA',          desc: 'TTS e transcrição de áudio com inteligência artificial', planos: ['platinum'] },
                 ],
 
                 _toolsFromFeatures(features) {
@@ -1907,6 +2023,9 @@
                             status: lic.status,
                             plano: lic.plano || 'basico',
                             tipo_conta: lic.tipo_conta === 'individual' ? 'individual' : 'equipe',
+                            cliente_nome: lic.cliente_nome || '', cliente_telefone: lic.cliente_telefone || '',
+                            valor_cobranca: lic.valor_cobranca || 0, ciclo: lic.ciclo || 'mensal',
+                            cobranca_auto: !(lic.cobranca_auto === 0 || lic.cobranca_auto === false),
                             features: lic.features || null,
                             created_at: lic.created_at,
                             expires_at: lic.expires_at,
@@ -2098,7 +2217,7 @@
                 },
 
                 openNewClientModal() {
-                    this.form = { instanceName: '', licenseKey: 'LIC-' + Math.random().toString(36).substr(2, 8).toUpperCase(), webhookUrl: '', days: '', plano: 'basico', tipoConta: 'equipe', isTrial: false, renewalUrl: '' };
+                    this.form = { instanceName: '', licenseKey: 'LIC-' + Math.random().toString(36).substr(2, 8).toUpperCase(), webhookUrl: '', days: '', plano: 'basico', tipoConta: 'equipe', isTrial: false, renewalUrl: '', clienteNome: '', clienteTelefone: '', valorCobranca: '', ciclo: 'mensal', cobrancaAuto: true };
                     this.isNewClientModalOpen = true;
                     setTimeout(() => lucide.createIcons(), 50);
                 },
@@ -2108,29 +2227,33 @@
                     this.isLoading = true;
                     const instName = this.form.instanceName.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); 
                     
-                    if (this.form.tipoConta === 'individual' && !(parseInt(this.form.days) > 0)) this.form.days = 30; // individual nunca fica vitalício
                     let expires_at = null;
                     if (this.form.days && parseInt(this.form.days) > 0) {
+                        // Dias digitados à mão (ex: teste grátis de 7 dias)
                         let expDate = new Date();
                         expDate.setDate(expDate.getDate() + parseInt(this.form.days));
                         expires_at = expDate.toISOString();
+                    } else if (this.form.tipoConta === 'individual' || parseFloat(this.form.valorCobranca) > 0) {
+                        // Cadastrou hoje dia 31 → vence dia 31 do mês seguinte (ou daqui 12 meses no anual)
+                        expires_at = this.addMeses(new Date(), this.form.ciclo === 'anual' ? 12 : 1).toISOString();
                     }
 
                     try {
                         const defaultFeaturesByPlan = {
                             basico:   {},
-                            premium:  {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:false,audio_ia:false},
-                            platinum: {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:true,audio_ia:true},
+                            premium:  {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:false},
+                            platinum: {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:true},
                         };
                         const initialFeatures = this._toolsDef.reduce((acc, t) => {
                             const planDefaults = defaultFeaturesByPlan[this.form.plano || 'basico'] || {};
                             acc[t.id] = planDefaults[t.id] === true;
                             return acc;
                         }, {});
+                        initialFeatures.audio_ia = false; // Áudio IA é ligado à parte (botão na lista de clientes)
                         const tipoConta = this.form.tipoConta === 'individual' ? 'individual' : 'equipe';
                         if (tipoConta === 'individual') {
                             this.form.plano = 'individual';
-                            Object.assign(initialFeatures, { bot: true, disparo: true, agenda: true, setores: false, ia_atendimento: true, audio_ia: true });
+                            Object.assign(initialFeatures, { bot: true, disparo: true, agenda: true, setores: false, ia_atendimento: true });
                         }
 
                         // 1. Cria/atualiza licença via /api/admin/criar-licenca
@@ -2151,7 +2274,11 @@
                         // Atualiza campos extras (expires_at, features, etc)
                         await dbCall({
                             table: 'licenses', op: 'update',
-                            data: { features: JSON.stringify(initialFeatures), expires_at, is_trial: this.form.isTrial || false, renewal_url: this.form.renewalUrl.trim() || null, tipo_conta: tipoConta },
+                            data: { features: JSON.stringify(initialFeatures), expires_at, is_trial: this.form.isTrial || false, renewal_url: this.form.renewalUrl.trim() || null, tipo_conta: tipoConta,
+                                    cliente_nome: this.form.clienteNome.trim() || null, cliente_telefone: this.form.clienteTelefone.replace(/\D/g, '') || null,
+                                    valor_cobranca: tipoConta === 'individual' ? 0 : (parseFloat(this.form.valorCobranca) || 0),
+                                    ciclo: this.form.ciclo === 'anual' ? 'anual' : 'mensal', cobranca_auto: this.form.cobrancaAuto ? 1 : 0,
+                                    dia_vencimento: expires_at ? new Date(expires_at).getDate() : null },
                             filters: [{ op: 'eq', col: 'instance_name', val: instName }]
                         });
 
@@ -2185,7 +2312,7 @@
 
                         // 4. Texto de resumo para o cliente
                         let baseUrl = window.location.origin + '/';
-                        const planLabels = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum', individual: (String(this.form.days) === '365' ? 'Anual — R$ 297' : 'Mensal — R$ 49,90') };
+                        const planLabels = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum', individual: (this.form.ciclo === 'anual' ? 'Anual — R$ 297' : 'Mensal — R$ 49,90') };
                         this.summaryText = tipoConta === 'individual'
                             ? `🚀 *Seja bem-vindo ao EvoCRM!*\nSua conta individual foi criada com sucesso. Aqui estão os seus dados de acesso:\n\n🔗 *Painel:* ${baseUrl}\n👤 *Usuário:* ${instName}\n🔑 *Senha:* ${this.form.licenseKey.trim()}\n📦 *Plano:* ${planLabels[this.form.plano] || 'Básico'} (Individual)\n\n📱 *Para conectar o seu WhatsApp, acesse o link abaixo pelo computador e leia o QR Code:*\n${baseUrl}conectar.html?i=${instName}\n\nGuarde esta mensagem em segurança!`
                             : `🚀 *Seja bem-vindo ao EvoCRM!*\nSua conta foi criada com sucesso. Aqui estão os seus dados de acesso:\n\n🔗 *Painel do CRM:* ${baseUrl}\n🏢 *Nome da Empresa:* ${instName}\n🔑 *Chave de Licença:* ${this.form.licenseKey.trim()}\n📦 *Plano:* ${planLabels[this.form.plano] || 'Básico'}\n🛡️ *Senha Master (ADM Principal):* admin123\n\n📱 *Para conectar o seu WhatsApp, acesse o link abaixo pelo computador e leia o QR Code:*\n${baseUrl}conectar.html?i=${instName}\n\nGuarde esta mensagem em segurança!`;
@@ -2445,6 +2572,77 @@
                     this.isLoading = false;
                 },
 
+                // Soma meses mantendo o dia (31 → 31; se o mês não tiver, último dia)
+                addMeses(data, meses) {
+                    const d = new Date(data); const dia = d.getDate();
+                    d.setDate(1); d.setMonth(d.getMonth() + meses);
+                    d.setDate(Math.min(dia, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()));
+                    return d;
+                },
+
+                // ===== COBRANÇAS (mensalidade automática) =====
+                async loadCobrancas() {
+                    try {
+                        const r = await fetch('/api/cobrancas');
+                        const d = await r.json();
+                        this.cobrancas = d.data || [];
+                        this.instanciaCobranca = d.instancia_cobranca || '';
+                    } catch(e) { this.cobrancas = []; }
+                    try {
+                        const r2 = await fetch('/api/cobrancas-whatsapps?admin_secret=evocrm-admin-2024');
+                        const d2 = await r2.json();
+                        this.whatsappsWuzapi = d2.data || [];
+                    } catch(e) { this.whatsappsWuzapi = []; }
+                    setTimeout(() => lucide.createIcons(), 50);
+                },
+                get cobrancasFiltradas() {
+                    const l = this.cobrancas.filter(c => c.expires_at);
+                    const f = this.cobrancaFiltro;
+                    let out = f === 'proximos' ? l.filter(c => c.dias !== null && c.dias >= 0 && c.dias <= 7)
+                            : f === 'vencidos' ? l.filter(c => c.dias !== null && c.dias < 0)
+                            : f === 'sem_dados' ? this.cobrancas.filter(c => !c.cliente_telefone || !(c.valor > 0) || !c.expires_at)
+                            : l;
+                    return out.sort((a, b) => (a.dias ?? 99999) - (b.dias ?? 99999));
+                },
+                async cobrarAgora(c) {
+                    if (!c.cliente_telefone) return this.addNotification('Sem WhatsApp', 'Cadastre o WhatsApp do cliente em "alterar plano".', 'error');
+                    if (!confirm(`Enviar a cobrança de R$ ${Number(c.valor).toFixed(2).replace('.', ',')} para ${c.cliente_nome || c.instance_name} agora?`)) return;
+                    this.cobrancaEnviando = { ...this.cobrancaEnviando, [c.instance_name]: true };
+                    try {
+                        const r = await fetch('/api/cobrancas/enviar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ instance_name: c.instance_name, admin_secret: 'evocrm-admin-2024' }) });
+                        const d = await r.json();
+                        if (!r.ok) throw new Error(d.error || 'Falha ao enviar');
+                        this.addNotification('Cobrança enviada', `PIX enviado para ${c.cliente_nome || c.instance_name}.`, 'success');
+                        await this.loadCobrancas();
+                    } catch(e) { this.addNotification('Não enviado', e.message, 'error'); }
+                    this.cobrancaEnviando = { ...this.cobrancaEnviando, [c.instance_name]: false };
+                },
+                async salvarInstanciaCobranca() {
+                    const valor = (this.instanciaCobranca || '').trim();
+                    const { data: ex } = await dbCall({ table: 'admin_config', filters: [{ op: 'eq', col: 'key', val: 'instancia_cobranca' }], single: true });
+                    if (ex) await dbCall({ table: 'admin_config', op: 'update', data: { value: valor }, filters: [{ op: 'eq', col: 'key', val: 'instancia_cobranca' }] });
+                    else await dbCall({ table: 'admin_config', op: 'insert', data: { key: 'instancia_cobranca', value: valor } });
+                    this.addNotification('Salvo', valor ? `As cobranças sairão do WhatsApp "${valor}".` : 'Usando o WhatsApp padrão (INSTANCE_NAME).', 'success');
+                },
+
+                // ===== ÁUDIO IA (liga/desliga por cliente, fora do plano) =====
+                _featuresObj(client) {
+                    let f = client?.features;
+                    if (typeof f === 'string') { try { f = JSON.parse(f); } catch(e) { f = null; } }
+                    return (f && typeof f === 'object' && !Array.isArray(f)) ? { ...f } : {};
+                },
+                audioAtivo(client) { return this._featuresObj(client).audio_ia === true; },
+                async toggleAudioIa(client) {
+                    if (String(client.id).startsWith('old-')) return this.addNotification('Atenção', 'Gere primeiro uma licença para este cliente.', 'info');
+                    const f = this._featuresObj(client);
+                    f.audio_ia = !(f.audio_ia === true);
+                    const { error } = await dbCall({ table: 'licenses', op: 'update', data: { features: JSON.stringify(f) }, filters: [{ op: 'eq', col: 'id', val: client.id }] });
+                    if (error) return this.addNotification('Erro', 'Não foi possível alterar o Áudio IA.', 'error');
+                    const lic = this.dbLicenses.find(l => l.id === client.id);
+                    if (lic) lic.features = f;
+                    this.addNotification('Áudio IA', `${f.audio_ia ? 'Ativado' : 'Desativado'} para ${client.instance_name}.`, f.audio_ia ? 'success' : 'info');
+                },
+
                 // ===== PLANOS =====
                 openChangePlanModal(client) {
                     const plano = client.plano || 'basico';
@@ -2456,7 +2654,8 @@
                     } else {
                         ferramentas = this._toolsDef.map(t => ({ ...t, ativo: t.planos.includes(plano) }));
                     }
-                    this.changePlanData = { id: client.id, instanceName: client.instance_name, plano, ferramentas, tipoConta: client.tipo_conta === 'individual' ? 'individual' : 'equipe', expiresAt: client.expires_at || null, addDias: 0 };
+                    this.changePlanData = { id: client.id, instanceName: client.instance_name, plano, ferramentas, tipoConta: client.tipo_conta === 'individual' ? 'individual' : 'equipe', expiresAt: client.expires_at || null, addDias: 0, audioIa: this.audioAtivo(client),
+                        clienteNome: client.cliente_nome || '', clienteTelefone: client.cliente_telefone || '', valorCobranca: client.valor_cobranca || '', ciclo: client.ciclo || 'mensal', cobrancaAuto: client.cobranca_auto !== false };
                     this.isChangePlanModalOpen = true;
                     setTimeout(() => lucide.createIcons(), 50);
                 },
@@ -2465,8 +2664,8 @@
                     this.changePlanData.plano = plano;
                     const defaults = {
                         basico:   {},
-                        premium:  {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:false,audio_ia:false},
-                        platinum: {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:true,audio_ia:true},
+                        premium:  {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:false},
+                        platinum: {bot:true,disparo:true,agenda:true,setores:true,ia_atendimento:true},
                     };
                     const map = defaults[plano] || {};
                     this.changePlanData.ferramentas = this._toolsDef.map(t => ({
@@ -2482,18 +2681,27 @@
                     this.isLoading = true;
                     const features = {};
                     for (const t of this.changePlanData.ferramentas) features[t.id] = t.ativo;
+                    features.audio_ia = !!this.changePlanData.audioIa; // não mexe no áudio ao trocar plano
 
                     const { error } = await dbCall({
                         table: 'licenses', op: 'update',
                         data: (() => {
                             const d = { plano: this.changePlanData.plano, features: JSON.stringify(features), tipo_conta: this.changePlanData.tipoConta === 'individual' ? 'individual' : 'equipe' };
                             if (d.tipo_conta === 'individual') { d.plano = 'individual'; features.setores = false; d.features = JSON.stringify(features); }
+                            const c = this.changePlanData;
+                            Object.assign(d, {
+                                cliente_nome: (c.clienteNome || '').trim() || null,
+                                cliente_telefone: String(c.clienteTelefone || '').replace(/\D/g, '') || null,
+                                valor_cobranca: d.tipo_conta === 'individual' ? 0 : (parseFloat(c.valorCobranca) || 0),
+                                ciclo: c.ciclo === 'anual' ? 'anual' : 'mensal',
+                                cobranca_auto: c.cobrancaAuto ? 1 : 0,
+                            });
                             const add = this.changePlanData.addDias;
                             if (add === -1) d.expires_at = null;
                             else if (add > 0) {
                                 const atual = this.changePlanData.expiresAt ? new Date(this.changePlanData.expiresAt) : null;
                                 const base = atual && atual > new Date() ? atual : new Date();
-                                d.expires_at = new Date(base.getTime() + add * 86400000).toISOString();
+                                d.expires_at = this.addMeses(base, add === 365 ? 12 : 1).toISOString();
                                 d.status = 'active';
                             }
                             return d;

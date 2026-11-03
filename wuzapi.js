@@ -945,7 +945,34 @@ function createWuzapi(opts = {}) {
         return null;
     }
 
-    return { handle, parseWebhookBody, isWuzapiPayload, normalizeWebhook, isConfigured, hasFfmpeg };
+    // ── Envio direto por QUALQUER usuário da Wuzapi (ex: o do EstimaFood) ──
+    // Usado só para mandar texto (cobranças). Não passa pela lista de licenças,
+    // não altera webhook nem sessão — o usuário continua exatamente como está.
+    async function tokenQualquer(nome) {
+        if (SINGLE_TOKEN && (!SINGLE_INST || SINGLE_INST === nome)) return SINGLE_TOKEN;
+        const u = await findUser(nome, true).catch(() => null);
+        return u ? pick(u, 'token') : null;
+    }
+    async function enviarTextoDireto(nome, numero, texto) {
+        const token = await tokenQualquer(nome);
+        if (!token) throw new Error(`Usuário "${nome}" não encontrado na Wuzapi`);
+        const s = await sessionStatus(token);
+        if (!s.loggedIn) throw new Error(`O WhatsApp "${nome}" não está conectado na Wuzapi`);
+        const phone = await resolvePhone(nome, token, numero);
+        const r = await call(token, 'POST', '/chat/send/text', { Phone: phone, Body: String(texto) }, 30000);
+        if (!r.ok) throw new Error(String(r.error || 'Falha ao enviar'));
+        return true;
+    }
+    async function listarUsuarios() {
+        const users = ADMIN ? await listUsers(true) : (SINGLE_TOKEN ? [{ name: SINGLE_INST || 'default', token: SINGLE_TOKEN }] : []);
+        return Promise.all(users.map(async u => {
+            const tk = pick(u, 'token');
+            const s = tk ? await sessionStatus(tk).catch(() => ({})) : {};
+            return { nome: pick(u, 'name'), conectado: !!(s.connected && s.loggedIn) };
+        }));
+    }
+
+    return { handle, parseWebhookBody, isWuzapiPayload, normalizeWebhook, isConfigured, hasFfmpeg, enviarTextoDireto, listarUsuarios };
 }
 
 module.exports = { createWuzapi };

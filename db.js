@@ -352,6 +352,19 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
         "ALTER TABLE ia_prompts ADD COLUMN delay_max INTEGER DEFAULT 3",
         "ALTER TABLE ia_prompts ADD COLUMN palavra_chave TEXT DEFAULT ''",
         "ALTER TABLE ia_prompts ADD COLUMN updated_at TEXT",
+        // licenses: dados do cliente para cobrança automática
+        "ALTER TABLE licenses ADD COLUMN cliente_nome TEXT",
+        "ALTER TABLE licenses ADD COLUMN cliente_telefone TEXT",
+        "ALTER TABLE licenses ADD COLUMN valor_cobranca REAL DEFAULT 0",
+        "ALTER TABLE licenses ADD COLUMN ciclo TEXT DEFAULT 'mensal'",
+        "ALTER TABLE licenses ADD COLUMN cobranca_auto INTEGER DEFAULT 1",
+        "ALTER TABLE licenses ADD COLUMN dia_vencimento INTEGER",
+        // pagamentos: faturas de cobrança
+        "ALTER TABLE pagamentos ADD COLUMN vencimento TEXT",
+        "ALTER TABLE pagamentos ADD COLUMN origem TEXT DEFAULT 'checkout'",
+        "ALTER TABLE pagamentos ADD COLUMN cobranca_enviada_em TEXT",
+        "ALTER TABLE pagamentos ADD COLUMN qr_code TEXT",
+        "ALTER TABLE pagamentos ADD COLUMN qr_base64 TEXT",
         // knowledge_docs: arquivo original (para a IA poder enviar ao cliente)
         "ALTER TABLE knowledge_docs ADD COLUMN arquivo_url TEXT",
         // licenses: tipo de conta (equipe = com setores/atendentes | individual = 1 usuário)

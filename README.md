@@ -70,3 +70,15 @@ storage.html     → gerenciador de arquivos
   WhatsApp envia logo após ler o QR Code).
 - **Nome do perfil do operador**: a Wuzapi nem sempre informa; o filtro que
   evita salvar o nome do operador como nome de lead pode não ter esse dado.
+
+## Cobrança automática de mensalidade
+
+- Cadastre **nome, WhatsApp e valor** do cliente no Painel Master (Novo Cliente ou "alterar plano").
+  O plano Individual usa o valor fixo (R$ 49,90/mês ou R$ 297/ano).
+- Todo dia, das 9h às 20h, quem vence em até **3 dias** recebe no WhatsApp a mensagem de cobrança
+  e o **PIX copia e cola** do Mercado Pago (`MP_ACCESS_TOKEN`).
+- As mensagens saem da instância definida em **Painel → Cobranças** (padrão: `INSTANCE_NAME`).
+- Pagou → a validade é renovada (+1 mês no mesmo dia, ou +1 ano) e o cliente recebe a confirmação.
+  O sistema confere o Mercado Pago a cada 15 minutos e também recebe o aviso em `/api/mp/webhook`
+  (configurado sozinho quando `SERVER_PUBLIC_URL` é https).
+- Em **Painel → Cobranças** você vê quem vence, quem já foi cobrado e pode clicar em **Cobrar agora**.

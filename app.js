@@ -136,8 +136,8 @@ function crmApp() {
                 _planoPadrao: {
                     basico:   [],
                     premium:  ['bot','disparo','agenda','setores'],
-                    platinum: ['bot','disparo','agenda','setores','ia_atendimento','audio_ia'],
-                    individual: ['bot','disparo','agenda','ia_atendimento','audio_ia'],
+                    platinum: ['bot','disparo','agenda','setores','ia_atendimento'],
+                    individual: ['bot','disparo','agenda','ia_atendimento'],
                 },
                 _temFeature(id) {
                     if (this.clienteFeatures && typeof this.clienteFeatures === 'object' && Object.keys(this.clienteFeatures).length > 0) {
