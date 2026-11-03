@@ -286,7 +286,7 @@ function iaAtendMixin() {
 
                 // ✅ Envia via proxy /api/send para evitar CORS
                 const evoRes = await this._evoSend('sendWhatsAppAudio', { number: lead.numero, audio: publicUrl });
-                if (!evoRes) throw new Error('Sem resposta da Evolution API');
+                if (!evoRes) throw new Error('Sem resposta do servidor de WhatsApp');
                 // Salva no Supabase
                 await this.client.from('messages').insert({
                     lead_id: lead.id, content: publicUrl, from_me: true,

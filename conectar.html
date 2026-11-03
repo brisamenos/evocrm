@@ -171,7 +171,7 @@ function qrApp() {
                 // ── PASSO 2: Criar instância se ainda não existe ──────────────
                 if (!this._instanceCreated && !state) {
                     this.loadingTitle = 'Preparando instância';
-                    this.loadingMsg = 'Criando sua instância na Evolution API...';
+                    this.loadingMsg = 'Criando sua instância no WhatsApp...';
 
                     try {
                         await evoProxy('/instance/create', 'POST', {

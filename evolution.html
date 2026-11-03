@@ -2070,7 +2070,7 @@
                         });
                         const dataEvo = await resEvo.json();
                         if (!resEvo.ok && dataEvo.message !== 'The instance already exists') {
-                            throw new Error('Erro na API Evolution: ' + JSON.stringify(dataEvo));
+                            throw new Error('Erro na API do WhatsApp (Wuzapi): ' + JSON.stringify(dataEvo));
                         }
 
                         // 3. Configura webhook automaticamente para este servidor
@@ -2210,7 +2210,7 @@
                             body: JSON.stringify({ path: `/instance/delete/${instanceName}`, method: 'DELETE' })
                         });
                         if (!resEvo.ok && resEvo.status !== 404) {
-                            throw new Error('A Evolution API rejeitou a eliminação.');
+                            throw new Error('A Wuzapi rejeitou a exclusão da instância.');
                         }
                         
                         this.addNotification('Deletado', 'Cliente e Instância removidos com sucesso.', 'success');

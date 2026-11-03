@@ -5256,7 +5256,7 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                                 <!-- Info custo -->
                                 <div x-show="iaTtsMode !== 'off'" class="flex gap-2 text-[11px] text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-3 items-start">
                                     <i data-lucide="info" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
-                                    <span>TTS usa o modelo <strong>tts-1</strong> da OpenAI (~$0.015 por 1.000 caracteres). O áudio é enviado via Evolution API como mensagem de voz.</span>
+                                    <span>TTS usa o modelo <strong>tts-1</strong> da OpenAI (~$0.015 por 1.000 caracteres). O áudio é enviado pela Wuzapi como mensagem de voz.</span>
                                 </div>
 
                                 <button @click="iaSalvarConfig()" :disabled="iaSalvando"

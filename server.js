@@ -189,9 +189,32 @@ function parseMultipart(buffer, boundary) {
 }
 
 // ─── CONFIGURAÇÃO ────────────────────────────────────────────────────────────
-const EVO_URL = process.env.EVO_URL || 'https://app-evolution-api.wzvzyp.easypanel.host';
-const EVO_KEY = process.env.EVO_KEY || '429683C4C977415CAAFCCE10F7D57EVO';
 const PORT    = process.env.PORT          || 3000;
+
+// ─── WHATSAPP: WUZAPI ────────────────────────────────────────────────────────
+// A Evolution API foi substituída pela Wuzapi. O módulo wuzapi.js expõe, dentro
+// deste próprio servidor, os mesmos endpoints que a Evolution tinha (em /evo/*)
+// e traduz tudo para a Wuzapi. Por isso o restante do código continua igual.
+//   WUZAPI_URL          → URL da sua Wuzapi (ex: https://wuzapi.seudominio.com)
+//   WUZAPI_ADMIN_TOKEN  → WUZAPI_ADMIN_TOKEN configurado na Wuzapi (cria/lista instâncias)
+//   WUZAPI_TOKEN        → (opcional) token de um usuário só, para modo instância única
+//   WEBHOOK_BASE_URL    → (opcional) URL que a Wuzapi usa para chegar no CRM
+//                          (padrão: SERVER_PUBLIC_URL)
+const { createWuzapi } = require('./wuzapi.js');
+const EVO_KEY = process.env.CRM_INTERNAL_KEY || require('crypto').randomBytes(24).toString('hex');
+const EVO_URL = `http://127.0.0.1:${PORT}/evo`;   // adaptador local (não é mais a Evolution)
+const wuz = createWuzapi({
+    url:            process.env.WUZAPI_URL || '',
+    adminToken:     process.env.WUZAPI_ADMIN_TOKEN || '',
+    singleToken:    process.env.WUZAPI_TOKEN || '',
+    singleInstance: process.env.INSTANCE_NAME || '',
+    webhookBase:    process.env.WEBHOOK_BASE_URL || SERVER_PUBLIC_URL,
+    publicUrl:      SERVER_PUBLIC_URL,
+    localBase:      `http://127.0.0.1:${PORT}`,
+    uploadsDir:     UPLOADS_DIR,
+    dataDir:        pathMod.dirname(process.env.DB_PATH || '/app/data/evocrm.db'),
+    log:            (i, t, m) => log(i, t, m),
+});
 
 // ─── MERCADO PAGO: tokens armazenados no Supabase (admin_config) ─────────────
 const MP_DEFAULTS = {
@@ -2769,11 +2792,43 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
 
+    // ── ADAPTADOR WUZAPI: endpoints no formato Evolution (/evo/*) ────────────
+    // Usado pelo próprio servidor (EVO_URL), pelo /api/evo-proxy e pelo front.
+    if (req.url.startsWith('/evo/')) {
+        if ((req.headers['apikey'] || '') !== EVO_KEY) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 401, error: 'Unauthorized' }));
+            return;
+        }
+        const chunks = [];
+        req.on('data', c => chunks.push(c));
+        req.on('end', async () => {
+            let status = 500, out = {};
+            try {
+                const u = new URL(req.url, 'http://localhost');
+                let reqBody = {};
+                const rawBody = Buffer.concat(chunks).toString();
+                if (rawBody.trim()) { try { reqBody = JSON.parse(rawBody); } catch (e) { reqBody = {}; } }
+                const r = await wuz.handle(req.method, u.pathname.replace(/^\/evo/, ''), u.searchParams, reqBody);
+                status = r.status; out = r.body;
+            } catch (e) {
+                status = e.status || 500;
+                out = { status, error: e.message, message: e.message };
+                log('sistema', 'erro', `[Wuzapi] ${req.method} ${req.url.split('?')[0]} → ${e.message}`);
+            }
+            res.writeHead(status, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(out));
+        });
+        return;
+    }
+
     // ── SERVIR ARQUIVOS DE MÍDIA (/uploads/*) ────────────────────────────────
     // Qualquer arquivo salvo pelo localSave() fica acessível aqui publicamente.
     if (req.url.startsWith('/uploads/')) {
-        const subPath = req.url.split('?')[0].replace('/uploads/', '');
-        const filePath = pathMod.join(UPLOADS_DIR, subPath);
+        let subPath = req.url.split('?')[0].replace('/uploads/', '');
+        try { subPath = decodeURIComponent(subPath); } catch (e) {}
+        const filePath = pathMod.resolve(UPLOADS_DIR, subPath);
+        if (!filePath.startsWith(pathMod.resolve(UPLOADS_DIR) + pathMod.sep)) { res.writeHead(404); res.end('Not found'); return; }
         const ext = pathMod.extname(filePath).toLowerCase();
         const ct = MIME[ext] || 'application/octet-stream';
         fs2.readFile(filePath, (err, data) => {
@@ -4491,8 +4546,9 @@ const server = http.createServer(async (req, res) => {
     if (req.url === '/api/config' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            evo_url:       EVO_URL,
+            evo_url:       '/evo',   // adaptador Wuzapi neste mesmo servidor
             evo_key:       EVO_KEY,
+            whatsapp:      'wuzapi',
             server_url:    SERVER_PUBLIC_URL,
             instance_name: process.env.INSTANCE_NAME || '',
         }));
@@ -5391,7 +5447,14 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ ok: true }));
 
             try {
-                const evt = JSON.parse(body);
+                // Wuzapi envia { type, event } (JSON ou form com jsonData) →
+                // convertemos para o formato Evolution que o código abaixo já entende.
+                let evt = wuz.parseWebhookBody(body, req.headers['content-type']);
+                if (wuz.isWuzapiPayload(evt)) {
+                    evt = wuz.normalizeWebhook(inst, evt);
+                    if (!evt) return;
+                }
+                if (!evt) return;
                 const event = evt.event || evt.type || '';
                 log(inst, 'info', `[Webhook] ${event}`);
 
@@ -5464,7 +5527,7 @@ const server = http.createServer(async (req, res) => {
                                 instance_name: inst, numero,
                                 nome: pushName || numero,
                                 status: (await getPrimeiraColuna(inst)), departamento: 'ADM Principal',
-                                unread: fromMe ? 0 : 1,
+                                unread: 0, // o contador é incrementado logo abaixo (antes contava 2 na 1ª mensagem)
                                 last_msg: content || `[${type}]`,
                                 last_interaction: new Date().toISOString(),
                             });
@@ -5920,7 +5983,17 @@ ${contexto}`
     let filePath = req.url.split('?')[0]; // remove query string
     if (filePath === '/' || filePath === '') filePath = '/index.html';
 
-    const fullPath = path.join(__dirname, filePath);
+    // Segurança: nunca servir banco de dados, código do servidor, configs ou
+    // arquivos fora da pasta do projeto (antes /data/evocrm.db era baixável).
+    try { filePath = decodeURIComponent(filePath); } catch (e) {}
+    const fullPath = path.resolve(__dirname, '.' + path.posix.normalize('/' + filePath));
+    const relPath  = path.relative(__dirname, fullPath).replace(/\\/g, '/');
+    const BLOQUEADOS = /^(data|node_modules|uploads-v2|\.git)(\/|$)|(^|\/)\.|\.(db|db-shm|db-wal|sqlite|sql|env|toml|md|lock)$|^(server|db|routes|fila_manager|wuzapi)\.js$|^package(-lock)?\.json$|^Dockerfile$/i;
+    if (relPath.startsWith('..') || path.isAbsolute(relPath) || BLOQUEADOS.test(relPath)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        res.end('Not found');
+        return;
+    }
     const ext = path.extname(fullPath).toLowerCase();
     const contentType = MIME[ext] || 'application/octet-stream';
 
