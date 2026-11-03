@@ -128,14 +128,23 @@ function createWuzapi(opts = {}) {
     const webhookChecked = new Set();
     let usersCache = { at: 0, list: [] };
 
+    // Caminho do ffmpeg: o do sistema (Dockerfile) ou o embutido no npm (ffmpeg-static).
+    // Sem ffmpeg, áudio gravado no navegador (webm/mp4) não é entregue pelo WhatsApp.
     let FFMPEG = null;
-    function hasFfmpeg() {
+    function ffmpegPath() {
         if (FFMPEG === null) {
-            try { FFMPEG = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0; } catch (e) { FFMPEG = false; }
-            if (!FFMPEG) log('sistema', 'warn', '[Wuzapi] ffmpeg não encontrado — áudios que não forem OGG/Opus podem não tocar no WhatsApp');
+            FFMPEG = false;
+            const ok = bin => { try { return spawnSync(bin, ['-version'], { stdio: 'ignore' }).status === 0; } catch (e) { return false; } };
+            if (ok('ffmpeg')) FFMPEG = 'ffmpeg';
+            else {
+                try { const p = require('ffmpeg-static'); if (p && ok(p)) FFMPEG = p; } catch (e) {}
+            }
+            if (FFMPEG) log('sistema', 'ok', `[Wuzapi] ffmpeg disponível (${FFMPEG === 'ffmpeg' ? 'sistema' : 'ffmpeg-static'})`);
+            else log('sistema', 'erro', '[Wuzapi] ffmpeg NÃO encontrado — áudios gravados não serão entregues no WhatsApp');
         }
         return FFMPEG;
     }
+    const hasFfmpeg = () => !!ffmpegPath();
 
     const isConfigured = () => !!WUZ && !!(ADMIN || SINGLE_TOKEN);
     const hookUrl = inst => `${WEBHOOK_BASE}/webhook/${encodeURIComponent(inst)}`;
@@ -220,6 +229,30 @@ function createWuzapi(opts = {}) {
     }
 
     const call = (token, method, path, body, timeoutMs) => raw(method, path, body, { Token: token }, timeoutMs);
+
+    // Versões antigas da Wuzapi usam GET com corpo JSON (ex: /user/avatar). fetch não
+    // permite corpo em GET, então usamos o módulo http/https direto.
+    function getWithBody(token, path, body, timeoutMs = 15000) {
+        return new Promise(resolve => {
+            try {
+                const u = new URL(WUZ + path);
+                const mod = u.protocol === 'https:' ? require('https') : require('http');
+                const payload = Buffer.from(JSON.stringify(body || {}));
+                const rq = mod.request(u, { method: 'GET', headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length, Token: token }, timeout: timeoutMs }, res => {
+                    const out = [];
+                    res.on('data', d => out.push(d));
+                    res.on('end', () => {
+                        let json; try { json = JSON.parse(Buffer.concat(out).toString()); } catch (e) { json = {}; }
+                        const data = (json && 'data' in json) ? json.data : json;
+                        resolve({ ok: res.statusCode < 400 && json?.success !== false, status: res.statusCode, data, error: json?.error || null });
+                    });
+                });
+                rq.on('error', e => resolve({ ok: false, status: 0, data: null, error: e.message }));
+                rq.on('timeout', () => { rq.destroy(); resolve({ ok: false, status: 0, data: null, error: 'timeout' }); });
+                rq.end(payload);
+            } catch (e) { resolve({ ok: false, status: 0, data: null, error: e.message }); }
+        });
+    }
 
     async function sessionStatus(token) {
         const r = await call(token, 'GET', '/session/status', null, 10000);
@@ -339,19 +372,19 @@ function createWuzapi(opts = {}) {
     function toOggOpus(buf, mime) {
         const isOgg = buf.slice(0, 4).toString() === 'OggS';
         if (isOgg) return Promise.resolve(buf);
-        if (!hasFfmpeg()) return Promise.resolve(buf);
+        if (!hasFfmpeg()) return Promise.resolve(null);
         return new Promise(resolve => {
-            const ff = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn',
+            const ff = spawn(ffmpegPath(), ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn',
                 '-c:a', 'libopus', '-b:a', '48k', '-ar', '48000', '-ac', '1', '-f', 'ogg', 'pipe:1']);
             const out = [];
             let done = false;
             const finish = b => { if (!done) { done = true; resolve(b); } };
             ff.stdout.on('data', d => out.push(d));
-            ff.on('error', () => finish(buf));
-            ff.on('close', code => finish(code === 0 && out.length ? Buffer.concat(out) : buf));
+            ff.on('error', () => finish(null));
+            ff.on('close', code => finish(code === 0 && out.length ? Buffer.concat(out) : null));
             ff.stdin.on('error', () => {});
             ff.stdin.end(buf);
-            setTimeout(() => { try { ff.kill('SIGKILL'); } catch (e) {} finish(buf); }, 60000);
+            setTimeout(() => { try { ff.kill('SIGKILL'); } catch (e) {} finish(null); }, 60000);
         });
     }
 
@@ -360,7 +393,7 @@ function createWuzapi(opts = {}) {
         if (buf.slice(0, 4).toString() === 'RIFF' && buf.slice(8, 12).toString() === 'WEBP') return Promise.resolve(buf);
         if (!hasFfmpeg()) return Promise.resolve(buf);
         return new Promise(resolve => {
-            const ff = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0',
+            const ff = spawn(ffmpegPath(), ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0',
                 '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,format=rgba,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
                 '-frames:v', '1', '-c:v', 'libwebp', '-f', 'webp', 'pipe:1']);
             const out = [];
@@ -420,6 +453,10 @@ function createWuzapi(opts = {}) {
 
         if (t === 'audio' || t === 'ptt') {
             const ogg = await toOggOpus(media.buf, mime);
+            if (!ogg) {
+                log(inst, 'erro', `[Wuzapi] Áudio não convertido para OGG/Opus (ffmpeg ausente ou arquivo inválido) — ${mime}`);
+                return fail(500, 'Não foi possível converter o áudio para o formato do WhatsApp (ffmpeg indisponível no servidor)');
+            }
             const r = await call(token, 'POST', '/chat/send/audio', { Phone: phone, Audio: 'data:audio/ogg;base64,' + ogg.toString('base64'), PTT: true }, 120000);
             return sendResult(inst, phone, r, 'áudio');
         }
@@ -697,8 +734,10 @@ function createWuzapi(opts = {}) {
                 const number = body.number || query.get('number');
                 if (!number) return fail(400, 'number obrigatório');
                 const phone = await resolvePhone(inst, token, number);
-                const r = await call(token, 'POST', '/user/avatar', { Phone: phone, Preview: false }, 15000);
+                let r = await call(token, 'POST', '/user/avatar', { Phone: phone, Preview: false }, 15000);
+                if (!r.ok && (r.status === 404 || r.status === 405)) r = await getWithBody(token, '/user/avatar', { Phone: phone, Preview: false });
                 const url = r.ok ? (pick(r.data || {}, 'URL', 'url') || null) : null;
+                if (!r.ok && !/no profile|not.*found|401|privacy/i.test(String(r.error))) log(inst, 'warn', `[Wuzapi] Foto de perfil ${phone}: ${r.error}`);
                 return { status: 200, body: { wuid: toJid(phone), profilePictureUrl: url } };
             }
             if (action === 'findContacts') {

@@ -16,6 +16,7 @@ COPY . .
 RUN mkdir -p /app/data /app/uploads
 
 ENV PORT=3000
+ENV TZ=America/Sao_Paulo
 EXPOSE 3000
 
 CMD ["node", "server.js"]

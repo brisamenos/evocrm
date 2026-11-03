@@ -2774,7 +2774,10 @@ function crmApp() {
                 async startRecording() {
                     try {
                         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        this.mediaRecorder = new MediaRecorder(stream);
+                        // Usa o melhor formato que o navegador suporta (o servidor converte para OGG/Opus)
+                        const _tipos = ['audio/ogg;codecs=opus', 'audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+                        const _mime = (window.MediaRecorder && MediaRecorder.isTypeSupported) ? _tipos.find(t => MediaRecorder.isTypeSupported(t)) : null;
+                        this.mediaRecorder = _mime ? new MediaRecorder(stream, { mimeType: _mime }) : new MediaRecorder(stream);
                         this.audioChunks = []; this.isRecording = true; this.recordingTimer = 0;
                         this.recordingInterval = setInterval(() => { 
                             this.recordingTimer++; 
@@ -2788,8 +2791,10 @@ function crmApp() {
                             clearInterval(this.recordingInterval);
                             stream.getTracks().forEach(track => track.stop());
                             if (this.isRecording && this.audioChunks.length > 0) {
-                                const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
-                                const file = new File([audioBlob], `voicemail-${Date.now()}.ogg`, { type: 'audio/ogg' });
+                                const _rmime = (this.mediaRecorder && this.mediaRecorder.mimeType) || 'audio/webm';
+                                const _ext = _rmime.includes('ogg') ? 'ogg' : _rmime.includes('mp4') ? 'm4a' : 'webm';
+                                const audioBlob = new Blob(this.audioChunks, { type: _rmime.split(';')[0] });
+                                const file = new File([audioBlob], `voicemail-${Date.now()}.${_ext}`, { type: _rmime.split(';')[0] });
                                 await this.uploadAndSend({ target: { files: [file] } }, 'audio');
                             }
                             this.isRecording = false;
@@ -3244,9 +3249,11 @@ function crmApp() {
                         
                         // ✅ Bug fix: usa proxy /api/send para evitar CORS no browser
                         let evoMsgIdMedia = null;
-                        try { const evoRespMedia = await this._evoSend(endpoint, body); evoMsgIdMedia = evoRespMedia?.key?.id || null; } catch(e) { console.error('[uploadAndSend] Falha EVO:', e); }
+                        let _falhaEnvio = null;
+                        try { const evoRespMedia = await this._evoSend(endpoint, body); evoMsgIdMedia = evoRespMedia?.key?.id || null; } catch(e) { _falhaEnvio = e; console.error('[uploadAndSend] Falha EVO:', e); }
+                        if (_falhaEnvio) this.addNotification('Não enviado', `O ${type === 'audio' ? 'áudio' : 'arquivo'} não chegou ao WhatsApp: ${_falhaEnvio.message || 'erro'}`, 'error', 8000);
                         
-                        const insertObjMedia = { lead_id: this.selectedLead.id, content: storageData.publicUrl, from_me: true, type: type, status: 'sent', instance_name: this.instanceName, sent_by_ia: false };
+                        const insertObjMedia = { lead_id: this.selectedLead.id, content: storageData.publicUrl, from_me: true, type: type, status: _falhaEnvio ? 'error' : 'sent', instance_name: this.instanceName, sent_by_ia: false };
                         if (evoMsgIdMedia) insertObjMedia.id = evoMsgIdMedia;
                         const { data, error } = await this.client.from('messages').insert(insertObjMedia).select().single(); 
                         if(data) this.resolveTempMessage(tempId, data);
@@ -3820,7 +3827,7 @@ alert('\u2705 '+contatos.length+' contato(s) enviados para o EvoCRM!\\n\\n'+prev
                 async kbUploadDoc(event) {
                     const file = event.target.files?.[0];
                     if (!file) return;
-                    const allowed = ['pdf', 'txt', 'docx', 'csv', 'md'];
+                    const allowed = ['pdf', 'txt', 'docx', 'csv', 'md', 'jpg', 'jpeg', 'png', 'webp'];
                     const ext = file.name.split('.').pop().toLowerCase();
                     if (!allowed.includes(ext)) {
                         this.addNotification('Formato inválido', `Formatos aceitos: ${allowed.join(', ')}`, 'error');
@@ -3835,7 +3842,8 @@ alert('\u2705 '+contatos.length+' contato(s) enviados para o EvoCRM!\\n\\n'+prev
                         const res = await fetch('/api/knowledge/upload', { method: 'POST', body: fd });
                         const data = await res.json();
                         if (data.error) throw new Error(data.error);
-                        this.addNotification('📄 Documento importado!', `${file.name} — ${data.chunks} chunks extraídos`, 'success');
+                        if (data.aviso) this.addNotification('📄 Arquivo adicionado (com aviso)', data.aviso, 'warn', 9000);
+                        else this.addNotification('📄 Arquivo adicionado!', `${file.name} já está disponível para a IA.`, 'success');
                         await this.kbLoadDocs();
                     } catch(e) {
                         this.addNotification('Erro no upload', e.message, 'error');
@@ -3845,7 +3853,7 @@ alert('\u2705 '+contatos.length+' contato(s) enviados para o EvoCRM!\\n\\n'+prev
                 },
 
                 async kbDeleteDoc(id, nome) {
-                    if (!confirm(`Remover "${nome}" da base de conhecimento?`)) return;
+                    if (!confirm(`Excluir "${nome}" da pasta de Arquivos Gerais?`)) return;
                     try {
                         await fetch(`/api/knowledge/docs?id=${id}`, { method: 'DELETE' });
                         this.addNotification('Removido', `${nome} foi removido da base.`, 'info');

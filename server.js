@@ -1,5 +1,7 @@
 // -*- coding: utf-8 -*-
 process.stdout.setEncoding && process.stdout.setEncoding("utf8");
+// Fuso horário do Brasil — sem isso o container roda em UTC e a agenda fica 3h adiantada
+process.env.TZ = process.env.TZ || 'America/Sao_Paulo';
 /**
  * IA WORKER - CRM EVO
  * Servidor Node.js que roda 24/7 no EasyPanel
@@ -339,6 +341,17 @@ function temFeature(inst, featureId) {
 }
 
 // ─── AGENDA IA ───────────────────────────────────────────────────────────────
+// "2026-11-05T14:00" → "2026-11-05T14:00:00-03:00" (mesmo formato que o painel salva)
+function comFuso(dhLocal) {
+    const base = normalizarDH(dhLocal);
+    if (!base) return dhLocal;
+    const off = -new Date(base + ':00').getTimezoneOffset();
+    const sign = off >= 0 ? '+' : '-';
+    const hh = String(Math.floor(Math.abs(off) / 60)).padStart(2, '0');
+    const mm = String(Math.abs(off) % 60).padStart(2, '0');
+    return `${base}:00${sign}${hh}:${mm}`;
+}
+
 function normalizarDH(dh) {
     if (!dh) return '';
     return dh.replace('Z','').replace(/\.\d+/,'').replace(/[+-]\d{2}:\d{2}$/,'').slice(0,16);
@@ -446,7 +459,7 @@ async function agendaPreCheck(inst, lead, mensagemTexto, histMsgs, apiKey) {
                 role:'system',
                 content:`Analise a mensagem e retorne APENAS JSON sem markdown:
 {"tipo":"agendamento_com_data"|"agendamento_sem_data"|"escolha_horario"|"cancelamento"|"reagendamento"|"outro","data_hora":"YYYY-MM-DDTHH:MM ou null","nova_data_hora":"YYYY-MM-DDTHH:MM ou null"}`
-            },{role:'user',content:`Msg cliente: "${mensagemTexto}"\nMsg anterior IA: "${ultimaIA.substring(0,200)}"\nData atual: ${new Date().toISOString()}\nAgendamentos: ${JSON.stringify(agsPend.map(a=>({dh:normalizarDH(a.data_hora||a.dataHora)})))}`}]})
+            },{role:'user',content:`Msg cliente: "${mensagemTexto}"\nMsg anterior IA: "${ultimaIA.substring(0,200)}"\nData/hora atual (Brasil): ${new Date().toLocaleString('pt-BR',{weekday:'long',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})} (${(()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;})()})\nAgendamentos: ${JSON.stringify(agsPend.map(a=>({dh:normalizarDH(a.data_hora||a.dataHora)})))}`}]})
         });
         const d=await res.json();
         intent=JSON.parse((d?.choices?.[0]?.message?.content||'{}').replace(/```json|```/g,'').trim());
@@ -514,7 +527,7 @@ async function agendaExecutar(inst, lead, pendente, iaTexto) {
         if (pendente.tipo==='agendar') {
             const {error}=await db.from('agendamentos_crm').insert({
                 instance_name:inst, lead_id:lead.id, numero:lead.numero,
-                tipo:'simples', texto:pendente.descricao, data_hora:pendente.dataHora,
+                tipo:'simples', texto:`Olá, ${leadName}! 😊 Chegou o horário do nosso agendamento. Estamos te esperando!`, data_hora:comFuso(pendente.dataHora),
                 sent:false, criado_por_ia:true, status:'ativo',
             });
             if (error) throw new Error(error.message);
@@ -529,7 +542,7 @@ async function agendaExecutar(inst, lead, pendente, iaTexto) {
             log(inst,'ok',`[Agenda] 🗑️ Cancelado — ${leadName}`);
 
         } else if (pendente.tipo==='reagendar') {
-            await db.from('agendamentos_crm').update({data_hora:pendente.novaDataHora,lembrete_enviado:false,reagendado_em:new Date().toISOString(),alterado_por:'ia'}).eq('id',pendente.ag.id);
+            await db.from('agendamentos_crm').update({data_hora:comFuso(pendente.novaDataHora),lembrete_enviado:false,reagendado_em:new Date().toISOString(),alterado_por:'ia'}).eq('id',pendente.ag.id);
             const novaF=new Date(pendente.novaDataHora.replace('T',' ')).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
             await db.from('dash_notifs').insert({instance_name:inst,title:`🔄 Reagendamento realizado`,body:`${leadName}: → ${novaF}`,type:'success',read:false,criado_por_ia:true,lead_id:lead.id});
             log(inst,'ok',`[Agenda] 🔄 Reagendado — ${leadName}: → ${pendente.novaDataHora}`);
@@ -833,13 +846,16 @@ async function checkLembretesServidor(inst) {
             .eq('instance_name', inst)
             .eq('sent', false)
             .eq('status', 'ativo')
-            .eq('lembrete_enviado', false)
-            .gte('data_hora', em55min)
-            .lte('data_hora', em65min);
+            .eq('lembrete_enviado', false);
 
-        if (!data || data.length === 0) return;
+        const iniJanela = new Date(em55min).getTime(), fimJanela = new Date(em65min).getTime();
+        const naJanela = (data || []).filter(ag => {
+            const t = new Date(ag.data_hora).getTime();
+            return !isNaN(t) && t >= iniJanela && t <= fimJanela;
+        });
+        if (naJanela.length === 0) return;
 
-        for (const ag of data) {
+        for (const ag of naJanela) {
             const numero = ag.numero || (ag.lead_id ? await buscarNumeroLead(inst, ag.lead_id) : null);
             if (!numero) continue;
 
@@ -1248,6 +1264,59 @@ async function bufferDisparar(inst, lead) {
     await iaResponderCliente(inst, msgFinal.content, lead, msgFinal);
 }
 
+// ─── ARQUIVOS GERAIS (pasta da empresa, vale para todos os clientes) ─────────
+// Seleciona os trechos mais relevantes dos arquivos para a pergunta do cliente
+// e lista os arquivos que a IA pode enviar com a marcação [ENVIAR_ARQUIVO: nome].
+async function buscarArquivosGerais(inst, texto) {
+    const { data: docs } = await db.from('knowledge_docs').select('id, nome, tipo, chunks, arquivo_url').eq('instance_name', inst);
+    if (!docs || docs.length === 0) return { contexto: '', arquivos: [] };
+    const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const PARADAS = new Set(['que','para','com','uma','como','tem','voce','vocês','qual','quais','sobre','mais','esse','essa','isso','pode','quero','gostaria','sim','nao','por','dos','das','meu','minha']);
+    const palavras = [...new Set(norm(texto).split(/[^a-z0-9]+/).filter(w => w.length > 2 && !PARADAS.has(w)))];
+    let trechos = [];
+    for (const d of docs) {
+        let parsed = [];
+        try { parsed = typeof d.chunks === 'string' ? JSON.parse(d.chunks) : (d.chunks || []); } catch (e) {}
+        parsed.forEach((c, idx) => {
+            const cn = norm(c);
+            let score = 0;
+            for (const w of palavras) if (cn.includes(w)) score++;
+            trechos.push({ doc: d.nome, text: c, score, idx });
+        });
+    }
+    let selecionados = trechos.filter(t => t.score > 0).sort((a, b) => b.score - a.score).slice(0, 6);
+    if (selecionados.length === 0) selecionados = trechos.filter(t => t.idx < 2).slice(0, 4); // visão geral
+    let total = 0;
+    const partes = [];
+    for (const t of selecionados) {
+        if (total + t.text.length > 6000) break;
+        total += t.text.length;
+        partes.push(`[Arquivo: ${t.doc}]\n${t.text}`);
+    }
+    const arquivos = docs.filter(d => d.arquivo_url).map(d => ({ nome: d.nome, url: d.arquivo_url, tipo: (d.tipo || '').toLowerCase() }));
+    let contexto = '';
+    if (partes.length) {
+        contexto += `ARQUIVOS GERAIS DA EMPRESA (catálogos, tabelas de preço, ofertas e informações — valem para TODOS os clientes):\n\n${partes.join('\n\n---\n\n')}\n\nUse estas informações para responder com precisão. Não invente preços, condições ou produtos que não estejam nos arquivos.`;
+    }
+    if (arquivos.length) {
+        contexto += `${contexto ? '\n\n' : ''}ARQUIVOS QUE VOCÊ PODE ENVIAR AO CLIENTE: ${arquivos.map(a => `"${a.nome}"`).join(', ')}.\nQuando o cliente pedir o catálogo, tabela, fotos ou um desses arquivos (ou quando enviar realmente ajudar), escreva em uma linha separada exatamente: [ENVIAR_ARQUIVO: nome do arquivo]. Não envie o mesmo arquivo repetidas vezes na conversa.`;
+    }
+    return { contexto, arquivos };
+}
+
+async function enviarArquivoGeral(inst, lead, arq) {
+    const ext = (arq.nome.split('.').pop() || '').toLowerCase();
+    const isImg = ['jpg', 'jpeg', 'png', 'webp'].includes(ext);
+    const r = await fetch(`${EVO_URL}/message/sendMedia/${inst}`, {
+        method: 'POST',
+        headers: { 'apikey': EVO_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: lead.numero, mediatype: isImg ? 'image' : 'document', media: arq.url, fileName: arq.nome, caption: '' })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    await salvarMensagemDB(inst, lead.id, arq.url, isImg ? 'image' : 'document');
+    log(inst, 'ok', `📎 [Arquivos Gerais] "${arq.nome}" enviado para ${getLeadName(lead)}`);
+}
+
 // ─── ENVIAR TEXTO VIA EVOLUTION API ──────────────────────────────────────────
 async function enviarTexto(inst, numero, texto) {
     const res = await fetch(`${EVO_URL}/message/sendText/${inst}`, {
@@ -1602,6 +1671,17 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
             }
         } catch(e) { log(inst, 'warn', `[Docs] Erro ao buscar documentos: ${e.message}`); }
 
+        // ── 3d. Arquivos gerais da empresa (pasta comum a todos os clientes) ──
+        let arquivosGerais = [];
+        try {
+            const ag = await buscarArquivosGerais(inst, `${mensagemClienteTexto || ''} ${currentText || ''}`);
+            arquivosGerais = ag.arquivos;
+            if (ag.contexto) {
+                openAIMsgs.push({ role: 'system', content: ag.contexto });
+                log(inst, 'info', `[Arquivos Gerais] Contexto injetado (${ag.contexto.length} chars, ${ag.arquivos.length} arquivo(s) disponíveis)`);
+            }
+        } catch(e) { log(inst, 'warn', `[Arquivos Gerais] Erro: ${e.message}`); }
+
         openAIMsgs.push({ role: 'user', content: currentText });
 
         // ── 4. Delay humanizado ──
@@ -1625,10 +1705,13 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
         if (!resposta) throw new Error('OpenAI retornou resposta vazia');
 
         // Remove tags de sinalização antes de enviar ao cliente
-        const respostaLimpa = resposta.replace(/##AGENDA_CONFIRMADA##|##AGENDA_CANCELADA##/g, '').trim();
+        const arquivosPedidos = [];
+        const respostaLimpa = resposta.replace(/##AGENDA_CONFIRMADA##|##AGENDA_CANCELADA##/g, '')
+            .replace(/\[ENVIAR_ARQUIVO:\s*([^\]]+)\]/gi, (_, n) => { arquivosPedidos.push(n.trim().replace(/^["']|["']$/g, '')); return ''; })
+            .replace(/\n{3,}/g, '\n\n').trim();
 
         // ── 6. Enviar resposta ──
-        const partes = dividirMensagem(respostaLimpa, cfg.msgMaxChars);
+        const partes = respostaLimpa ? dividirMensagem(respostaLimpa, cfg.msgMaxChars) : [];
         const ttsMode = cfg.ttsMode || 'off';
         const clienteMandouAudio = (msgObj?.type === 'audio');
         const frequencia = cfg.ttsFrequencia ?? 50;
@@ -1674,6 +1757,18 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
                 await enviarTexto(inst, lead.numero, parte);
                 await salvarMensagemDB(inst, lead.id, parte, 'text');
             }
+        }
+
+        // ── 6b. Arquivos gerais pedidos pela IA ──
+        const jaEnviados = new Set();
+        for (const nomePedido of arquivosPedidos) {
+            const np = nomePedido.toLowerCase();
+            const arq = arquivosGerais.find(a => a.nome.toLowerCase() === np)
+                     || arquivosGerais.find(a => a.nome.toLowerCase().includes(np) || np.includes(a.nome.toLowerCase().replace(/\.[a-z0-9]+$/, '')));
+            if (!arq || jaEnviados.has(arq.url)) { if (!arq) log(inst, 'warn', `[Arquivos Gerais] IA pediu "${nomePedido}", mas não existe na pasta`); continue; }
+            jaEnviados.add(arq.url);
+            try { await delay(1200); await enviarArquivoGeral(inst, lead, arq); }
+            catch (e) { log(inst, 'erro', `[Arquivos Gerais] Falha ao enviar "${arq.nome}": ${e.message}`); }
         }
 
         // ── 7. Verificar mídias inteligentes ──
@@ -5136,6 +5231,10 @@ const server = http.createServer(async (req, res) => {
     // ── PROXY: Foto de perfil WhatsApp com cache local ──────────────────────
     // Salva automaticamente em /uploads/avatares/ e retorna URL local (24h TTL).
     if (req.url.startsWith('/api/profile-pic/')) {
+        // Monta a URL da foto com o endereço que o navegador usou (funciona mesmo
+        // se SERVER_PUBLIC_URL estiver diferente do domínio real)
+        const _origem = `${(req.headers['x-forwarded-proto'] || 'http').split(',')[0]}://${req.headers['x-forwarded-host'] || req.headers.host}`;
+        const _urlLocal = u => u ? String(u).replace(/^https?:\/\/[^/]+(?=\/uploads\/)/, _origem) : u;
         const rawPath   = req.url.split('?')[0];
         const number    = rawPath.split('/api/profile-pic/')[1] || '';
         const urlParams = new URLSearchParams((req.url.split('?')[1]) || '');
@@ -5157,7 +5256,7 @@ const server = http.createServer(async (req, res) => {
                 if (ageHours < 24) {
                     const cachedUrl = `${SERVER_PUBLIC_URL}/uploads/avatares/${safeName}.jpg`;
                     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' });
-                    res.end(JSON.stringify({ url: cachedUrl, cached: true }));
+                    res.end(JSON.stringify({ url: _urlLocal(cachedUrl), cached: true }));
                     return;
                 }
             }
@@ -5165,7 +5264,7 @@ const server = http.createServer(async (req, res) => {
             // Busca + faz cache local
             const picUrl = await fetchAndCacheAvatar(inst, number);
             res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600' });
-            res.end(JSON.stringify({ url: picUrl || null, cached: false }));
+            res.end(JSON.stringify({ url: _urlLocal(picUrl) || null, cached: false }));
         } catch (e) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ url: null }));
@@ -5820,25 +5919,31 @@ const server = http.createServer(async (req, res) => {
                 const fileBuffer = filePart.data;
 
                 let textoExtraido = '';
+                const IMG_EXT = ['jpg', 'jpeg', 'png', 'webp'];
 
-                if (ext === 'pdf') {
-                    const pdfParse = require('pdf-parse');
-                    const pdfData = await pdfParse(fileBuffer);
-                    textoExtraido = pdfData.text || '';
-                } else if (ext === 'docx') {
-                    const mammoth = require('mammoth');
-                    const result = await mammoth.extractRawText({ buffer: fileBuffer });
-                    textoExtraido = result.value || '';
-                } else if (ext === 'txt' || ext === 'csv' || ext === 'md') {
-                    textoExtraido = fileBuffer.toString('utf8');
-                } else {
-                    // Tenta ler como texto
-                    textoExtraido = fileBuffer.toString('utf8');
+                try {
+                    if (ext === 'pdf') {
+                        const pdfParse = require('pdf-parse');
+                        const pdfData = await pdfParse(fileBuffer);
+                        textoExtraido = pdfData.text || '';
+                    } else if (ext === 'docx') {
+                        const mammoth = require('mammoth');
+                        const result = await mammoth.extractRawText({ buffer: fileBuffer });
+                        textoExtraido = result.value || '';
+                    } else if (ext === 'txt' || ext === 'csv' || ext === 'md') {
+                        textoExtraido = fileBuffer.toString('utf8');
+                    }
+                } catch (eTxt) { log(inst, 'warn', `[Knowledge] Sem leitura de texto em "${fileName}": ${eTxt.message}`); }
+
+                // Guarda o arquivo original na pasta geral (a IA pode enviá-lo ao cliente)
+                const nomeSeguro = `${Date.now()}-${fileName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+                const arquivoUrl = localSave(`arquivos_gerais/${inst.replace(/[^a-zA-Z0-9_-]/g, '_')}`, nomeSeguro, fileBuffer);
+
+                if (!textoExtraido.trim() && !IMG_EXT.includes(ext)) {
+                    log(inst, 'warn', `[Knowledge] "${fileName}" sem texto legível (PDF escaneado?) — a IA poderá enviar o arquivo, mas não ler o conteúdo`);
                 }
 
-                if (!textoExtraido.trim()) throw new Error('Não foi possível extrair texto do arquivo');
-
-                const textChunks = chunkText(textoExtraido);
+                const textChunks = textoExtraido.trim() ? chunkText(textoExtraido) : [];
                 log(inst, 'ok', `[Knowledge] 📄 Upload: "${fileName}" → ${textoExtraido.length} chars, ${textChunks.length} chunks`);
 
                 const { data: doc, error } = await db.from('knowledge_docs').insert({
@@ -5847,12 +5952,14 @@ const server = http.createServer(async (req, res) => {
                     tipo: ext,
                     conteudo_raw: textoExtraido,
                     chunks: JSON.stringify(textChunks),
-                    tamanho: fileBuffer.length
+                    tamanho: fileBuffer.length,
+                    arquivo_url: arquivoUrl
                 });
                 if (error) throw new Error(error.message);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ ok: true, doc, chunks: textChunks.length, chars: textoExtraido.length }));
+                res.end(JSON.stringify({ ok: true, doc, chunks: textChunks.length, chars: textoExtraido.length, arquivo_url: arquivoUrl,
+                    aviso: (!textoExtraido.trim() && !IMG_EXT.includes(ext)) ? 'Não deu para ler o texto deste arquivo. A IA pode enviá-lo, mas não consegue ler o conteúdo.' : null }));
             } catch(e) {
                 log('knowledge', 'erro', `[Knowledge] Upload falhou: ${e.message}`);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -5868,7 +5975,7 @@ const server = http.createServer(async (req, res) => {
             const url = new URL(req.url, `http://${req.headers.host}`);
             const inst = url.searchParams.get('inst') || '';
             const { data } = await db.from('knowledge_docs')
-                .select('id, instance_name, nome, tipo, tamanho, created_at')
+                .select('id, instance_name, nome, tipo, tamanho, created_at, arquivo_url')
                 .eq('instance_name', inst)
                 .order('created_at', { ascending: false });
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -5886,6 +5993,14 @@ const server = http.createServer(async (req, res) => {
             const url = new URL(req.url, `http://${req.headers.host}`);
             const id = url.searchParams.get('id') || '';
             if (!id) throw new Error('id obrigatório');
+            try {
+                const { data: kd } = await db.from('knowledge_docs').select('arquivo_url').eq('id', id).single();
+                const m = (kd?.arquivo_url || '').match(/\/uploads\/(arquivos_gerais\/.+)$/);
+                if (m) {
+                    const fp = pathMod.resolve(UPLOADS_DIR, decodeURIComponent(m[1]));
+                    if (fp.startsWith(pathMod.resolve(UPLOADS_DIR) + pathMod.sep) && fsSync.existsSync(fp)) fsSync.unlinkSync(fp);
+                }
+            } catch (eDel) {}
             await db.from('knowledge_docs').delete().eq('id', id);
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));
@@ -6162,6 +6277,7 @@ server.listen(PORT, async () => {
     // atendimento_inicio deve nascer quando um humano assume/responde.
     // Nao preencher com last_interaction, pois isso mistura espera com TMA.
 
+    wuz.hasFfmpeg(); // registra no log se a conversão de áudio está disponível
     setupGlobalDbListener(); // SQLite realtime — deve rodar antes de carregarInstancias
     carregarInstancias();
 

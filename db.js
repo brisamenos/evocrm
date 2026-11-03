@@ -352,6 +352,8 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
         "ALTER TABLE ia_prompts ADD COLUMN delay_max INTEGER DEFAULT 3",
         "ALTER TABLE ia_prompts ADD COLUMN palavra_chave TEXT DEFAULT ''",
         "ALTER TABLE ia_prompts ADD COLUMN updated_at TEXT",
+        // knowledge_docs: arquivo original (para a IA poder enviar ao cliente)
+        "ALTER TABLE knowledge_docs ADD COLUMN arquivo_url TEXT",
         // licenses: tipo de conta (equipe = com setores/atendentes | individual = 1 usuário)
         "ALTER TABLE licenses ADD COLUMN tipo_conta TEXT DEFAULT 'equipe'",
         // dash_notifs: coluna tipo_agenda
