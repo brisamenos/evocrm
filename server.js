@@ -3186,10 +3186,76 @@ const MIME = {
     '.webp': 'image/webp',
     '.mp3':  'audio/mpeg',
     '.ogg':  'audio/ogg',
+    '.oga':  'audio/ogg',
+    '.opus': 'audio/ogg',
+    '.webm': 'audio/webm',
+    '.m4a':  'audio/mp4',
+    '.aac':  'audio/aac',
+    '.wav':  'audio/wav',
+    '.amr':  'audio/amr',
+    '.jpeg': 'image/jpeg',
+    '.gif':  'image/gif',
+    '.mov':  'video/quicktime',
+    '.3gp':  'video/3gpp',
+    '.doc':  'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.xls':  'application/vnd.ms-excel',
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.txt':  'text/plain; charset=utf-8',
+    '.csv':  'text/csv; charset=utf-8',
     '.mp4':  'video/mp4',
     '.zip':  'application/zip',
     '.pdf':  'application/pdf',
 };
+
+// Entrega arquivo com suporte a "Range" (o player de áudio/vídeo do navegador pede pedaços)
+function servirArquivo(req, res, filePath, contentType, cache = 'public, max-age=31536000') {
+    fs2.stat(filePath, (err, st) => {
+        if (err || !st.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+        const total = st.size;
+        const range = req.headers.range;
+        const base = { 'Content-Type': contentType, 'Cache-Control': cache, 'Accept-Ranges': 'bytes' };
+        if (range) {
+            const m = /bytes=(\d*)-(\d*)/.exec(range);
+            let start = m && m[1] ? parseInt(m[1], 10) : 0;
+            let end = m && m[2] ? parseInt(m[2], 10) : total - 1;
+            if (m && !m[1] && m[2]) { start = Math.max(0, total - parseInt(m[2], 10)); end = total - 1; }
+            if (isNaN(start) || start >= total || end < start) { res.writeHead(416, { 'Content-Range': `bytes */${total}` }); res.end(); return; }
+            end = Math.min(end, total - 1);
+            res.writeHead(206, { ...base, 'Content-Range': `bytes ${start}-${end}/${total}`, 'Content-Length': end - start + 1 });
+            fs2.createReadStream(filePath, { start, end }).pipe(res);
+            return;
+        }
+        res.writeHead(200, { ...base, 'Content-Length': total });
+        fs2.createReadStream(filePath).pipe(res);
+    });
+}
+
+// Converte qualquer áudio para MP3 (toca em todos os navegadores, inclusive iPhone) — com cache
+const _convertendoAudio = new Map();
+function audioParaMp3(origem) {
+    const cacheDir = pathMod.join(UPLOADS_DIR, '_audio_mp3');
+    const nome = require('crypto').createHash('md5').update(origem).digest('hex') + '.mp3';
+    const destino = pathMod.join(cacheDir, nome);
+    if (fsSync.existsSync(destino) && fsSync.statSync(destino).size > 0) return Promise.resolve(destino);
+    if (_convertendoAudio.has(destino)) return _convertendoAudio.get(destino);
+    const ff = wuz.ffmpegPath();
+    if (!ff) return Promise.reject(new Error('ffmpeg indisponível'));
+    fsSync.mkdirSync(cacheDir, { recursive: true });
+    const tmp = destino + '.tmp';
+    const p = new Promise((resolve, reject) => {
+        const proc = require('child_process').spawn(ff, ['-hide_banner', '-loglevel', 'error', '-y', '-i', origem, '-vn', '-c:a', 'libmp3lame', '-b:a', '64k', '-f', 'mp3', tmp]);
+        const t = setTimeout(() => { try { proc.kill('SIGKILL'); } catch (e) {} }, 60000);
+        proc.on('error', e => { clearTimeout(t); reject(e); });
+        proc.on('close', code => {
+            clearTimeout(t);
+            if (code === 0 && fsSync.existsSync(tmp)) { fsSync.renameSync(tmp, destino); resolve(destino); }
+            else { try { fsSync.unlinkSync(tmp); } catch (e) {} reject(new Error('conversão falhou')); }
+        });
+    }).finally(() => _convertendoAudio.delete(destino));
+    _convertendoAudio.set(destino, p);
+    return p;
+}
 
 const server = http.createServer(async (req, res) => {
     // ── CORS headers ────────────────────────────────────────────────────────
@@ -3237,16 +3303,7 @@ const server = http.createServer(async (req, res) => {
         const filePath = pathMod.resolve(UPLOADS_DIR, subPath);
         if (!filePath.startsWith(pathMod.resolve(UPLOADS_DIR) + pathMod.sep)) { res.writeHead(404); res.end('Not found'); return; }
         const ext = pathMod.extname(filePath).toLowerCase();
-        const ct = MIME[ext] || 'application/octet-stream';
-        fs2.readFile(filePath, (err, data) => {
-            if (err) { res.writeHead(404); res.end('Not found'); return; }
-            res.writeHead(200, {
-                'Content-Type': ct,
-                'Cache-Control': 'public, max-age=31536000',
-                'Content-Length': data.length,
-            });
-            res.end(data);
-        });
+        servirArquivo(req, res, filePath, MIME[ext] || 'application/octet-stream');
         return;
     }
 
@@ -5310,6 +5367,26 @@ const server = http.createServer(async (req, res) => {
                 res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(r));
             } catch (e) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
         });
+        return;
+    }
+
+    // ── PLAYER DE ÁUDIO DO CHAT: entrega o áudio em MP3 ─────────────────────
+    // GET /api/audio?src=https://.../uploads/chat_media/x/123.ogg
+    if (req.url.startsWith('/api/audio?') && req.method === 'GET') {
+        try {
+            const src = new URL(req.url, 'http://x').searchParams.get('src') || '';
+            const m = src.match(/\/uploads\/([^?#]+)/);
+            if (!m) { res.writeHead(400); res.end('src inválido'); return; }
+            const origem = pathMod.resolve(UPLOADS_DIR, decodeURIComponent(m[1]));
+            if (!origem.startsWith(pathMod.resolve(UPLOADS_DIR) + pathMod.sep) || !fsSync.existsSync(origem)) { res.writeHead(404); res.end('Áudio não encontrado'); return; }
+            try {
+                const mp3 = await audioParaMp3(origem);
+                servirArquivo(req, res, mp3, 'audio/mpeg', 'public, max-age=86400');
+            } catch (e) {
+                // Sem conversão: entrega o original
+                servirArquivo(req, res, origem, MIME[pathMod.extname(origem).toLowerCase()] || 'application/octet-stream');
+            }
+        } catch (e) { res.writeHead(500); res.end(e.message); }
         return;
     }
 

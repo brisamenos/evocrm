@@ -529,8 +529,8 @@ function createWuzapi(opts = {}) {
         const r = await call(token, 'POST', `/chat/download${info.kind}`, body, 120000);
         if (!r.ok) { log(inst, 'warn', `[Wuzapi] Download de mídia falhou: ${r.error}`); return null; }
         const dataStr = String(pick(r.data || {}, 'Data', 'data', 'base64') || '');
-        const mm = dataStr.match(/^data:([^;]+);base64,(.*)$/s);
-        return { base64: mm ? mm[2] : dataStr, mimetype: mm ? mm[1] : (pick(r.data || {}, 'Mimetype', 'mimetype') || body.Mimetype) };
+        const mm = dataStr.match(/^data:([^,]*?);base64,(.*)$/s);   // aceita "audio/ogg; codecs=opus"
+        return { base64: mm ? mm[2] : dataStr, mimetype: mm ? mm[1].split(';')[0].trim() : (pick(r.data || {}, 'Mimetype', 'mimetype') || body.Mimetype) };
     }
 
     // ── Emulação dos endpoints Evolution ───────────────────────────────────
@@ -893,8 +893,8 @@ function createWuzapi(opts = {}) {
             const ts = tsRaw ? Math.floor(new Date(tsRaw).getTime() / 1000) || Math.floor(Date.now() / 1000) : Math.floor(Date.now() / 1000);
             const b64 = obj.base64 || obj.Base64;
             if (id && b64) {
-                const mm = String(b64).match(/^data:([^;]+);base64,(.*)$/s);
-                mediaCache.set(id, { base64: mm ? mm[2] : String(b64), mimetype: obj.mimeType || obj.mimetype || (mm ? mm[1] : null), at: Date.now() });
+                const mm = String(b64).match(/^data:([^,]*?);base64,(.*)$/s);
+                mediaCache.set(id, { base64: mm ? mm[2] : String(b64), mimetype: obj.mimeType || obj.mimetype || (mm ? mm[1].split(';')[0].trim() : null), at: Date.now() });
                 if (mediaCache.size > 200) mediaCache.delete(mediaCache.keys().next().value);
             }
             const fromMe = !!pick(info, 'IsFromMe');
@@ -972,7 +972,7 @@ function createWuzapi(opts = {}) {
         }));
     }
 
-    return { handle, parseWebhookBody, isWuzapiPayload, normalizeWebhook, isConfigured, hasFfmpeg, enviarTextoDireto, listarUsuarios };
+    return { handle, parseWebhookBody, isWuzapiPayload, normalizeWebhook, isConfigured, hasFfmpeg, ffmpegPath, enviarTextoDireto, listarUsuarios };
 }
 
 module.exports = { createWuzapi };

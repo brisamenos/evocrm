@@ -724,7 +724,12 @@ function crmApp() {
                     if (!this._chatAudioProgress[msgId]) {
                         this._chatAudioProgress[msgId] = { current: 0, duration: 0, pct: 0 };
                     }
-                    const audio = new Audio(url);
+                    // Toca pela rota do servidor, que entrega em MP3 (funciona em qualquer navegador/celular).
+                    // Se falhar, tenta o arquivo original.
+                    const original = url;
+                    const viaServidor = (url && url.includes('/uploads/')) ? `/api/audio?src=${encodeURIComponent(url)}` : url;
+                    const audio = new Audio(viaServidor);
+                    audio._tentouOriginal = viaServidor === original;
                     this._chatAudio = audio;
 
                     audio.addEventListener('loadedmetadata', () => {
@@ -749,6 +754,13 @@ function crmApp() {
                         this._chatAudio = null;
                     });
                     audio.addEventListener('error', () => {
+                        if (!audio._tentouOriginal && this._chatAudio === audio) {
+                            audio._tentouOriginal = true;
+                            audio.src = original;
+                            audio.play().then(() => { this._chatAudioPlaying[msgId] = true; }).catch(() => {});
+                            return;
+                        }
+                        this.addNotification('Áudio', 'Não foi possível reproduzir este áudio.', 'error');
                         this._chatAudioPlaying[msgId] = false;
                         this._chatAudioMsgId = null;
                         this._chatAudio = null;
@@ -757,6 +769,7 @@ function crmApp() {
                     audio.play().then(() => {
                         this._chatAudioPlaying[msgId] = true;
                     }).catch(() => {
+                        if (!audio._tentouOriginal) return;   // o "error" acima vai tentar o arquivo original
                         this._chatAudioPlaying[msgId] = false;
                         this._chatAudioMsgId = null;
                         this._chatAudio = null;
@@ -1741,8 +1754,17 @@ function crmApp() {
                     return Object.entries(grupos).map(([dept,lista]) => ({dept,lista})).sort((a,b) => b.lista.length-a.lista.length);
                 },
 
+                // A aba Stats chama o desenho duas vezes seguidas (clique + watch) → junta numa só
                 renderDashCharts() {
+                    clearTimeout(this._dashChartsTimer);
+                    this._dashChartsTimer = setTimeout(() => {
+                        try { this._renderDashChartsAgora(); } catch (e) { console.warn('[Stats]', e.message); }
+                    }, 120);
+                },
+                _renderDashChartsAgora() {
                     if (typeof Chart === 'undefined') return;
+                    const visivel = id => { const el = document.getElementById(id); return el && el.offsetParent !== null; };
+                    if (!visivel('chartTags') && !visivel('chartAtividade')) return;
                     const isDark = this.isDarkMode;
                     const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
                     const textColor = isDark ? '#8b949e' : '#6b7280';
@@ -4066,7 +4088,8 @@ document.addEventListener('alpine:init', () => {
         notifDetail: null,
         editTaskId: null,
         _dbClient() { return window._evoSupabase || null; },
-        _inst() { return instanceName || ''; },
+        // Nome da instância vem do componente pai (crmApp); "instanceName" solto não existe aqui
+        _inst() { return this.instanceName || localStorage.getItem('evo_instance') || ''; },
         async saveTasks() {},
         async saveDashNotifs() {},
         async refreshDashNotifs() {
@@ -4131,8 +4154,8 @@ document.addEventListener('alpine:init', () => {
         },
         abrirChatDaNotif(notif) {
             if (!notif.leadId) return;
-            const lead = myLeads.find(l => l.id === notif.leadId);
-            if (lead) { this.showNotifDetail = false; screen = 'chats'; this.$nextTick(() => openChat(lead)); }
+            const lead = (this.myLeads || this.leads || []).find(l => l.id === notif.leadId);
+            if (lead) { this.showNotifDetail = false; this.screen = 'chats'; this.$nextTick(() => this.openChat(lead)); }
         },
         async markRead(id) { const n = this.dashNotifs.find(n => n.id === id); if (n) { n.read = true; const db = window._evoSupabase; if (db) await db.from('dash_notifs').update({ read: true }).eq('id', id); } },
         async markAllRead() { this.dashNotifs.forEach(n => n.read = true); const db = window._evoSupabase; if (db && this._inst()) await db.from('dash_notifs').update({ read: true }).eq('instance_name', this._inst()).eq('read', false); },
@@ -4151,7 +4174,7 @@ document.addEventListener('alpine:init', () => {
         notifBg(type) { return type==='success'?'bg-[#e0e7ff] dark:bg-[#3730a3]/30':type==='error'?'bg-red-50 dark:bg-red-900/20':type==='warning'?'bg-amber-50 dark:bg-amber-900/20':'bg-blue-50 dark:bg-blue-900/20'; },
         formatDue(due) { if (!due) return ''; const d=new Date(due); const now=new Date(); const diff=Math.ceil((d-now)/(1000*60*60*24)); if (diff<0) return 'Atrasada'; if (diff===0) return 'Hoje'; if (diff===1) return 'Amanhã'; return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}); },
         isDueUrgent(due) { if (!due) return false; const d=new Date(due); const now=new Date(); return (d-now)/(1000*60*60*24) <= 1; },
-        iaAgendamentosPendentes() { return (agendamentos||[]).filter(a => !a.sent && a.criadoPorIA); },
+        iaAgendamentosPendentes() { return (this.agendamentos || []).filter(a => !a.sent && a.criadoPorIA); },
         iaTarefasPendentes() { return this.tasks.filter(t => !t.done && t.criadoPorIA); }
     }));
 
