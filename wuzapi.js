@@ -320,6 +320,21 @@ function createWuzapi(opts = {}) {
 
     const toJid = p => p.includes('@') ? p : `${p}@s.whatsapp.net`;
 
+    // Contatos do celular (nome de perfil) — cache de 5 min por instância
+    const contactsCache = new Map();
+    async function contactsCached(inst, token) {
+        const c = contactsCache.get(inst);
+        if (c && Date.now() - c.at < 300000) return c.data;
+        try {
+            const r = await call(token, 'GET', '/user/contacts', null, 30000);
+            if (r.ok && r.data && typeof r.data === 'object') {
+                contactsCache.set(inst, { at: Date.now(), data: r.data });   // só guarda quando deu certo
+                return r.data;
+            }
+        } catch (e) {}
+        return c ? c.data : {};
+    }
+
     // ── Mídia ───────────────────────────────────────────────────────────────
     function localUploadPath(sub) {
         const clean = decodeURIComponent(sub.split('?')[0]);
@@ -715,6 +730,7 @@ function createWuzapi(opts = {}) {
             if (action === 'whatsappNumbers') {
                 const nums = (Array.isArray(body.numbers) ? body.numbers : []).map(n => String(n).replace(/@.*$/, '').replace(/\D/g, '')).filter(Boolean);
                 if (!nums.length) return { status: 200, body: [] };
+                const contatos = await contactsCached(inst, token);
                 const out = [];
                 for (let i = 0; i < nums.length; i += 50) {
                     const chunk = nums.slice(i, i + 50);
@@ -725,7 +741,9 @@ function createWuzapi(opts = {}) {
                         const exists = !!(u && pick(u, 'IsInWhatsapp', 'isInWhatsapp'));
                         const jid = exists ? String(pick(u, 'JID', 'jid')) : `${n}@s.whatsapp.net`;
                         if (exists) phoneCache.set(`${inst}:${n}`, { phone: jid.split('@')[0].split(':')[0], at: Date.now(), ok: true });
-                        out.push({ exists, jid, number: n, name: (u && pick(u, 'VerifiedName', 'verifiedName')) || undefined });
+                        const c = contatos[jid] || contatos[`${n}@s.whatsapp.net`] || null;
+                        const pushName = (c && (pick(c, 'PushName') || pick(c, 'BusinessName'))) || (u && pick(u, 'VerifiedName', 'verifiedName')) || undefined;
+                        out.push({ exists, jid, number: n, pushName, name: (c && pick(c, 'FullName')) || pushName });
                     }
                 }
                 return { status: 200, body: out };

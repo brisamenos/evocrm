@@ -1985,7 +1985,9 @@ function crmApp() {
 
                 getLeadName(lead) {
                     if(!lead) return 'Desconhecido';
-                    if(lead.nome && lead.nome !== lead.numero) return lead.nome;
+                    const _generico = !lead.nome || lead.nome === lead.numero || ['Lead Avulso','Lead Importado','Desconhecido','Contato'].includes(lead.nome);
+                    if(!_generico) return lead.nome;
+                    if(lead.push_name && lead.push_name !== lead.numero) return lead.push_name;
                     if(lead.name) return lead.name;
                     if(lead.pushName) return lead.pushName;
                     return lead.nome || lead.numero || 'Desconhecido';
@@ -2545,6 +2547,22 @@ function crmApp() {
                         }
                     } catch(e) { console.error('Erro foto:', e); }
                     finally { delete this._picFetching[lead.id]; }
+                },
+
+                // ── Editar nome do lead (vale para todo o CRM; a IA passa a usar esse nome) ──
+                async editarNomeLead(lead) {
+                    if (!lead?.id) return;
+                    const atual = this.getLeadName(lead);
+                    const digitado = prompt('Nome do contato:', atual === lead.numero ? '' : atual);
+                    if (digitado === null) return;               // cancelou
+                    const nome = digitado.trim().slice(0, 80);
+                    if (!nome) return this.addNotification('Nome vazio', 'Digite um nome para salvar.', 'error');
+                    const { error } = await this.client.from('leads').update({ nome, updated_at: new Date().toISOString() }).eq('id', lead.id);
+                    if (error) return this.addNotification('Erro', 'Não foi possível salvar o nome.', 'error');
+                    const idx = this.leads.findIndex(l => l.id === lead.id);
+                    if (idx !== -1) { this.leads[idx] = { ...this.leads[idx], nome }; this.leads = [...this.leads]; }
+                    if (this.selectedLead?.id === lead.id) this.selectedLead = { ...this.selectedLead, nome };
+                    this.addNotification('Nome salvo', `Contato renomeado para "${nome}".`, 'success');
                 },
 
                 async forceUpdateProfilePic(lead) { 

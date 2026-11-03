@@ -5397,6 +5397,9 @@ CREATE POLICY "allow all" ON ia_midias FOR ALL USING (true) WITH CHECK (true);</
                         <div class="truncate">
                             <h3 class="font-bold text-base text-wa-text-light dark:text-wa-text-dark truncate flex items-center gap-1">
                                 <span :class="_blurNome(selectedLead) && 'blur-field'" x-text="getLeadName(selectedLead)"></span>
+                                <button @click.stop="editarNomeLead(selectedLead)" class="p-1 rounded-md text-slate-400 hover:text-[#6366f1] hover:bg-slate-100 dark:hover:bg-[#21262d] transition-colors shrink-0" title="Editar nome">
+                                    <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                </button>
                             </h3>
                             <div class="flex items-center gap-2">
                                 <p class="text-[11px] text-wa-sub-light dark:text-wa-sub-dark font-medium" :class="privacy.numeros && 'blur-field'" x-text="selectedLead?.numero"></p>

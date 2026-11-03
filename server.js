@@ -5661,6 +5661,9 @@ const server = http.createServer(async (req, res) => {
                                 unread: (lead.unread || 0) + 1,
                                 push_name: pushName || lead.push_name,
                                 followup_count: 0,
+                                // Lead sem nome (só número / genérico) → usa o nome do perfil do WhatsApp
+                                ...((pushName && !isGroup && (!lead.nome || lead.nome === numero || ['Lead Avulso','Lead Importado','Desconhecido','Contato'].includes(lead.nome))
+                                     && !(getState(inst).operatorNames?.has?.(pushName.trim()))) ? { nome: pushName } : {}),
                                 followup_last_at: null,
                             };
                             // TMA começa quando um humano assume/responde; mensagem do cliente conta como espera.
