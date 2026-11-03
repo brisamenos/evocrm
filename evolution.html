@@ -225,7 +225,7 @@
                                                         'bg-amber-900/30 border-amber-600/50 text-amber-300': client.plano === 'premium',
                                                         'bg-brand-900/30 border-brand-500/50 text-brand-300': client.plano === 'platinum'
                                                     }">
-                                                    <span x-text="client.plano === 'premium' ? '🥈 Premium' : (client.plano === 'platinum' ? '🥇 Platinum' : '🥉 Básico')"></span>
+                                                    <span x-text="client.plano === 'individual' ? '👤 Individual' : client.plano === 'premium' ? '🥈 Premium' : (client.plano === 'platinum' ? '🥇 Platinum' : '🥉 Básico')"></span>
                                                 </span>
                                                 <span class="text-[9px] font-black uppercase tracking-wider" :class="client.tipo_conta === 'individual' ? 'text-emerald-400' : 'text-slate-400'" x-text="client.tipo_conta === 'individual' ? '👤 Individual' : '👥 Equipe'"></span>
                                                 <button @click="openChangePlanModal(client)" class="text-[9px] text-slate-500 hover:text-brand-400 underline transition-colors">alterar plano</button>
@@ -1022,8 +1022,30 @@
                     </div>
                 </div>
 
+                <!-- PLANO INDIVIDUAL (preço fixo) -->
+                <div x-show="form.tipoConta === 'individual'">
+                    <label class="text-[10px] font-black uppercase text-slate-400 mb-3 block ml-1">Plano Individual — período</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" @click="form.days = 30"
+                            :class="String(form.days) === '30' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
+                            class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
+                            <span class="text-[11px] font-black">Mensal</span>
+                            <span class="text-sm font-black mt-1">R$ 49,90</span>
+                            <span class="text-[9px] text-slate-500 mt-1">30 dias</span>
+                        </button>
+                        <button type="button" @click="form.days = 365"
+                            :class="String(form.days) === '365' ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400 hover:border-emerald-600'"
+                            class="flex flex-col items-center p-3 rounded-xl border-2 transition-all text-center">
+                            <span class="text-[11px] font-black">Anual</span>
+                            <span class="text-sm font-black mt-1">R$ 297</span>
+                            <span class="text-[9px] text-slate-500 mt-1">365 dias</span>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-2 ml-1">Inclui IA, arquivos, agenda, fluxos e disparos. Para teste grátis, digite os dias em "Dias de Acesso" e marque Degustação.</p>
+                </div>
+
                 <!-- SELEÇÃO DE PLANO -->
-                <div>
+                <div x-show="form.tipoConta !== 'individual'">
                     <label class="text-[10px] font-black uppercase text-slate-400 mb-3 block ml-1">Plano do Cliente</label>
                     <div class="grid grid-cols-3 gap-2">
                         <button type="button" @click="form.plano = 'basico'"
@@ -1246,6 +1268,15 @@
                             <span class="text-[9px] text-slate-500 mt-1 leading-tight">Administrador cria<br>setores e atendentes</span>
                         </button>
                     </div>
+                </div>
+
+                <!-- VALIDADE -->
+                <p class="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">Validade</p>
+                <p class="text-xs text-slate-300 mb-2" x-text="changePlanData.expiresAt ? 'Atual: vence em ' + new Date(changePlanData.expiresAt).toLocaleDateString('pt-BR') : 'Atual: vitalício (sem vencimento)'"></p>
+                <div class="grid grid-cols-3 gap-2 mb-5">
+                    <button type="button" @click="changePlanData.addDias = changePlanData.addDias === 30 ? 0 : 30" :class="changePlanData.addDias === 30 ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">+30 dias<br><span class="text-[9px] font-bold">Mensal R$ 49,90</span></button>
+                    <button type="button" @click="changePlanData.addDias = changePlanData.addDias === 365 ? 0 : 365" :class="changePlanData.addDias === 365 ? 'border-emerald-400 bg-emerald-900/30 text-emerald-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">+365 dias<br><span class="text-[9px] font-bold">Anual R$ 297</span></button>
+                    <button type="button" @click="changePlanData.addDias = changePlanData.addDias === -1 ? 0 : -1" :class="changePlanData.addDias === -1 ? 'border-amber-400 bg-amber-900/30 text-amber-300' : 'border-slate-700 text-slate-400'" class="p-2.5 rounded-xl border-2 text-[11px] font-black">Vitalício<br><span class="text-[9px] font-bold">sem vencimento</span></button>
                 </div>
 
                 <!-- SELEÇÃO DE PLANO BASE -->
@@ -1641,6 +1672,7 @@
                     this.isLoading = true;
                     try {
                         const payload = {
+                            slug: f.id_slug.trim(),
                             id_slug: f.id_slug.trim(),
                             nome: f.nome.trim(),
                             descricao: f.descricao.trim(),
@@ -2076,6 +2108,7 @@
                     this.isLoading = true;
                     const instName = this.form.instanceName.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); 
                     
+                    if (this.form.tipoConta === 'individual' && !(parseInt(this.form.days) > 0)) this.form.days = 30; // individual nunca fica vitalício
                     let expires_at = null;
                     if (this.form.days && parseInt(this.form.days) > 0) {
                         let expDate = new Date();
@@ -2095,7 +2128,10 @@
                             return acc;
                         }, {});
                         const tipoConta = this.form.tipoConta === 'individual' ? 'individual' : 'equipe';
-                        if (tipoConta === 'individual' && 'setores' in initialFeatures) initialFeatures.setores = false;
+                        if (tipoConta === 'individual') {
+                            this.form.plano = 'individual';
+                            Object.assign(initialFeatures, { bot: true, disparo: true, agenda: true, setores: false, ia_atendimento: true, audio_ia: true });
+                        }
 
                         // 1. Cria/atualiza licença via /api/admin/criar-licenca
                         const licRes = await fetch('/api/admin/criar-licenca', {
@@ -2149,7 +2185,7 @@
 
                         // 4. Texto de resumo para o cliente
                         let baseUrl = window.location.origin + '/';
-                        const planLabels = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum' };
+                        const planLabels = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum', individual: (String(this.form.days) === '365' ? 'Anual — R$ 297' : 'Mensal — R$ 49,90') };
                         this.summaryText = tipoConta === 'individual'
                             ? `🚀 *Seja bem-vindo ao EvoCRM!*\nSua conta individual foi criada com sucesso. Aqui estão os seus dados de acesso:\n\n🔗 *Painel:* ${baseUrl}\n👤 *Usuário:* ${instName}\n🔑 *Senha:* ${this.form.licenseKey.trim()}\n📦 *Plano:* ${planLabels[this.form.plano] || 'Básico'} (Individual)\n\n📱 *Para conectar o seu WhatsApp, acesse o link abaixo pelo computador e leia o QR Code:*\n${baseUrl}conectar.html?i=${instName}\n\nGuarde esta mensagem em segurança!`
                             : `🚀 *Seja bem-vindo ao EvoCRM!*\nSua conta foi criada com sucesso. Aqui estão os seus dados de acesso:\n\n🔗 *Painel do CRM:* ${baseUrl}\n🏢 *Nome da Empresa:* ${instName}\n🔑 *Chave de Licença:* ${this.form.licenseKey.trim()}\n📦 *Plano:* ${planLabels[this.form.plano] || 'Básico'}\n🛡️ *Senha Master (ADM Principal):* admin123\n\n📱 *Para conectar o seu WhatsApp, acesse o link abaixo pelo computador e leia o QR Code:*\n${baseUrl}conectar.html?i=${instName}\n\nGuarde esta mensagem em segurança!`;
@@ -2420,7 +2456,7 @@
                     } else {
                         ferramentas = this._toolsDef.map(t => ({ ...t, ativo: t.planos.includes(plano) }));
                     }
-                    this.changePlanData = { id: client.id, instanceName: client.instance_name, plano, ferramentas, tipoConta: client.tipo_conta === 'individual' ? 'individual' : 'equipe' };
+                    this.changePlanData = { id: client.id, instanceName: client.instance_name, plano, ferramentas, tipoConta: client.tipo_conta === 'individual' ? 'individual' : 'equipe', expiresAt: client.expires_at || null, addDias: 0 };
                     this.isChangePlanModalOpen = true;
                     setTimeout(() => lucide.createIcons(), 50);
                 },
@@ -2449,15 +2485,27 @@
 
                     const { error } = await dbCall({
                         table: 'licenses', op: 'update',
-                        data: { plano: this.changePlanData.plano, features: JSON.stringify(features), tipo_conta: this.changePlanData.tipoConta === 'individual' ? 'individual' : 'equipe' },
+                        data: (() => {
+                            const d = { plano: this.changePlanData.plano, features: JSON.stringify(features), tipo_conta: this.changePlanData.tipoConta === 'individual' ? 'individual' : 'equipe' };
+                            if (d.tipo_conta === 'individual') { d.plano = 'individual'; features.setores = false; d.features = JSON.stringify(features); }
+                            const add = this.changePlanData.addDias;
+                            if (add === -1) d.expires_at = null;
+                            else if (add > 0) {
+                                const atual = this.changePlanData.expiresAt ? new Date(this.changePlanData.expiresAt) : null;
+                                const base = atual && atual > new Date() ? atual : new Date();
+                                d.expires_at = new Date(base.getTime() + add * 86400000).toISOString();
+                                d.status = 'active';
+                            }
+                            return d;
+                        })(),
                         filters: [{ op: 'eq', col: 'id', val: this.changePlanData.id }]
                     });
 
                     if (error) {
                         this.addNotification('Erro', 'Falha ao salvar: ' + error.message, 'error');
                     } else {
-                        const labels = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum', custom: '⚙️ Personalizado' };
-                        this.addNotification('Sucesso', `Plano atualizado: ${labels[this.changePlanData.plano] || 'Personalizado'}!`, 'success');
+                        const labels = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum', custom: '⚙️ Personalizado', individual: '👤 Individual' };
+                        this.addNotification('Sucesso', `Plano atualizado: ${labels[this.changePlanData.tipoConta === 'individual' ? 'individual' : this.changePlanData.plano] || 'Personalizado'}!`, 'success');
                         this.isChangePlanModalOpen = false;
                         await this.loadData();
                     }

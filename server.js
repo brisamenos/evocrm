@@ -279,6 +279,64 @@ const getMpToken     = async () => (await getMpConfig('mp_access_token')) || get
 const getMpPublicKey = async () => (await getMpConfig('mp_public_key'))   || getMpPublicKeySync();
 
 
+// ─── PLANO INDIVIDUAL (preço fixo) ───────────────────────────────────────────
+// Os valores ficam SÓ no servidor: o navegador não consegue alterar o preço.
+const PLANO_INDIVIDUAL = {
+    id_slug: 'individual', nome: 'Individual',
+    descricao: 'CRM completo com IA para quem atende sozinho',
+    preco_mensal: 49.90, preco_anual: 297.00,
+    dias: { mensal: 30, anual: 365 },
+    cor: '#6366f1',
+    features: [
+        { text: 'CRM de conversas WhatsApp', on: true },
+        { text: 'Funil Kanban de leads', on: true },
+        { text: 'IA de atendimento 24/7 com seu prompt', on: true },
+        { text: 'Arquivos (PDF/catálogo) lidos pela IA', on: true },
+        { text: 'Agendamento pela IA', on: true },
+        { text: 'Fluxos e automações', on: true },
+        { text: 'Disparos / campanhas', on: true },
+        { text: 'Áudio IA (texto para voz)', on: true },
+        { text: '1 usuário (login e senha)', on: true },
+    ],
+};
+const MP_API = process.env.MP_API_URL || 'https://api.mercadopago.com';
+const FEATURES_INDIVIDUAL = { bot: true, disparo: true, agenda: true, setores: false, ia_atendimento: true, audio_ia: true };
+const _ativandoPedido = new Set();
+
+// Ativa (nova assinatura) ou estende (renovação) a licença de um pagamento aprovado.
+// Idempotente: pode ser chamada várias vezes sem duplicar dias.
+async function ativarAssinaturaIndividual(pag) {
+    if (!pag || pag.instancia_criada === 1 || pag.instancia_criada === true) return;
+    if (_ativandoPedido.has(pag.id)) return;
+    _ativandoPedido.add(pag.id);
+    try {
+        const inst = String(pag.instancia || pag.instance_name || '').trim().toLowerCase();
+        const dias = pag.billing === 'anual' ? PLANO_INDIVIDUAL.dias.anual : PLANO_INDIVIDUAL.dias.mensal;
+        const { data: lic } = await db.from('licenses').select('*').eq('instance_name', inst).single();
+        let expires;
+        if (pag.is_renewal && lic) {
+            // Renovação: soma a partir do vencimento atual (se ainda não venceu)
+            const base = lic.expires_at && new Date(lic.expires_at) > new Date() ? new Date(lic.expires_at) : new Date();
+            expires = new Date(base.getTime() + dias * 86400000);
+            await db.from('licenses').update({ status: 'active', expires_at: expires.toISOString(), is_trial: false }).eq('instance_name', inst);
+        } else {
+            expires = new Date(Date.now() + dias * 86400000);
+            await db.from('licenses').upsert({
+                instance_name: inst, license_key: pag.license_key, plano: 'individual', status: 'active',
+                tipo_conta: 'individual', features: JSON.stringify(FEATURES_INDIVIDUAL),
+                expires_at: expires.toISOString(), is_trial: false,
+            }, { onConflict: 'instance_name' });
+            try {
+                const { data: iaEx } = await db.from('ia_config').select('id').eq('instance_name', inst).single();
+                if (!iaEx) await db.from('ia_config').insert({ instance_name: inst, ativo: false, modelo: 'gpt-4o-mini', prompt: '' });
+            } catch (e) {}
+            if (!state[inst]) inicializarInstancia(inst).catch(() => {});
+        }
+        await db.from('pagamentos').update({ status: 'approved', expires_at: expires.toISOString(), instancia_criada: 1 }).eq('id', pag.id);
+        log('sistema', 'ok', `[Assinatura] ✅ ${pag.is_renewal ? 'Renovada' : 'Ativada'}: ${inst} | ${pag.billing} | até ${expires.toLocaleDateString('pt-BR')}`);
+    } finally { _ativandoPedido.delete(pag.id); }
+}
+
 // ─── ESTADO GLOBAL (por instância) ───────────────────────────────────────────
 const state = {};
 
@@ -4933,6 +4991,105 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ error: e.message }));
             }
         });
+        return;
+    }
+
+    // ── PLANO INDIVIDUAL: dados públicos (preço fixo) ────────────────────────
+    if (req.url === '/api/plano-individual' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(PLANO_INDIVIDUAL));
+        return;
+    }
+
+    // ── PLANO INDIVIDUAL: gerar PIX (nova assinatura ou renovação) ───────────
+    // POST { nome, email, whatsapp, cpf, instancia, periodo: 'mensal'|'anual', renovacao }
+    if (req.url === '/api/assinatura/pix' && req.method === 'POST') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            const responder = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+            try {
+                const b = JSON.parse(body || '{}');
+                const nome = String(b.nome || '').trim(), email = String(b.email || '').trim();
+                const whatsapp = String(b.whatsapp || '').replace(/\D/g, ''), cpf = String(b.cpf || '').replace(/\D/g, '');
+                const inst = String(b.instancia || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+                const periodo = b.periodo === 'anual' ? 'anual' : 'mensal';
+                const renovacao = !!b.renovacao;
+                if (!nome) return responder(400, { error: 'Informe seu nome completo.' });
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return responder(400, { error: 'Informe um e-mail válido.' });
+                if (whatsapp.length < 10) return responder(400, { error: 'Informe seu WhatsApp com DDD.' });
+                if (cpf.length !== 11) return responder(400, { error: 'CPF inválido. Informe os 11 dígitos.' });
+                if (inst.length < 3) return responder(400, { error: 'O nome de usuário deve ter ao menos 3 caracteres.' });
+
+                const { data: licEx } = await db.from('licenses').select('instance_name, tipo_conta').eq('instance_name', inst).single();
+                if (!renovacao && licEx) return responder(409, { error: 'Esse nome de usuário já está em uso. Escolha outro.' });
+                if (renovacao && !licEx) return responder(404, { error: 'Conta não encontrada para renovar.' });
+
+                const token = await getMpToken();
+                if (!token) return responder(500, { error: 'Pagamento indisponível no momento (Mercado Pago não configurado).' });
+
+                const valor = periodo === 'anual' ? PLANO_INDIVIDUAL.preco_anual : PLANO_INDIVIDUAL.preco_mensal;
+                const licenseKey = renovacao ? null : ('LIC-' + require('crypto').randomBytes(5).toString('hex').toUpperCase());
+                const { data: ped, error: dbErr } = await db.from('pagamentos').insert({
+                    nome, email, whatsapp, cpf, instancia: inst, instance_name: inst,
+                    plano: 'individual', billing: periodo, valor, status: 'pending',
+                    license_key: licenseKey, is_renewal: renovacao ? 1 : 0, instancia_criada: 0,
+                });
+                const pedido = Array.isArray(ped) ? ped[0] : ped;
+                if (dbErr || !pedido) throw new Error(dbErr?.message || 'Falha ao registrar o pedido');
+
+                const mpRes = await fetch(`${MP_API}/v1/payments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Idempotency-Key': pedido.id },
+                    body: JSON.stringify({
+                        transaction_amount: valor,
+                        description: `EvoCRM - Plano Individual ${periodo === 'anual' ? 'Anual' : 'Mensal'}${renovacao ? ' (renovação)' : ''}`,
+                        payment_method_id: 'pix',
+                        payer: { email, first_name: nome.split(' ')[0], last_name: nome.split(' ').slice(1).join(' ') || 'Cliente', identification: { type: 'CPF', number: cpf } },
+                        external_reference: pedido.id,
+                        date_of_expiration: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+                    }),
+                });
+                const mp = await mpRes.json().catch(() => ({}));
+                if (!mpRes.ok) throw new Error(mp.message || 'Erro ao gerar o PIX no Mercado Pago');
+                await db.from('pagamentos').update({ mp_payment_id: String(mp.id) }).eq('id', pedido.id);
+                const tx = mp.point_of_interaction?.transaction_data || {};
+                log('sistema', 'ok', `[Assinatura] PIX gerado: ${inst} | ${periodo} | R$ ${valor.toFixed(2)}${renovacao ? ' | renovação' : ''}`);
+                responder(200, { pedido_id: pedido.id, valor, periodo, qr_code: tx.qr_code || '', qr_code_base64: tx.qr_code_base64 || '', mp_payment_id: String(mp.id) });
+            } catch (e) {
+                log('sistema', 'erro', `[Assinatura] ${e.message}`);
+                responder(500, { error: e.message });
+            }
+        });
+        return;
+    }
+
+    // ── PLANO INDIVIDUAL: status do pagamento (ativa a conta quando aprovado) ─
+    if (req.url.startsWith('/api/assinatura/status') && req.method === 'GET') {
+        const responder = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+        try {
+            const pedidoId = new URL(req.url, 'http://x').searchParams.get('pedido') || '';
+            let { data: pag } = await db.from('pagamentos').select('*').eq('id', pedidoId).single();
+            if (!pag) return responder(404, { error: 'Pedido não encontrado' });
+            let status = pag.status;
+            if (status !== 'approved' && pag.mp_payment_id) {
+                const token = await getMpToken();
+                const r = await fetch(`${MP_API}/v1/payments/${pag.mp_payment_id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const d = await r.json().catch(() => ({}));
+                if (d.status) status = d.status;
+                if (status !== pag.status && status !== 'approved') await db.from('pagamentos').update({ status }).eq('id', pag.id);
+            }
+            if (status === 'approved') {
+                await ativarAssinaturaIndividual({ ...pag, status: 'approved' });
+                ({ data: pag } = await db.from('pagamentos').select('*').eq('id', pedidoId).single());
+                const { data: lic } = await db.from('licenses').select('license_key, expires_at').eq('instance_name', pag.instancia || pag.instance_name).single();
+                return responder(200, {
+                    status: 'approved', instancia: pag.instancia || pag.instance_name, renovacao: !!pag.is_renewal,
+                    license_key: pag.is_renewal ? null : (lic?.license_key || pag.license_key), expires_at: lic?.expires_at || pag.expires_at,
+                });
+            }
+            responder(200, { status });
+        } catch (e) { responder(500, { error: e.message }); }
         return;
     }
 

@@ -128,7 +128,7 @@ function crmApp() {
                 renewContadorTimer: null,
                 renewPollTimer: null,
                 renewForm: { nome: '', email: '', whatsapp: '', cpf: '' },
-                MP_ACCESS_TOKEN_RENEW: 'APP_USR-551634858809999-031000-b35ffaf8d2252b304ece7d763c723ec4-569868834',
+                MP_ACCESS_TOKEN_RENEW: '',
 
                 // ── PERMISSÕES POR PLANO / FEATURES ──
                 // Quando features foi salvo explicitamente no banco → é a fonte da verdade.
@@ -137,6 +137,7 @@ function crmApp() {
                     basico:   [],
                     premium:  ['bot','disparo','agenda','setores'],
                     platinum: ['bot','disparo','agenda','setores','ia_atendimento','audio_ia'],
+                    individual: ['bot','disparo','agenda','ia_atendimento','audio_ia'],
                 },
                 _temFeature(id) {
                     if (this.clienteFeatures && typeof this.clienteFeatures === 'object' && Object.keys(this.clienteFeatures).length > 0) {
@@ -166,8 +167,14 @@ function crmApp() {
                 _toastUpgrade(label) {
                     this.addNotification('🔒 Função bloqueada', `"${label}" requer upgrade. Fale com o proprietário.`, 'warn');
                 },
+                // Conta individual tem todos os recursos (menos equipe) → exibe como completo
+                get planoVisual() { return this.isIndividual ? 'platinum' : this.clientePlano; },
+                renovarIndividual(periodo = 'mensal') {
+                    window.open(`checkout.html?renovar=true&instancia=${encodeURIComponent(this.instanceName)}&periodo=${periodo}`, '_blank');
+                },
                 get planoBadge() {
-                    const b = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum', custom: '⚙️ Personalizado' };
+                    if (this.isIndividual) return '👤 Plano Individual';
+                    const b = { basico: '🥉 Básico', premium: '🥈 Premium', platinum: '🥇 Platinum', custom: '⚙️ Personalizado', individual: '👤 Individual' };
                     return b[this.clientePlano] || '⚙️ Personalizado';
                 },
 
@@ -192,6 +199,7 @@ function crmApp() {
                 },
 
                 abrirRenovacao() {
+                    if (this.isIndividual) return this.renovarIndividual('mensal');
                     // Carrega planos do Supabase para o modal
                     this.renewModal = true;
                     this.renewStep = 'planos';

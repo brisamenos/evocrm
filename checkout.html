@@ -662,10 +662,14 @@
                 <div class="plan-price">
                     <div class="plan-price-row">
                         <span class="plan-price-curr">R$</span>
-                        <span class="plan-price-num" :style="'color:'+plano.cor" x-text="plano.preco_mensal || plano.preco"></span>
-                        <span class="plan-price-period">/mês</span>
+                        <span class="plan-price-num" :style="'color:'+plano.cor" x-text="brl(precoAtual(plano))"></span>
+                        <span class="plan-price-period" x-text="periodo === 'anual' ? '/ano' : '/mês'"></span>
                     </div>
-                    <p style="font-size:11px;color:var(--dimmed);margin-top:5px;">Renovação mensal, cancele quando quiser</p>
+                    <div style="display:flex;gap:6px;margin-top:12px;" @click.stop>
+                        <button type="button" @click="periodo='mensal'" :style="periodo==='mensal' ? 'background:'+plano.cor+';color:#fff;border-color:'+plano.cor : ''" style="flex:1;padding:8px 6px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;" x-text="'Mensal • R$ ' + brl(plano.preco_mensal)"></button>
+                        <button type="button" @click="periodo='anual'" :style="periodo==='anual' ? 'background:'+plano.cor+';color:#fff;border-color:'+plano.cor : ''" style="flex:1;padding:8px 6px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;" x-text="'Anual • R$ ' + brl(plano.preco_anual)"></button>
+                    </div>
+                    <p style="font-size:11px;color:var(--dimmed);margin-top:8px;" x-text="periodo === 'anual' ? 'Pagamento único por 12 meses — equivale a R$ ' + brl(plano.preco_anual/12) + '/mês' : 'Renovação mensal, cancele quando quiser'"></p>
                 </div>
                 <hr class="plan-divider">
                 <div class="plan-features">
@@ -689,7 +693,7 @@
 </section>
 
 <!-- ═══ COMPARISON TABLE ═══ -->
-<section class="compare-section section fade-in" x-show="!modoRenovacao" x-cloak>
+<section class="compare-section section fade-in" x-show="!modoRenovacao && planos.length > 1" x-cloak>
     <div style="text-align:center;margin-bottom:50px;">
         <span class="section-label">Comparativo detalhado</span>
         <h2 class="section-title">O que está incluso em <span class="grad">cada plano</span></h2>
@@ -818,8 +822,8 @@
                 </div>
                 <div style="display:flex;align-items:flex-start;gap:10px;">
                     <div style="text-align:right;">
-                        <p style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:#a5a8fb;" x-text="'R$ '+(planoSelecionado?.preco_mensal || planoSelecionado?.preco)"></p>
-                        <p style="font-size:11px;color:var(--dimmed);">/mês</p>
+                        <p style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:#a5a8fb;" x-text="'R$ '+brl(precoAtual())"></p>
+                        <p style="font-size:11px;color:var(--dimmed);" x-text="periodo === 'anual' ? '/ano' : '/mês'"></p>
                     </div>
                     <button class="modal-close" @click="fecharModal()"><i data-lucide="x" style="width:16px;height:16px;"></i></button>
                 </div>
@@ -828,6 +832,17 @@
             <div x-show="modoRenovacao" style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.18);border-radius:12px;padding:11px 15px;margin-bottom:20px;display:flex;align-items:center;gap:9px;">
                 <i data-lucide="refresh-cw" style="width:14px;height:14px;color:#fbbf24;flex-shrink:0;"></i>
                 <span style="font-size:12.5px;color:#fbbf24;">Renovando plano para a instância: <strong x-text="form.instancia"></strong></span>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-bottom:20px;">
+                <button type="button" @click="periodo='mensal'" :style="periodo==='mensal' ? 'background:rgba(91,94,244,.18);border-color:#5b5ef4;color:#fff' : ''" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-weight:700;cursor:pointer;text-align:center;">
+                    <span style="display:block;font-size:12px;">Mensal</span>
+                    <span style="display:block;font-size:16px;" x-text="'R$ ' + brl(planoSelecionado?.preco_mensal)"></span>
+                </button>
+                <button type="button" @click="periodo='anual'" :style="periodo==='anual' ? 'background:rgba(91,94,244,.18);border-color:#5b5ef4;color:#fff' : ''" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);font-weight:700;cursor:pointer;text-align:center;">
+                    <span style="display:block;font-size:12px;">Anual</span>
+                    <span style="display:block;font-size:16px;" x-text="'R$ ' + brl(planoSelecionado?.preco_anual)"></span>
+                </button>
             </div>
 
             <hr style="border:none;border-top:1px solid var(--border);margin-bottom:24px;">
@@ -851,7 +866,7 @@
                     <p style="font-size:11px;color:var(--dimmed);margin-top:5px;">Exigido pelo Mercado Pago para emissão do PIX.</p>
                 </div>
                 <div x-show="!modoRenovacao">
-                    <label style="font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;"><i data-lucide="server" style="width:12px;height:12px;"></i> Nome da instância</label>
+                    <label style="font-size:11px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;"><i data-lucide="server" style="width:12px;height:12px;"></i> Nome de usuário (para entrar no painel)</label>
                     <input class="input-field" x-model="form.instancia" type="text" :disabled="modoRenovacao" placeholder="minha_empresa" @input="form.instancia=$event.target.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
                     <p style="font-size:11px;color:var(--dimmed);margin-top:5px;">Sem espaços ou caracteres especiais. Ex: <b style="color:#5b5ef4;">minha_empresa</b></p>
                 </div>
@@ -928,6 +943,13 @@
             <button class="btn-primary" style="padding:16px 38px;font-size:15px;" @click="irParaConectar()">
                 <span x-text="modoRenovacao?'Voltar ao CRM →':'Conectar agora →'"></span>
             </button>
+            <div x-show="!modoRenovacao && credenciais" style="background:rgba(91,94,244,.08);border:1px solid rgba(91,94,244,.25);border-radius:14px;padding:14px 16px;margin:16px 0;text-align:left;">
+                <p style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">Seus dados de acesso — anote!</p>
+                <p style="font-size:14px;margin-bottom:4px;">👤 Usuário: <b x-text="credenciais?.instancia"></b></p>
+                <p style="font-size:14px;margin-bottom:4px;">🔑 Senha: <b x-text="credenciais?.license_key"></b></p>
+                <p style="font-size:12px;color:var(--muted);" x-text="credenciais?.expires_at ? 'Válido até ' + new Date(credenciais.expires_at).toLocaleDateString('pt-BR') : ''"></p>
+            </div>
+            <p x-show="modoRenovacao && credenciais?.expires_at" style="font-size:13px;color:var(--muted);margin:10px 0;" x-text="'Nova validade: ' + new Date(credenciais?.expires_at).toLocaleDateString('pt-BR')"></p>
             <p x-show="!modoRenovacao" style="font-size:11px;color:var(--dimmed);margin-top:14px;" x-text="'Instância: '+form.instancia"></p>
         </div>
 
@@ -1007,8 +1029,10 @@ class DbQueryBuilder {
 function checkoutApp() {
     return {
         // ── CONFIG ──
-        MP_ACCESS_TOKEN: 'APP_USR-551634858809999-031000-b35ffaf8d2252b304ece7d763c723ec4-569868834',
-        MP_PUBLIC_KEY:   'APP_USR-83d49086-a9b8-425a-a3ce-b4b2afbc0ff7',
+        // Pagamento é gerado pelo servidor (/api/assinatura/*) — nenhum token fica no navegador
+        periodo: 'mensal',          // 'mensal' | 'anual'
+        pedidoId: null,
+        credenciais: null,          // { instancia, license_key, expires_at } após aprovação
         CONECTAR_URL: 'conectar.html',
         DIAS_MENSAL: 30,
         DIAS_ANUAL: 365,
@@ -1080,6 +1104,7 @@ function checkoutApp() {
             this.client = makeDbClient();
 
             const params = new URLSearchParams(window.location.search);
+            if (params.get('periodo') === 'anual') this.periodo = 'anual';
             if (params.get('renovar') === 'true') {
                 this.modoRenovacao = true;
                 this.form.instancia = decodeURIComponent(params.get('instancia') || '');
@@ -1089,10 +1114,8 @@ function checkoutApp() {
             try {
                 const { data: rows } = await this.client.from('admin_config')
                     .select('key,value')
-                    .in('key', ['mp_access_token','mp_public_key','conectar_url']);
+                    .in('key', ['conectar_url']);
                 rows?.forEach(r => {
-                    if (r.key === 'mp_access_token' && r.value) this.MP_ACCESS_TOKEN = r.value;
-                    if (r.key === 'mp_public_key'   && r.value) this.MP_PUBLIC_KEY   = r.value;
                     if (r.key === 'conectar_url'    && r.value) this.CONECTAR_URL    = r.value;
                 });
             } catch(e) {}
@@ -1132,68 +1155,20 @@ function checkoutApp() {
 
         // ── CARREGAR PLANOS ──
         async carregarPlanos() {
+            // Plano único e fixo: Individual — R$ 49,90/mês ou R$ 297/ano (valores vêm do servidor)
             this.carregandoPlanos = true;
-            try {
-                const { data, error } = await this.client.from('planos').select('*').order('ordem', { ascending: true });
-                if (!error && data?.length > 0) {
-                    this.planos = data;
-                    this.buildComparativo();
-                    this.carregandoPlanos = false;
-                    return;
-                }
-            } catch(e) {}
-
-            this.planos = [
-                {
-                    id_slug: 'basico', nome: 'Básico', descricao: 'CRM apenas',
-                    preco_mensal: 67, preco: 67, cor: '#94a3b8', popular: false,
-                    features: [
-                        { text: 'CRM de conversas WhatsApp', on: true },
-                        { text: 'Funil Kanban de leads', on: true },
-                        { text: '1 número WhatsApp', on: true },
-                        { text: 'Histórico de mensagens', on: true },
-                        { text: 'Departamentos / Setores', on: false },
-                        { text: 'Automação (Bot)', on: false },
-                        { text: 'Disparo em Massa', on: false },
-                        { text: 'Agenda', on: false },
-                        { text: 'IA de Atendimento 24/7', on: false },
-                        { text: 'Áudio IA (TTS)', on: false },
-                    ]
-                },
-                {
-                    id_slug: 'premium', nome: 'Premium', descricao: '+ Automação',
-                    preco_mensal: 97, preco: 97, cor: '#7b7ff5', popular: true,
-                    features: [
-                        { text: 'CRM de conversas WhatsApp', on: true },
-                        { text: 'Funil Kanban de leads', on: true },
-                        { text: '3 números WhatsApp', on: true },
-                        { text: 'Departamentos / Setores', on: true },
-                        { text: 'Automação (Bot)', on: true },
-                        { text: 'Disparo em Massa', on: true },
-                        { text: 'Agenda', on: true },
-                        { text: 'IA de Atendimento 24/7', on: false },
-                        { text: 'Áudio IA (TTS)', on: false },
-                    ]
-                },
-                {
-                    id_slug: 'platinum', nome: 'Platinum', descricao: 'Tudo liberado',
-                    preco_mensal: 197, preco: 197, cor: '#c4b5fd', popular: false,
-                    features: [
-                        { text: 'CRM de conversas WhatsApp', on: true },
-                        { text: 'Funil Kanban de leads', on: true },
-                        { text: 'Números ilimitados', on: true },
-                        { text: 'Departamentos / Setores', on: true },
-                        { text: 'Automação (Bot)', on: true },
-                        { text: 'Disparo em Massa', on: true },
-                        { text: 'Agenda', on: true },
-                        { text: 'IA de Atendimento 24/7', on: true },
-                        { text: 'Áudio IA (TTS)', on: true },
-                    ]
-                },
-            ];
+            let p = null;
+            try { const r = await fetch('/api/plano-individual'); if (r.ok) p = await r.json(); } catch(e) {}
+            if (!p) p = { id_slug: 'individual', nome: 'Individual', descricao: 'CRM completo com IA para quem atende sozinho', preco_mensal: 49.90, preco_anual: 297, cor: '#6366f1', features: [] };
+            p.popular = true;
+            this.planos = [p];
             this.buildComparativo();
             this.carregandoPlanos = false;
         },
+
+        // Formata valor em reais: 49.9 → "49,90"
+        brl(v) { return Number(v || 0).toFixed(2).replace('.', ','); },
+        precoAtual(p) { p = p || this.planoSelecionado || this.planos[0]; if (!p) return 0; return this.periodo === 'anual' ? p.preco_anual : p.preco_mensal; },
 
         buildComparativo() {
             const recursos = [
@@ -1232,64 +1207,28 @@ function checkoutApp() {
             if (!email.includes('@')) return this.erroForm = 'Informe um e-mail válido.';
             if (whatsapp.replace(/\D/g,'').length < 10) return this.erroForm = 'Informe seu WhatsApp com DDD.';
             if (cpf.replace(/\D/g,'').length !== 11) return this.erroForm = 'CPF inválido. Informe os 11 dígitos.';
-            if (!this.modoRenovacao && (!instancia || instancia.length < 3)) return this.erroForm = 'Nome de instância deve ter ao menos 3 caracteres.';
+            if (!instancia || instancia.length < 3) return this.erroForm = 'O nome de usuário deve ter ao menos 3 caracteres.';
 
             this.loading = true; this.erroForm = '';
-            const plano = this.planoSelecionado;
-            const valor = Number(plano.preco_mensal || plano.preco);
-            this.valorPix = valor;
-
             try {
-                const licKey = 'LIC-' + Math.random().toString(36).substr(2,9).toUpperCase();
-                const { data: pedido, error: dbErr } = await this.client.from('pagamentos').insert({
-                    nome, email,
-                    whatsapp: whatsapp.replace(/\D/g,''),
-                    cpf: cpf.replace(/\D/g,''),
-                    instancia,
-                    instance_name: instancia,
-                    plano: plano.id_slug || plano.nome,
-                    billing: 'mensal',
-                    valor,
-                    status: 'pending',
-                    license_key: licKey,
-                    is_renewal: this.modoRenovacao ? 1 : 0,
-                }).select().single();
-                if (dbErr) throw dbErr;
-
-                const mpResp = await fetch('https://api.mercadopago.com/v1/payments', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.MP_ACCESS_TOKEN}`,
-                        'X-Idempotency-Key': pedido.id,
-                    },
-                    body: JSON.stringify({
-                        transaction_amount: valor,
-                        description: `EvoCRM Pro - Plano ${plano.nome}`,
-                        payment_method_id: 'pix',
-                        payer: {
-                            email,
-                            first_name: nome.split(' ')[0],
-                            last_name: nome.split(' ').slice(1).join(' ') || 'Cliente',
-                            identification: { type: 'CPF', number: cpf.replace(/\D/g,'') },
-                        },
-                        external_reference: pedido.id,
-                        date_of_expiration: new Date(Date.now() + 30*60*1000).toISOString(),
-                    }),
+                const r = await fetch('/api/assinatura/pix', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nome, email, whatsapp, cpf, instancia, periodo: this.periodo, renovacao: this.modoRenovacao })
                 });
-                const mpData = await mpResp.json();
-                if (!mpResp.ok) throw new Error(mpData.message || 'Erro ao gerar PIX');
-
-                const pix = mpData.point_of_interaction?.transaction_data;
-                this.pixCopiaECola = pix?.qr_code || '';
-                this.pixQrCodeBase64 = pix?.qr_code_base64 || '';
-                this.mpPaymentId = mpData.id;
-
-                await this.client.from('pagamentos').update({ mp_payment_id: String(mpData.id) }).eq('id', pedido.id);
-
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    // erros de preenchimento voltam para o formulário
+                    if (r.status === 400 || r.status === 409 || r.status === 404) { this.erroForm = d.error || 'Verifique os dados.'; this.loading = false; return; }
+                    throw new Error(d.error || 'Erro ao gerar PIX');
+                }
+                this.valorPix = d.valor;
+                this.pixCopiaECola = d.qr_code || '';
+                this.pixQrCodeBase64 = d.qr_code_base64 || '';
+                this.mpPaymentId = d.mp_payment_id;
+                this.pedidoId = d.pedido_id;
                 this.step = 'pix';
                 this.iniciarContador(1800);
-                this.aguardarPagamento(pedido.id, instancia);
+                this.aguardarPagamento(d.pedido_id, instancia);
                 setTimeout(() => lucide.createIcons(), 50);
             } catch(e) {
                 this.erroMsg = e.message || 'Erro desconhecido'; this.step = 'erro';
@@ -1300,24 +1239,14 @@ function checkoutApp() {
         async aguardarPagamento(pedidoId, instancia) {
             const check = async () => {
                 try {
-                    if (this.mpPaymentId) {
-                        const r = await fetch(`https://api.mercadopago.com/v1/payments/${this.mpPaymentId}`, {
-                            headers: { 'Authorization': `Bearer ${this.MP_ACCESS_TOKEN}` }
-                        });
-                        const d = await r.json();
-                        if (d.status === 'approved') {
-                            await this.client.from('pagamentos').update({ status: 'approved' }).eq('id', pedidoId);
-                            clearTimeout(this.pollTimer); clearInterval(this.contadorTimer);
-                            await this.ativarLicenca(pedidoId, instancia);
-                            this.step = 'sucesso'; return;
-                        }
-                    }
-                    const { data } = await this.client.from('pagamentos').select('status').eq('id', pedidoId).single();
-                    if (data?.status === 'approved') {
+                    const r = await fetch('/api/assinatura/status?pedido=' + encodeURIComponent(pedidoId));
+                    const d = await r.json().catch(() => ({}));
+                    if (d.status === 'approved') {
                         clearTimeout(this.pollTimer); clearInterval(this.contadorTimer);
-                        await this.ativarLicenca(pedidoId, instancia);
+                        this.credenciais = d;
                         this.step = 'sucesso';
-                    } else if (data?.status === 'cancelled' || data?.status === 'rejected') {
+                        setTimeout(() => lucide.createIcons(), 50);
+                    } else if (['cancelled', 'rejected', 'expired'].includes(d.status)) {
                         clearTimeout(this.pollTimer);
                         this.erroMsg = 'PIX expirado ou cancelado.'; this.step = 'erro';
                     } else {
@@ -1356,60 +1285,15 @@ function checkoutApp() {
             setTimeout(() => this.pixCopiado = false, 3000);
         },
 
-        async ativarLicenca(pedidoId, instancia) {
-            try {
-                const { data: pag } = await this.client.from('pagamentos').select('*').eq('id', pedidoId).single();
-                if (!pag) return;
-
-                const expires = new Date();
-                expires.setDate(expires.getDate() + this.DIAS_MENSAL);
-                const expiresIso = expires.toISOString();
-                const licKey = pag.license_key || ('LIC-' + Math.random().toString(36).substr(2,9).toUpperCase());
-
-                if (this.modoRenovacao) {
-                    // ── RENOVAÇÃO: usa endpoint do servidor ──────────────────
-                    await fetch('/api/renovar-licenca', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ instancia, pedido_id: pedidoId })
-                    });
-                } else {
-                    // ── NOVA ASSINATURA: cria licença + instância via servidor ─
-                    // 1. Criar licença no SQLite via /api/admin/criar-licenca
-                    await fetch('/api/admin/criar-licenca', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            instance_name: instancia,
-                            license_key: licKey,
-                            plano: pag.plano || 'basico',
-                            admin_secret: 'evocrm-admin-2024'
-                        })
-                    });
-
-                    // 2. Criar instância na Evolution + configurar webhook
-                    await fetch('/api/criar-instancia', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ instancia, pedido_id: pedidoId })
-                    }).catch(() => {}); // não bloqueia se falhar
-
-                    // 3. Marcar pagamento como processado
-                    await this.client.from('pagamentos')
-                        .update({ expires_at: expiresIso, instancia_criada: 1 })
-                        .eq('id', pedidoId);
-                }
-            } catch(e) {
-                console.error('Erro ao ativar licença:', e);
-            }
-        },
+        // A ativação agora é feita pelo servidor quando o pagamento é aprovado.
+        async ativarLicenca() {},
 
         irParaConectar() {
             if (this.modoRenovacao) window.location.href = 'index.html';
             else window.location.href = this.CONECTAR_URL + '?i=' + this.form.instancia;
         },
 
-        aoSucesso() { setTimeout(() => this.irParaConectar(), 3000); },
+        aoSucesso() { if (this.modoRenovacao) setTimeout(() => this.irParaConectar(), 4000); },
 
         maskPhone(e) {
             let v = e.target.value.replace(/\D/g, '');
