@@ -112,7 +112,8 @@ function fluxoBotoesMixin() {
                     body: JSON.stringify({ inst: this.instanceName, numero: n }) });
                 const d = await r.json();
                 if (!r.ok) throw new Error(d.error || 'erro');
-                this.addNotification('Testar menu', 'Enviado! Abra o WhatsApp desse número e toque nos botões.', 'success');
+                if (d.avisos && d.avisos.length) this.addNotification('Testar menu — atenção', d.avisos.join(' • '), 'warn', 15000);
+                else this.addNotification('Testar menu', 'Enviado! Abra o WhatsApp desse número e toque nos botões.', 'success');
             } catch (e) { this.addNotification('Testar menu', e.message, 'error'); }
             this.fbTestando = false;
         },
@@ -126,29 +127,24 @@ function fluxoBotoesMixin() {
                 ao_digitar: 'ia',
                 palavra_menu: 'menu',
                 rodape: 'Dr. Levi Farias • OAB/CE 44.641',
-                texto_boas_vindas:
-`Olá, {nome}! Seja muito bem-vindo(a).
-
-Sou o canal de atendimento do advogado Levi Farias, OAB/CE 44.641, com atuação especializada em conflitos imobiliários, especialmente situações envolvendo atrasos na entrega de imóveis e descumprimento de contratos por construtoras.
-
-Gostaria de compreender pessoalmente os detalhes da sua situação para identificar quais direitos podem estar envolvidos.`,
+                // Curto de propósito: o áudio já apresenta o Dr. Levi; o texto vai junto com os botões (1 mensagem só)
+                texto_boas_vindas: '',
                 etapa_inicial: 'inicio',
                 etapas: [
                     {
                         id: 'inicio', nome: 'Menu inicial', botao_lista: 'Ver opções',
-                        texto: 'Você comprou uma casa ou apartamento e está enfrentando algum problema com a entrega? Toque na opção que mais se parece com a sua situação, ou, se preferir, me conte com suas palavras o que aconteceu 👇',
+                        texto: 'Olá, {nome}! 👋 Aqui é o atendimento do advogado *Levi Farias* (OAB/CE 44.641), especialista em atraso na entrega de imóveis.\n\nComo posso te ajudar? Toque em uma opção ou me conte o que aconteceu 👇',
                         opcoes: [
                             { id: 'atraso', titulo: '🏗️ Atraso na entrega', descricao: '', acao: 'ia', destino: '', resposta: '',
-                              contexto_ia: 'Situação: atraso na entrega do imóvel. Peça, de forma acolhedora, que ele conte livremente o que aconteceu (sem lista de perguntas) e conduza a investigação uma pergunta por vez.' },
-                            { id: 'recuperar', titulo: '💰 Recuperar dinheiro', descricao: '', acao: 'ia', destino: '', resposta: '',
-                              contexto_ia: 'Situação: o cliente pensa em encerrar o contrato e recuperar o que pagou. Entenda primeiro a história e os motivos, sem induzir a decisão, uma pergunta por vez.' },
-                            { id: 'cliente', titulo: '📂 Já sou cliente', descricao: '', acao: 'humano', destino: '', contexto_ia: '',
-                              resposta: 'Perfeito! Já avisei a equipe do Dr. Levi Farias. Em breve retornaremos por aqui com as informações do seu caso. Se quiser, já pode adiantar sua dúvida nesta conversa.' },
+                              contexto_ia: 'Situação: atraso na entrega do imóvel. Responda em no máximo 2 frases curtas: acolha e peça que ele conte o que aconteceu. Uma pergunta só.' },
+                            { id: 'agendar', titulo: '🎥 Agendar chamada', descricao: '', acao: 'agenda', destino: '', resposta: '', contexto_ia: '' },
+                            { id: 'advogado', titulo: '💬 Falar c/ advogado', descricao: '', acao: 'humano', destino: '', contexto_ia: '',
+                              resposta: 'Perfeito! Já avisei o Dr. Levi Farias e ele vai te responder por aqui o quanto antes.\n\nSe quiser adiantar, me conte em poucas palavras o que aconteceu com o seu imóvel.' },
                         ],
                     },
                 ],
             };
-            this.addNotification('Modelo carregado', 'Revise os textos, envie o áudio e clique em Salvar.', 'info');
+            this.addNotification('Modelo carregado', 'Revise o texto, envie o áudio e clique em Salvar menu.', 'info');
             setTimeout(() => window.lucide && lucide.createIcons(), 60);
         },
     };

@@ -1601,7 +1601,7 @@ async function _fluxoSalvar(inst, leadId, id, content, type) {
 }
 
 function _fluxoTexto(t, lead) {
-    const nome = (lead?.nome && !/^\d+$/.test(lead.nome) && !/@lid$/.test(lead.nome) && lead.nome !== 'Contato WhatsApp')
+    const nome = (lead?.nome && !/^\d+$/.test(lead.nome) && !/@lid$/.test(lead.nome) && !['Contato WhatsApp', 'Teste do menu'].includes(lead.nome))
         ? String(lead.nome).split(' ')[0] : '';
     return String(t || '').replace(/,\s*\{nome\}/gi, nome ? `, ${nome}` : '').replace(/\{nome\}/gi, nome).replace(/ +([,!?.])/g, '$1').replace(/  +/g, ' ').trim();
 }
@@ -1645,7 +1645,7 @@ async function fluxoEnviarEtapa(inst, lead, cfg, etapa, prefixo) {
 }
 
 async function _fluxoSetEtapa(inst, lead, etapaId) {
-    const upd = { fluxo_etapa: etapaId || null, fluxo_em: new Date().toISOString(), fluxo_feito: 1 };
+    const upd = { fluxo_etapa: etapaId || null, fluxo_em: new Date().toISOString(), fluxo_feito: 1, fluxo_reset_em: null };
     Object.assign(lead, upd);
     const s = getState(inst);
     if (s.leads[lead.id]) Object.assign(s.leads[lead.id], upd);
@@ -1661,6 +1661,7 @@ function _fluxoGuardarPendente(lead, msg) {
 }
 
 async function fluxoIniciar(inst, lead, cfg, { comBoasVindas = true } = {}) {
+    const avisos = [];
     const etapa = (cfg.etapas || []).find(e => e.id === cfg.etapa_inicial) || (cfg.etapas || [])[0];
     await _fluxoSetEtapa(inst, lead, etapa ? etapa.id : null);
     const pausa = Math.min(Math.max(parseFloat(cfg.delay_seg) || 0, 0), 15) * 1000;
@@ -1669,21 +1670,22 @@ async function fluxoIniciar(inst, lead, cfg, { comBoasVindas = true } = {}) {
             await _fluxoPost(inst, 'sendPresence', { number: lead.numero, presence: 'recording', delay: Math.max(pausa, 1500) }).catch(() => {});
             const id = await _fluxoPost(inst, 'sendWhatsAppAudio', { number: lead.numero, audio: cfg.audio_url });
             await _fluxoSalvar(inst, lead.id, id, cfg.audio_url, 'audio');
-        } catch (e) { log(inst, 'erro', `[Fluxo] Áudio de boas-vindas não enviado: ${e.message}`); }
-    }
+        } catch (e) { log(inst, 'erro', `[Fluxo] Áudio de boas-vindas não enviado: ${e.message}`); avisos.push(`Áudio não enviado: ${e.message}`); }
+    } else if (comBoasVindas) avisos.push('Nenhum áudio de boas-vindas salvo no menu.');
     if (comBoasVindas && String(cfg.texto_boas_vindas || '').trim()) {
         if (pausa) await delay(pausa);
         const txt = _fluxoTexto(cfg.texto_boas_vindas, lead);
         try {
             const id = await _fluxoPost(inst, 'sendText', { number: lead.numero, text: txt, delay: 1200 });
             await _fluxoSalvar(inst, lead.id, id, txt, 'text');
-        } catch (e) { log(inst, 'erro', `[Fluxo] Boas-vindas não enviada: ${e.message}`); }
+        } catch (e) { log(inst, 'erro', `[Fluxo] Boas-vindas não enviada: ${e.message}`); avisos.push(`Mensagem não enviada: ${e.message}`); }
     }
     if (etapa) {
         if (pausa) await delay(pausa);
         await fluxoEnviarEtapa(inst, lead, cfg, etapa).catch(e => log(inst, 'erro', `[Fluxo] Menu não enviado: ${e.message}`));
     }
     log(inst, 'ok', `[Fluxo] ▶️ Menu de boas-vindas enviado para ${getLeadName(lead)}`);
+    return { avisos };
 }
 
 function _fluxoAcharOpcao(etapa, msg) {
@@ -1782,7 +1784,7 @@ async function fluxoProcessar(inst, lead, msg) {
     // Contato novo = nenhuma mensagem (de nenhum lado) com mais de 1 minuto. Quem já conversou
     // ou recebeu um disparo não recebe o menu de boas-vindas.
     let recebidas = 0;
-    try {
+    if (!lead.fluxo_reset_em) try {
         const { data } = await db.from('messages').select('id').eq('lead_id', lead.id)
             .lt('created_at', new Date(Date.now() - 60000).toISOString()).limit(1);
         recebidas = (data || []).length ? 2 : 0;
@@ -2262,6 +2264,13 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
             if (msgData && msgData.length > 0) {
                 const msgAtualId = msgObj?.id || null;
                 let todasMsgs = msgData.filter(m => !(msgAtualId && m.id === msgAtualId));
+                // "Limpar histórico da IA" no CRM: a IA só considera o que veio depois da limpeza
+                const desde = lead.ia_hist_desde || getState(inst).leads[lead.id]?.ia_hist_desde;
+                if (desde) {
+                    const corte = new Date(desde).getTime();
+                    const quando = m => new Date(String(m.created_at || m.timestamp || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(m.created_at || '')) ? '' : 'Z')).getTime();
+                    if (!isNaN(corte)) todasMsgs = todasMsgs.filter(m => { const t = quando(m); return isNaN(t) || t >= corte; });
+                }
 
                 // Segurança: remove ultima msg do cliente se bater com a atual
                 if (todasMsgs.length > 0) {
@@ -6671,10 +6680,15 @@ const server = http.createServer(async (req, res) => {
                     const cfg = await carregarFluxo(inst, true);
                     let { data: lead } = await db.from('leads').select('*').eq('numero', numero).eq('instance_name', inst).single();
                     if (!lead && !numero.startsWith('55')) ({ data: lead } = await db.from('leads').select('*').eq('numero', '55' + numero).eq('instance_name', inst).single());
+                    if (!lead) { // com/sem o 9º dígito: compara os 8 últimos números
+                        const fim = numero.slice(-8);
+                        const { data: todos } = await db.from('leads').select('*').eq('instance_name', inst);
+                        lead = (todos || []).find(l => String(l.numero || '').replace(/\D/g, '').endsWith(fim)) || null;
+                    }
                     if (!lead) {
                         const num = numero.startsWith('55') ? numero : '55' + numero;
                         const { data: novo } = await db.from('leads').insert({
-                            instance_name: inst, numero: num, nome: 'Teste do menu', status: await getPrimeiraColuna(inst),
+                            instance_name: inst, numero: num, nome: num, status: await getPrimeiraColuna(inst),
                             departamento: 'ADM Principal', unread: 0, last_msg: '', last_interaction: new Date().toISOString(),
                         });
                         lead = Array.isArray(novo) ? novo[0] : novo;
@@ -6683,8 +6697,9 @@ const server = http.createServer(async (req, res) => {
                     const s = getState(inst);
                     if (s.humanoAtivo?.[lead.id]) { delete s.humanoAtivo[lead.id]; salvarPausaDB(inst, lead.id, false, 'Teste do menu'); }
                     _fluxoInicio.set(lead.id, Date.now() + 120000);
-                    try { await fluxoIniciar(inst, lead, cfg); } finally { _fluxoInicio.set(lead.id, Date.now() + 3000); }
-                    jsonRes(200, { ok: true });
+                    let r = { avisos: [] };
+                    try { r = await fluxoIniciar(inst, lead, cfg); } finally { _fluxoInicio.set(lead.id, Date.now() + 3000); }
+                    jsonRes(200, { ok: true, avisos: r?.avisos || [] });
                 } catch (e) { jsonRes(400, { error: e.message }); }
             });
             return;

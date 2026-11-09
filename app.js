@@ -3433,8 +3433,11 @@ function crmApp() {
                     try {
                         await this.client.from('ia_historico').delete()
                             .eq('instance_name', this.instanceName).eq('lead_id', leadId);
+                        // Recomeça do zero: a próxima mensagem recebe de novo as boas-vindas do Menu com Botões
+                        await this.client.from('leads').update({ fluxo_feito: 0, fluxo_etapa: null, fluxo_reset_em: new Date().toISOString(), ia_hist_desde: new Date().toISOString() })
+                            .eq('instance_name', this.instanceName).eq('id', leadId);
                         this.iaAddLog('ok', `🗑️ Histórico IA limpo — ${leadName}`);
-                        this.addNotification('🗑️ Histórico limpo', `IA começará nova conversa com ${leadName}`, 'info');
+                        this.addNotification('🗑️ Histórico limpo', `A IA começa do zero com ${leadName}. A próxima mensagem dele recebe as boas-vindas do menu.`, 'info');
                         this._refreshIcons();
                     } catch(e) {
                         this.iaAddLog('erro', '❌ Erro ao limpar histórico: ' + e.message);
@@ -3446,6 +3449,8 @@ function crmApp() {
                     if (!confirm('Limpar histórico da IA para TODOS os contatos?\n\nA IA perderá o contexto de todas as conversas.')) return;
                     try {
                         await this.client.from('ia_historico').delete()
+                            .eq('instance_name', this.instanceName);
+                        await this.client.from('leads').update({ fluxo_feito: 0, fluxo_etapa: null, fluxo_reset_em: new Date().toISOString(), ia_hist_desde: new Date().toISOString() })
                             .eq('instance_name', this.instanceName);
                         this.iaAddLog('ok', '🗑️ Histórico IA zerado para todos os contatos');
                         this.addNotification('🗑️ Histórico zerado', 'IA começará do zero com todos os contatos', 'info');

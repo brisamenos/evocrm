@@ -512,6 +512,8 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
     try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_etapa TEXT"); } catch(e) {}
     try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_em TEXT"); } catch(e) {}
     try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_feito INTEGER DEFAULT 0"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_reset_em TEXT"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN ia_hist_desde TEXT"); } catch(e) {}
 
     // Copia dados de colunas antigas para novas (crm_tags e departments)
     try { _db.run("UPDATE crm_tags SET name = nome WHERE name IS NULL AND nome IS NOT NULL"); } catch(e) {}

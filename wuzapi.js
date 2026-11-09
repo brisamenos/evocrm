@@ -356,6 +356,11 @@ function createWuzapi(opts = {}) {
             let localPath = null;
             if (s.startsWith('/uploads/')) localPath = localUploadPath(s.slice('/uploads/'.length));
             else if (PUBLIC_URL && s.startsWith(PUBLIC_URL + '/uploads/')) localPath = localUploadPath(s.slice((PUBLIC_URL + '/uploads/').length));
+            // Qualquer domínio (http/https, domínio antigo ou novo): se o arquivo existe aqui, lê do disco
+            if (!localPath || !fs.existsSync(localPath)) {
+                const um = s.match(/^https?:\/\/[^/]+\/uploads\/([^?#]+)/i);
+                if (um) { try { const lp = localUploadPath(decodeURIComponent(um[1])); if (lp && fs.existsSync(lp)) localPath = lp; } catch (e) {} }
+            }
 
             if (localPath && fs.existsSync(localPath)) {
                 buf = fs.readFileSync(localPath);
