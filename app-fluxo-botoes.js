@@ -94,8 +94,11 @@ function fluxoBotoesMixin() {
                 const d = await r.json();
                 if (!r.ok || !d.url) throw new Error(d.error || 'falha no upload');
                 this.fbCfg.audio_url = d.url;
-                await this.fbSalvar(true);
-                this.addNotification('Áudio de boas-vindas', 'Áudio enviado ✅ Ele vai como mensagem de voz.', 'success');
+                const salvou = await this.fbSalvar(true);
+                if (!salvou) throw new Error('o arquivo subiu, mas o menu não foi salvo. Corrija o aviso acima e clique em "Salvar menu".');
+                const conf = await (await fetch(`/api/fluxo-botoes?inst=${encodeURIComponent(this.instanceName)}`)).json();
+                if (!conf?.config?.audio_url) throw new Error('o servidor não guardou o áudio. Tente de novo.');
+                this.addNotification('Áudio de boas-vindas', 'Áudio salvo no menu ✅ Ele vai como mensagem de voz.', 'success');
             } catch (e) { this.addNotification('Áudio', 'Erro no upload: ' + e.message, 'error'); }
             this.fbEnviandoAudio = false;
         },
@@ -137,9 +140,9 @@ function fluxoBotoesMixin() {
                         opcoes: [
                             { id: 'atraso', titulo: '🏗️ Atraso na entrega', descricao: '', acao: 'ia', destino: '', resposta: '',
                               contexto_ia: 'Situação: atraso na entrega do imóvel. Responda em no máximo 2 frases curtas: acolha e peça que ele conte o que aconteceu. Uma pergunta só.' },
-                            { id: 'agendar', titulo: '🎥 Agendar chamada', descricao: '', acao: 'agenda', destino: '', resposta: '', contexto_ia: '' },
-                            { id: 'advogado', titulo: '💬 Falar c/ advogado', descricao: '', acao: 'humano', destino: '', contexto_ia: '',
-                              resposta: 'Perfeito! Já avisei o Dr. Levi Farias e ele vai te responder por aqui o quanto antes.\n\nSe quiser adiantar, me conte em poucas palavras o que aconteceu com o seu imóvel.' },
+                            { id: 'recuperar', titulo: '💰 Recuperar dinheiro', descricao: '', acao: 'ia', destino: '', resposta: '',
+                              contexto_ia: 'Situação: o cliente pensa em encerrar o contrato e recuperar o que pagou. Em no máximo 2 frases, acolha e pergunte o que aconteceu, sem induzir a decisão.' },
+                            { id: 'agendar', titulo: 'Agendar atendimento', descricao: '', acao: 'agenda', destino: '', resposta: '', contexto_ia: '' },
                         ],
                     },
                 ],

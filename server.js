@@ -1670,8 +1670,17 @@ async function fluxoIniciar(inst, lead, cfg, { comBoasVindas = true } = {}) {
             await _fluxoPost(inst, 'sendPresence', { number: lead.numero, presence: 'recording', delay: Math.max(pausa, 1500) }).catch(() => {});
             const id = await _fluxoPost(inst, 'sendWhatsAppAudio', { number: lead.numero, audio: cfg.audio_url });
             await _fluxoSalvar(inst, lead.id, id, cfg.audio_url, 'audio');
-        } catch (e) { log(inst, 'erro', `[Fluxo] Áudio de boas-vindas não enviado: ${e.message}`); avisos.push(`Áudio não enviado: ${e.message}`); }
-    } else if (comBoasVindas) avisos.push('Nenhum áudio de boas-vindas salvo no menu.');
+        } catch (e) {
+            log(inst, 'erro', `[Fluxo] Áudio de boas-vindas não enviado: ${e.message}`); avisos.push(`Áudio não enviado: ${e.message}`);
+            // Avisa no CRM (no máximo 1x a cada 10 min) para não depender dos logs do servidor
+            global._avisoAudioFluxo = global._avisoAudioFluxo || {};
+            if (Date.now() - (global._avisoAudioFluxo[inst] || 0) > 600000) {
+                global._avisoAudioFluxo[inst] = Date.now();
+                db.from('dash_notifs').insert({ instance_name: inst, title: '⚠️ Áudio de boas-vindas não foi enviado',
+                    body: `Motivo: ${String(e.message).slice(0, 300)}\nArquivo: ${cfg.audio_url}`, type: 'warning', read: false, criado_por_ia: true, lead_id: lead.id }).catch(() => {});
+            }
+        }
+    } else if (comBoasVindas) { avisos.push('Nenhum áudio de boas-vindas salvo no menu.'); log(inst, 'warn', '[Fluxo] Nenhum áudio de boas-vindas salvo no menu — enviando só texto e botões'); }
     if (comBoasVindas && String(cfg.texto_boas_vindas || '').trim()) {
         if (pausa) await delay(pausa);
         const txt = _fluxoTexto(cfg.texto_boas_vindas, lead);
