@@ -389,23 +389,46 @@ function createWuzapi(opts = {}) {
     }
 
     // Converte qualquer áudio para OGG/Opus (formato de mensagem de voz do WhatsApp)
+    // Converte QUALQUER áudio para nota de voz do WhatsApp: OGG/Opus, mono, 48 kHz, sem capa/metadados.
+    // Usa arquivo temporário (não pipe) porque M4A/MP4 do celular guardam o índice no fim do arquivo.
+    // Mesmo um .ogg é recodificado: OGG/Vorbis ou estéreo é aceito pela Wuzapi mas NÃO aparece no WhatsApp.
     function toOggOpus(buf, mime) {
-        const isOgg = buf.slice(0, 4).toString() === 'OggS';
-        if (isOgg) return Promise.resolve(buf);
-        if (!hasFfmpeg()) return Promise.resolve(null);
+        const jaVoz = buf.slice(0, 4).toString() === 'OggS' && buf.slice(0, 200).includes('OpusHead');
+        if (!hasFfmpeg()) return Promise.resolve(jaVoz ? buf : null);
+        const os = require('os');
+        const base = pathMod.join(os.tmpdir(), `wz_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+        const ent = base + '.in', sai = base + '.ogg';
+        try { fs.writeFileSync(ent, buf); } catch (e) { return Promise.resolve(jaVoz ? buf : null); }
         return new Promise(resolve => {
-            const ff = spawn(ffmpegPath(), ['-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-vn',
-                '-c:a', 'libopus', '-b:a', '48k', '-ar', '48000', '-ac', '1', '-f', 'ogg', 'pipe:1']);
-            const out = [];
             let done = false;
-            const finish = b => { if (!done) { done = true; resolve(b); } };
-            ff.stdout.on('data', d => out.push(d));
+            const limpar = () => { try { fs.unlinkSync(ent); } catch (e) {} try { fs.unlinkSync(sai); } catch (e) {} };
+            const finish = b => { if (done) return; done = true; limpar(); resolve(b || (jaVoz ? buf : null)); };
+            const ff = spawn(ffmpegPath(), ['-hide_banner', '-loglevel', 'error', '-y', '-i', ent, '-vn', '-map_metadata', '-1',
+                '-c:a', 'libopus', '-b:a', '32k', '-vbr', 'on', '-application', 'voip', '-ar', '48000', '-ac', '1', '-f', 'ogg', sai]);
+            let erro = '';
+            ff.stderr.on('data', d => { erro += d; });
             ff.on('error', () => finish(null));
-            ff.on('close', code => finish(code === 0 && out.length ? Buffer.concat(out) : null));
-            ff.stdin.on('error', () => {});
-            ff.stdin.end(buf);
-            setTimeout(() => { try { ff.kill('SIGKILL'); } catch (e) {} finish(null); }, 60000);
+            ff.on('close', code => {
+                let out = null;
+                try { if (code === 0) { const b = fs.readFileSync(sai); if (b.length > 100) out = b; } } catch (e) {}
+                if (!out && erro) console.warn('[Wuzapi] ffmpeg áudio:', erro.trim().slice(0, 300));
+                finish(out);
+            });
+            setTimeout(() => { try { ff.kill('SIGKILL'); } catch (e) {} finish(null); }, 90000);
         });
+    }
+
+    // Duração (s) de um OGG/Opus: posição (granule) da última página ÷ 48000
+    function oggSegundos(buf) {
+        try {
+            const idx = buf.lastIndexOf(Buffer.from('OggS'));
+            if (idx < 0 || idx + 14 > buf.length) return 0;
+            const granule = Number(buf.readBigUInt64LE(idx + 6));
+            let preSkip = 0;
+            const h = buf.indexOf(Buffer.from('OpusHead'));
+            if (h >= 0) preSkip = buf.readUInt16LE(h + 10);
+            return Math.max(1, Math.round((granule - preSkip) / 48000));
+        } catch (e) { return 0; }
     }
 
     // Converte imagem para WEBP 512x512 (formato de figurinha do WhatsApp)
@@ -477,7 +500,13 @@ function createWuzapi(opts = {}) {
                 log(inst, 'erro', `[Wuzapi] Áudio não convertido para OGG/Opus (ffmpeg ausente ou arquivo inválido) — ${mime}`);
                 return fail(500, 'Não foi possível converter o áudio para o formato do WhatsApp (ffmpeg indisponível no servidor)');
             }
-            const r = await call(token, 'POST', '/chat/send/audio', { Phone: phone, Audio: 'data:audio/ogg;base64,' + ogg.toString('base64'), PTT: true }, 120000);
+            const seg = oggSegundos(ogg);
+            const onda = Array.from({ length: 64 }, (_, k) => 20 + Math.round(60 * Math.abs(Math.sin(k * 0.45))));
+            const r = await call(token, 'POST', '/chat/send/audio', {
+                Phone: phone, Audio: 'data:audio/ogg;base64,' + ogg.toString('base64'), PTT: true,
+                MimeType: 'audio/ogg; codecs=opus', ...(seg ? { Seconds: seg } : {}), Waveform: Buffer.from(onda).toString('base64'), // []byte no Go = base64
+            }, 120000);
+            if (r.ok) log(inst, 'info', `[Wuzapi] Áudio enviado como nota de voz (${seg || '?'}s, ${Math.round(ogg.length / 1024)} KB)`);
             return sendResult(inst, phone, r, 'áudio');
         }
         if (t === 'sticker') {

@@ -824,11 +824,14 @@ const _agOpcoes = new Map();   // lead.id -> { opcoes:[{id,titulo}], at } (para 
 const _agOfertaEm = new Map(); // lead.id -> quando os botões de horário foram enviados (evita repetir)
 const DIAS_CURTOS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-async function agCarregarCfg(inst) {
+// exigirIA: só a IA depende da chave "IA verifica disponibilidade". Botões (o cliente pediu
+// para agendar) usam a disponibilidade da Agenda mesmo com essa chave desligada.
+async function agCarregarCfg(inst, { exigirIA = true } = {}) {
     if (!temFeature(inst, 'agenda')) return null;
     try {
-        const { data } = await db.from('agenda_config').select('*').eq('instance_name', inst).single();
-        if (!data || !data.ia_verificar) return null;
+        let { data } = await db.from('agenda_config').select('*').eq('instance_name', inst).single();
+        if (exigirIA && (!data || !data.ia_verificar)) return null;
+        data = data || {};
         let dias = data.dias_semana;
         if (typeof dias === 'string') { try { dias = JSON.parse(dias); } catch (e) { dias = null; } }
         return {
@@ -902,7 +905,7 @@ function agDoLead(ags, lead) {
 
 // Convite com o próximo horário livre + "escolher outro"
 async function agOferecer(inst, lead, { intro = '', forcar = false } = {}) {
-    const cfg = await agCarregarCfg(inst);
+    const cfg = await agCarregarCfg(inst, { exigirIA: false });
     if (!cfg) return false;
     if (!forcar && Date.now() - (_agOfertaEm.get(lead.id) || 0) < 90000) return false;
     _agOfertaEm.set(lead.id, Date.now());
@@ -949,7 +952,7 @@ async function agMostrarHoras(inst, lead, cfg, ags, ds) {
 
 // Grava o agendamento (ou remarca o que já existe), confirma ao cliente e avisa o CRM
 async function agReservar(inst, lead, dh) {
-    const cfg = await agCarregarCfg(inst);
+    const cfg = await agCarregarCfg(inst, { exigirIA: false });
     if (!cfg) return;
     const ags = await agCarregarAgs(inst);
     const ds = dh.slice(0, 10), hs = dh.slice(11, 16);
@@ -1009,7 +1012,7 @@ async function agProcessarResposta(inst, lead, msg) {
         if (!op) return false;
         id = op.id;
     }
-    const cfg = await agCarregarCfg(inst);
+    const cfg = await agCarregarCfg(inst, { exigirIA: false });
     if (!cfg) return false;
     const ags = await agCarregarAgs(inst);
     log(inst, 'info', `[Agenda] 👆 ${getLeadName(lead)} → ${id}`);
@@ -1338,7 +1341,7 @@ async function checkLembretesServidor(inst) {
 
             const agDt = new Date(ag.data_hora);
             const horaFmt = agDt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const cfgAg = await agCarregarCfg(inst).catch(() => null);
+            const cfgAg = await agCarregarCfg(inst, { exigirIA: false }).catch(() => null);
             const nomeCompromisso = cfgAg?.compromisso || 'agendamento';
             const msgLembrete = `Olá! Só um lembrete: seu ${nomeCompromisso} é hoje às ${horaFmt}. Até já! 😊`;
 
