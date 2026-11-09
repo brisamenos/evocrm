@@ -706,6 +706,42 @@ function createWuzapi(opts = {}) {
                 if (dly) await doPresence(token, phone, 'recording', dly);
                 return sendMediaCore(inst, token, phone, { type: 'audio', src: body.audio || body.audioMessage?.audio });
             }
+            // Botões de resposta rápida (Evolution: sendButtons) → Wuzapi /chat/send/buttons
+            if (action === 'sendButtons') {
+                const btns = (Array.isArray(body.buttons) ? body.buttons : []).slice(0, 3).map((b, i) => {
+                    const title = [...String(b.displayText || b.title || b.text || b.buttonText?.displayText || `Opção ${i + 1}`)].slice(0, 20).join('');
+                    const id = String(b.id || b.buttonId || `op${i + 1}`);
+                    return { type: 'reply', title, id, ButtonId: id, ButtonText: title };
+                });
+                if (!btns.length) return fail(400, 'buttons obrigatório');
+                const texto = [body.title, body.description || body.text].filter(x => String(x || '').trim()).join('\n\n');
+                if (dly) await doPresence(token, phone, 'composing', dly);
+                const payload = { Phone: phone, Body: texto || ' ', Title: body.title || undefined, Buttons: btns };
+                if (String(body.footer || '').trim()) payload.Footer = String(body.footer);
+                const r = await call(token, 'POST', '/chat/send/buttons', payload, 30000);
+                return sendResult(inst, phone, r, 'botões');
+            }
+            // Lista (Evolution: sendList) → Wuzapi /chat/send/list
+            if (action === 'sendList') {
+                const secoes = (Array.isArray(body.sections) ? body.sections : []).map(sec => ({
+                    title: String(sec.title || 'Opções').slice(0, 24),
+                    rows: (sec.rows || []).slice(0, 10).map((r, i) => ({
+                        title: [...String(r.title || `Opção ${i + 1}`)].slice(0, 24).join(''),
+                        desc: String(r.description || '').slice(0, 72),
+                        RowId: String(r.rowId || r.id || `op${i + 1}`),
+                    })),
+                })).filter(sec => sec.rows.length);
+                if (!secoes.length) return fail(400, 'sections obrigatório');
+                if (dly) await doPresence(token, phone, 'composing', dly);
+                const payload = {
+                    Phone: phone, ButtonText: String(body.buttonText || 'Ver opções').slice(0, 20),
+                    Desc: String(body.description || body.text || ' '), TopText: body.title || undefined,
+                    Sections: secoes, List: secoes.flatMap(sec => sec.rows),
+                };
+                if (String(body.footerText || body.footer || '').trim()) payload.FooterText = String(body.footerText || body.footer);
+                const r = await call(token, 'POST', '/chat/send/list', payload, 30000);
+                return sendResult(inst, phone, r, 'lista');
+            }
             if (action === 'sendPtv') return sendMediaCore(inst, token, phone, { type: 'video', src: body.video || body.media });
             if (action === 'sendSticker') return sendMediaCore(inst, token, phone, { type: 'sticker', src: body.sticker || body.media });
             if (action === 'sendPresence') {

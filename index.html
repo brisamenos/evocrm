@@ -90,6 +90,7 @@
     <script src="app-agenda.js"></script>
     <script src="app-disparo.js"></script>
     <script src="app-autoreply.js"></script>
+    <script src="app-fluxo-botoes.js"></script>
     <script src="app-ia-atend.js"></script>
     <script src="app.js"></script>
 
@@ -1813,9 +1814,9 @@
                                 {id:'todas',   label:'Todas',       icon:'bell',         count: dashNotifs.length},
                                 {id:'manual',  label:'Manuais',     icon:'edit-3',       count: dashNotifs.filter(n=>!n.criadoPorIA).length},
                                 {id:'ia',      label:'Agente IA',   icon:'sparkles',     count: dashNotifs.filter(n=>n.criadoPorIA).length},
-                                {id:'agenda',  label:'Agendamento', icon:'calendar-plus',count: dashNotifs.filter(n=>n.criadoPorIA&&(n.title.includes('Agendamento')||n.title.includes('Agendamento'))).length},
-                                {id:'venda',   label:'Interesse',   icon:'shopping-bag', count: dashNotifs.filter(n=>n.criadoPorIA&&(n.title.includes('Interesse'️')||n.title.includes('Interesse'))).length},
-                                {id:'suporte', label:'Suporte',     icon:'headphones',   count: dashNotifs.filter(n=>n.criadoPorIA&&(n.title.includes('Suporte'')||n.title.includes('Suporte'))).length}
+                                {id:'agenda',  label:'Agendamento', icon:'calendar-plus',count: dashNotifs.filter(n=>n.criadoPorIA&&n.title.includes('Agendamento')).length},
+                                {id:'venda',   label:'Interesse',   icon:'shopping-bag', count: dashNotifs.filter(n=>n.criadoPorIA&&n.title.includes('Interesse')).length},
+                                {id:'suporte', label:'Suporte',     icon:'headphones',   count: dashNotifs.filter(n=>n.criadoPorIA&&n.title.includes('Suporte')).length}
                             ]" :key="f.id">
                                 <button @click="notifFilter = f.id"
                                         :class="notifFilter === f.id ? 'bg-[#6366f1] text-white shadow-sm' : 'bg-white dark:bg-[#161b22] text-[#6b7280] dark:text-[#8b949e] border border-[#e6edf3] dark:border-[#21262d]'"
@@ -2994,14 +2995,185 @@
 
                                         <!-- ABAS WhatsApp style: Fluxos | Respostas Automáticas -->
                     <div class="wa-tab-bar mt-4">
-                        <button @click="botTab = 'fluxos'; setTimeout(() => lucide.createIcons(), 50)" :class="botTab !== 'respostas' ? 'wa-tab active' : 'wa-tab'" class="flex items-center justify-center gap-2">
+                        <button @click="botTab = 'fluxos'; setTimeout(() => lucide.createIcons(), 50)" :class="botTab !== 'respostas' && botTab !== 'botoes' ? 'wa-tab active' : 'wa-tab'" class="flex items-center justify-center gap-2">
                             <i data-lucide="git-merge" class="w-4 h-4"></i> Fluxos n8n
                         </button>
                         <button @click="botTab = 'respostas'; setTimeout(() => lucide.createIcons(), 50)" :class="botTab === 'respostas' ? 'wa-tab active' : 'wa-tab'" class="flex items-center justify-center gap-2">
                             <i data-lucide="bot" class="w-4 h-4"></i> Respostas Auto.
                             <span x-show="autoReplies.length > 0" class="bg-[#6366f1] text-white text-[10px] font-black px-2 py-0.5 rounded-full" x-text="autoReplies.length"></span>
                         </button>
+                        <button @click="botTab = 'botoes'; fbCarregar()" :class="botTab === 'botoes' ? 'wa-tab active' : 'wa-tab'" class="flex items-center justify-center gap-2">
+                            <i data-lucide="mouse-pointer-click" class="w-4 h-4"></i> Menu com Botões
+                            <span x-show="fbCfg.ativo" class="bg-emerald-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">ON</span>
+                        </button>
                     </div>
+                    <!-- ══════════════════════════════════════════════
+                         ABA: MENU COM BOTÕES (boas-vindas por áudio + botões)
+                    ══════════════════════════════════════════════ -->
+                    <div x-show="botTab === 'botoes'" x-transition class="px-4 space-y-5 pb-10 mt-4">
+
+                        <!-- Cabeçalho + liga/desliga -->
+                        <div class="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-[2rem] p-6 text-white shadow-xl">
+                            <div class="flex items-center justify-between gap-3 flex-wrap">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center"><i data-lucide="mouse-pointer-click" class="w-5 h-5"></i></div>
+                                    <div>
+                                        <h3 class="font-black text-xl">Menu com Botões</h3>
+                                        <p class="text-white/80 text-xs font-medium">No 1º contato: áudio de boas-vindas + mensagem + botões. Cada botão leva a uma etapa, à IA ou a um atendente.</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-black" x-text="fbCfg.ativo ? 'Ativo' : 'Desligado'"></span>
+                                    <button @click="fbToggle()" :class="fbCfg.ativo ? 'bg-white/90' : 'bg-white/25'" class="relative w-12 h-6 rounded-full transition-all">
+                                        <div :class="fbCfg.ativo ? 'translate-x-6 bg-emerald-600' : 'translate-x-0.5 bg-white'" class="absolute top-0.5 w-5 h-5 rounded-full shadow transition-transform"></div>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-2 mt-4">
+                                <button @click="fbModeloLevi()" class="bg-white/15 hover:bg-white/25 text-white text-xs font-black px-4 py-2 rounded-xl">⚖️ Carregar modelo: Dr. Levi (Imobiliário)</button>
+                            </div>
+                        </div>
+
+                        <!-- 1. Áudio + mensagem de boas-vindas -->
+                        <div class="bg-white dark:bg-[#161b22] rounded-[1.5rem] border border-slate-200 dark:border-[#21262d] p-5 space-y-4">
+                            <h4 class="font-black text-slate-800 dark:text-white flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">1</span> Boas-vindas (só no primeiro contato)</h4>
+
+                            <div>
+                                <label class="text-[11px] font-black uppercase text-slate-500">Áudio de boas-vindas (vai como mensagem de voz)</label>
+                                <div class="mt-2 flex flex-wrap items-center gap-3">
+                                    <template x-if="fbCfg.audio_url">
+                                        <audio :src="fbAudioPlayer(fbCfg.audio_url)" controls preload="none" class="h-10 max-w-full"></audio>
+                                    </template>
+                                    <label class="cursor-pointer bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-black px-4 py-2.5 rounded-xl border border-emerald-200 dark:border-emerald-800 flex items-center gap-2">
+                                        <i data-lucide="mic" class="w-4 h-4"></i>
+                                        <span x-text="fbEnviandoAudio ? 'Enviando...' : (fbCfg.audio_url ? 'Trocar áudio' : 'Enviar áudio')"></span>
+                                        <input type="file" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.aac" class="hidden" @change="fbUploadAudio($event)" :disabled="fbEnviandoAudio">
+                                    </label>
+                                    <button x-show="fbCfg.audio_url" @click="fbRemoverAudio()" class="text-xs font-bold text-red-500 hover:underline">Remover</button>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-1">Grave no celular (gravador de voz) e envie aqui. MP3, M4A, OGG ou WAV.</p>
+                            </div>
+
+                            <div>
+                                <label class="text-[11px] font-black uppercase text-slate-500">Mensagem de boas-vindas (opcional) — use {nome} para o primeiro nome</label>
+                                <textarea x-model="fbCfg.texto_boas_vindas" rows="6" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-3 text-sm dark:text-white" placeholder="Olá, {nome}! Seja bem-vindo(a)..."></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="text-[11px] font-black uppercase text-slate-500">Pausa entre mensagens</label>
+                                    <select x-model.number="fbCfg.delay_seg" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2.5 text-sm dark:text-white">
+                                        <option value="1">1 segundo</option><option value="2">2 segundos</option><option value="3">3 segundos</option><option value="5">5 segundos</option><option value="8">8 segundos</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[11px] font-black uppercase text-slate-500">Formato das opções</label>
+                                    <select x-model="fbCfg.formato" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2.5 text-sm dark:text-white">
+                                        <option value="botoes">Botões (até 3 por mensagem)</option>
+                                        <option value="lista">Lista (menu "Ver opções")</option>
+                                        <option value="texto">Texto numerado (1, 2, 3)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[11px] font-black uppercase text-slate-500">Rodapé dos botões</label>
+                                    <input x-model="fbCfg.rodape" maxlength="60" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2.5 text-sm dark:text-white" placeholder="Ex: Dr. Levi Farias • OAB/CE 44.641">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 2. Etapas e botões -->
+                        <div class="bg-white dark:bg-[#161b22] rounded-[1.5rem] border border-slate-200 dark:border-[#21262d] p-5 space-y-4">
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <h4 class="font-black text-slate-800 dark:text-white flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">2</span> Menus e botões</h4>
+                                <button @click="fbAddEtapa()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black px-4 py-2 rounded-xl">+ Etapa</button>
+                            </div>
+                            <p x-show="!fbCfg.etapas.length" class="text-sm text-slate-400">Nenhuma etapa. Clique em "+ Etapa" ou carregue o modelo.</p>
+
+                            <template x-for="(etapa, i) in fbCfg.etapas" :key="etapa.id">
+                                <div class="rounded-2xl border-2 p-4 space-y-3" :class="fbCfg.etapa_inicial === etapa.id ? 'border-emerald-400 dark:border-emerald-700' : 'border-slate-200 dark:border-[#30363d]'">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <input x-model="etapa.nome" class="flex-1 min-w-[140px] font-black text-sm bg-transparent border-b border-dashed border-slate-300 dark:border-slate-600 dark:text-white py-1" placeholder="Nome da etapa">
+                                        <span x-show="fbCfg.etapa_inicial === etapa.id" class="text-[10px] font-black uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-1 rounded-lg">Primeiro menu</span>
+                                        <button x-show="fbCfg.etapa_inicial !== etapa.id" @click="fbCfg.etapa_inicial = etapa.id" class="text-[11px] font-bold text-emerald-600 hover:underline">Usar como primeiro menu</button>
+                                        <button @click="fbRemoverEtapa(i)" class="text-slate-400 hover:text-red-500" title="Remover etapa"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                    <textarea x-model="etapa.texto" rows="3" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-3 text-sm dark:text-white" placeholder="Texto que aparece acima dos botões"></textarea>
+                                    <div x-show="fbCfg.formato === 'lista'">
+                                        <label class="text-[11px] font-black uppercase text-slate-500">Texto do botão da lista</label>
+                                        <input x-model="etapa.botao_lista" maxlength="20" class="mt-1 w-full sm:w-60 rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2 text-sm dark:text-white">
+                                    </div>
+
+                                    <template x-for="(op, j) in etapa.opcoes" :key="op.id">
+                                        <div class="rounded-xl bg-slate-50 dark:bg-[#0d1117] border border-slate-200 dark:border-[#30363d] p-3 space-y-2">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-black text-slate-400 w-5" x-text="(j + 1) + '.'"></span>
+                                                <input x-model="op.titulo" maxlength="22" @input="if ([...op.titulo].length > 20) op.titulo = [...op.titulo].slice(0, 20).join('')" class="flex-1 rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-2 text-sm font-bold dark:text-white" placeholder="Texto do botão (até 20 letras)">
+                                                <span class="text-[10px] text-slate-400 w-8 text-right" x-text="[...(op.titulo || '')].length + '/20'"></span>
+                                                <button @click="fbMoverOpcao(etapa, j, -1)" class="text-slate-400 hover:text-slate-700 dark:hover:text-white" title="Subir">↑</button>
+                                                <button @click="fbMoverOpcao(etapa, j, 1)" class="text-slate-400 hover:text-slate-700 dark:hover:text-white" title="Descer">↓</button>
+                                                <button @click="fbRemoverOpcao(etapa, j)" class="text-slate-400 hover:text-red-500" title="Remover botão"><i data-lucide="x" class="w-4 h-4"></i></button>
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-7">
+                                                <select x-model="op.acao" class="rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-2 text-xs dark:text-white">
+                                                    <option value="ia">🤖 Passar para a IA</option>
+                                                    <option value="etapa">➡️ Abrir outra etapa (outro menu)</option>
+                                                    <option value="humano">🙋 Chamar atendente (pausa a IA)</option>
+                                                    <option value="fim">✅ Só responder e encerrar</option>
+                                                    <option value="agenda">📅 Mostrar horários para agendar</option>
+                                                </select>
+                                                <select x-show="op.acao === 'etapa'" x-model="op.destino" class="rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-2 text-xs dark:text-white">
+                                                    <option value="">— escolha a etapa —</option>
+                                                    <template x-for="e2 in fbCfg.etapas.filter(x => x.id !== etapa.id)" :key="e2.id">
+                                                        <option :value="e2.id" x-text="e2.nome || e2.id" :selected="op.destino === e2.id"></option>
+                                                    </template>
+                                                </select>
+                                                <input x-show="fbCfg.formato === 'lista'" x-model="op.descricao" maxlength="72" class="rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-2 text-xs dark:text-white" placeholder="Descrição na lista (opcional)">
+                                            </div>
+                                            <div class="pl-7 space-y-2">
+                                                <textarea x-model="op.resposta" rows="2" class="w-full rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-2 text-xs dark:text-white"
+                                                          :placeholder="op.acao === 'ia' ? 'Mensagem fixa antes da IA (opcional — normalmente deixe vazio)' : 'Mensagem enviada ao tocar neste botão (opcional)'"></textarea>
+                                                <textarea x-show="op.acao === 'ia'" x-model="op.contexto_ia" rows="2" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/60 dark:bg-indigo-950/30 p-2 text-xs dark:text-white"
+                                                          placeholder="Instrução para a IA quando o cliente tocar aqui (o cliente não vê). Ex: Situação: atraso na entrega. Peça que conte o que aconteceu."></textarea>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <button x-show="etapa.opcoes.length < 10" @click="fbAddOpcao(etapa)" class="text-xs font-black text-emerald-600 hover:underline">+ Botão</button>
+                                    <p x-show="fbCfg.formato === 'botoes' && etapa.opcoes.length > 3" class="text-[11px] text-amber-600">Com mais de 3 botões, o WhatsApp recebe em mensagens separadas de até 3. Para muitas opções, prefira "Lista".</p>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- 3. Comportamento -->
+                        <div class="bg-white dark:bg-[#161b22] rounded-[1.5rem] border border-slate-200 dark:border-[#21262d] p-5 space-y-3">
+                            <h4 class="font-black text-slate-800 dark:text-white flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs flex items-center justify-center">3</span> Comportamento</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[11px] font-black uppercase text-slate-500">Se o cliente digitar em vez de tocar</label>
+                                    <select x-model="fbCfg.ao_digitar" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2.5 text-sm dark:text-white">
+                                        <option value="ia">A IA continua a conversa</option>
+                                        <option value="repetir">Repetir o menu uma vez, depois IA</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[11px] font-black uppercase text-slate-500">Palavra que reabre o menu</label>
+                                    <input x-model="fbCfg.palavra_menu" maxlength="20" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2.5 text-sm dark:text-white" placeholder="menu">
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-slate-400">O cliente também pode responder com o número da opção (1, 2, 3). Contatos que já tinham conversa ou receberam disparo não recebem as boas-vindas.</p>
+                        </div>
+
+                        <!-- Salvar + testar -->
+                        <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
+                            <button @click="fbSalvar()" :disabled="fbSalvando" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 px-6 rounded-xl shadow-md text-sm disabled:opacity-60">
+                                <span x-text="fbSalvando ? 'Salvando...' : 'Salvar menu'"></span>
+                            </button>
+                            <div class="flex-1 flex gap-2">
+                                <input x-model="fbTesteNumero" inputmode="tel" class="flex-1 rounded-xl border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#0d1117] p-3 text-sm dark:text-white" placeholder="Seu WhatsApp para teste (com DDD)">
+                                <button @click="fbTestar()" :disabled="fbTestando" class="bg-slate-800 dark:bg-[#21262d] text-white font-black py-3 px-4 rounded-xl text-sm disabled:opacity-60" x-text="fbTestando ? 'Enviando...' : 'Testar'"></button>
+                            </div>
+                        </div>
+                    </div>
+
 
                     <!-- ══════════════════════════════════════════════
                          ABA: RESPOSTAS AUTOMÁTICAS (Chatbot por palavra-chave)
@@ -3314,7 +3486,7 @@
                     <!-- ══════════════════════════════════════════════
                          ABA: FLUXOS n8n (original, sem alterações)
                     ══════════════════════════════════════════════ -->
-                    <div x-show="botTab !== 'respostas'" x-transition>
+                    <div x-show="botTab !== 'respostas' && botTab !== 'botoes'" x-transition>
 
                     <div class="flex justify-between items-center mb-6 px-4 mt-4">
                         <div>
@@ -3710,7 +3882,7 @@
                             <div class="flex items-center justify-between p-4 bg-[#e0e7ff] dark:bg-[#3730a3]/20 rounded-2xl border border-[#6366f1]/20">
                                 <div>
                                     <p class="font-black text-sm text-[#3730a3] dark:text-[#a5b4fc]">IA verifica disponibilidade</p>
-                                    <p class="text-[10px] text-[#6b7280] mt-0.5">Quando ativo, a IA checa agenda antes de confirmar horário</p>
+                                    <p class="text-[10px] text-[#6b7280] mt-0.5">Quando ativo, a IA manda botões com o próximo horário livre ou para escolher, e agenda sozinha</p>
                                 </div>
                                 <button @click="agendaDisp.ia_verificar = !agendaDisp.ia_verificar"
                                         class="relative w-14 h-7 rounded-full transition-all duration-300"
@@ -3718,6 +3890,24 @@
                                     <span class="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-all duration-300"
                                           :class="agendaDisp.ia_verificar ? 'translate-x-7' : 'translate-x-0'"></span>
                                 </button>
+                            </div>
+
+                            <!-- Nome do compromisso + antecedência (usados nos botões da IA) -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[10px] font-black uppercase text-slate-500 mb-1 block">Nome do compromisso</label>
+                                    <input x-model="agendaDisp.compromisso_nome" maxlength="60" placeholder="Ex: videochamada com o Dr. Levi"
+                                           class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2.5 text-sm dark:text-white">
+                                    <p class="text-[10px] text-slate-400 mt-1">Aparece na confirmação e no lembrete do cliente.</p>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-black uppercase text-slate-500 mb-1 block">Antecedência mínima</label>
+                                    <select x-model.number="agendaDisp.antecedencia_min" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2.5 text-sm dark:text-white">
+                                        <option value="30">30 minutos</option><option value="60">1 hora</option><option value="120">2 horas</option>
+                                        <option value="240">4 horas</option><option value="720">12 horas</option><option value="1440">1 dia</option>
+                                    </select>
+                                    <p class="text-[10px] text-slate-400 mt-1">A IA não oferece horários mais próximos que isso.</p>
+                                </div>
                             </div>
 
                             <!-- Dias da semana -->

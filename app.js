@@ -95,6 +95,7 @@ function crmApp() {
                 ...agendaMixin(),
                 ...disparoMixin(),
                 ...autoReplyMixin(),
+                ...(typeof fluxoBotoesMixin === 'function' ? fluxoBotoesMixin() : {}),
                 ...iaAtendMixin(),
                 screen: 'chats',
                 appState: 'login', 
@@ -880,7 +881,7 @@ function crmApp() {
                     horario_inicio: '09:00', horario_fim: '18:00',
                     duracao_slot: 60,
                     almoco_inicio: '12:00', almoco_fim: '13:00', almoco_ativo: true,
-                    max_por_dia: 8, ia_verificar: true,
+                    max_por_dia: 8, ia_verificar: true, compromisso_nome: '', antecedencia_min: 60,
                     confirmacao_ativa: false,
                     confirmacao_horas_antes: 24,
                     confirmacao_msg: 'Olá {nome}! 😊 Lembramos que você tem um agendamento amanhã às {hora}. Por favor, confirme sua presença respondendo *SIM* para confirmar ou *NÃO* para cancelar. Aguardamos você!'
@@ -3732,6 +3733,18 @@ alert('\u2705 '+contatos.length+' contato(s) enviados para o EvoCRM!\\n\\n'+prev
                                     this.addNotification('💬 Chat Interno', `${m.from_dept} em ${leadNome}: ${m.content.substring(0,50)}`, 'info');
                                     if (m.content.includes('@Admin') || m.content.includes('📢')) this.playSound();
                                 }
+                            }
+
+                            // ── Agenda: atualiza a lista e avisa quando a IA marca um horário ──
+                            if (msg.type === 'agendamentos') {
+                                clearTimeout(this._agReloadT);
+                                this._agReloadT = setTimeout(() => this.loadAgendamentos && this.loadAgendamentos(), 400);
+                                return;
+                            }
+                            if (msg.type === 'agenda' && msg.event === 'novo') {
+                                this.addNotification(msg.titulo || '📅 Novo agendamento', (msg.corpo || '').split('\n').slice(0, 2).join(' • '), 'success', 12000);
+                                try { this.playSound(); } catch (e) {}
+                                return;
                             }
 
                             // ── Roteamento automático de departamento ──

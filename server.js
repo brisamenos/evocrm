@@ -635,10 +635,16 @@ function agSlotsLivres(cfg, dataStr) {
     return slots;
 }
 
-function agSlotOcupado(ags, dataStr, horaStr) {
+function agSlotOcupado(ags, dataStr, horaStr, dur = 60) {
+    const [h, m] = horaStr.split(':').map(Number);
+    const ini = h * 60 + m, fim = ini + (dur || 60);
     return ags.some(a => {
         if (a.sent||(a.status&&a.status!=='ativo')) return false;
-        return normalizarDH(a.data_hora||a.dataHora).startsWith(`${dataStr}T${horaStr}`);
+        const dh = normalizarDH(a.data_hora||a.dataHora);
+        if (dh.slice(0, 10) !== dataStr) return false;
+        const [ah, am] = dh.slice(11, 16).split(':').map(Number);
+        const t = ah * 60 + am;
+        return t >= ini && t < fim;
     });
 }
 
@@ -653,7 +659,10 @@ function agSlotDisponivel(cfg, ags, dataStr, horaStr) {
     const slots=agSlotsLivres(cfg,dataStr); if (!slots.length) return false;
     const [hR,mR]=horaStr.split(':').map(Number); const minR=hR*60+mR; const dur=cfg.duracao_slot||60;
     const slot=slots.find(s=>{const [hs,ms]=s.split(':').map(Number);const minS=hs*60+ms;return minR>=minS&&minR<minS+dur;});
-    return slot?!agSlotOcupado(ags,dataStr,slot):false;
+    if (!slot) return false;
+    const [hs2,ms2]=slot.split(':').map(Number); const dtSlot=new Date(dataStr+'T12:00:00'); dtSlot.setHours(hs2,ms2,0,0);
+    if (dtSlot.getTime() < Date.now() + (cfg.antecedencia_min ?? 60) * 60000) return false;
+    return !agSlotOcupado(ags,dataStr,slot,dur);
 }
 
 function agProximos(cfg, ags, de, qtd=5) {
@@ -665,10 +674,10 @@ function agProximos(cfg, ags, de, qtd=5) {
         if (!agMaxDia(cfg,ags,ds)) {
             for (const slot of agSlotsLivres(cfg,ds)) {
                 if (livres.length>=qtd) break;
-                if (!agSlotOcupado(ags,ds,slot)) {
+                if (!agSlotOcupado(ags,ds,slot,cfg.duracao_slot)) {
                     const [hs,ms]=slot.split(':').map(Number);
                     const dt2=new Date(ds+'T12:00:00'); dt2.setHours(hs,ms,0,0);
-                    if (dt2>de) livres.push({data:ds,hora:slot,dt:dt2});
+                    if (dt2.getTime() >= de.getTime() + (cfg.antecedencia_min ?? 60) * 60000) livres.push({data:ds,hora:slot,dt:dt2});
                 }
             }
         }
@@ -683,28 +692,11 @@ function fmtDT(dataStr, horaStr) {
 }
 
 async function agendaPreCheck(inst, lead, mensagemTexto, histMsgs, apiKey) {
-    if (!temFeature(inst,'agenda')) {
-        log(inst,'info','[Agenda] Feature agenda não ativa — pulando');
+    const cfg = await agCarregarCfg(inst);
+    if (!cfg) {
+        log(inst,'info','[Agenda] Agenda da IA desligada (recurso ou "IA verificar agenda") — pulando');
         return { agendaContexto:'', agendaAcaoPendente:null };
     }
-    let cfg;
-    try {
-        const {data} = await db.from('agenda_config').select('*').eq('instance_name',inst).single();
-        if (!data||!data.ia_verificar) {
-            log(inst,'info','[Agenda] ia_verificar desativado — pulando');
-            return { agendaContexto:'', agendaAcaoPendente:null };
-        }
-        cfg = {
-            dias_semana:    data.dias_semana    ||{'1':true,'2':true,'3':true,'4':true,'5':true},
-            horario_inicio: data.horario_inicio ||'08:00',
-            horario_fim:    data.horario_fim    ||'18:00',
-            duracao_slot:   data.duracao_slot   ||60,
-            almoco_ativo:   data.almoco_ativo   ??false,
-            almoco_inicio:  data.almoco_inicio  ||'12:00',
-            almoco_fim:     data.almoco_fim     ||'13:00',
-            max_por_dia:    data.max_por_dia    ||8,
-        };
-    } catch(e) { return { agendaContexto:'', agendaAcaoPendente:null }; }
 
     let ags=[];
     try { const {data}=await db.from('agendamentos_crm').select('*').eq('instance_name',inst).eq('sent',false).eq('status','ativo'); ags=data||[]; } catch(e) {}
@@ -734,20 +726,23 @@ async function agendaPreCheck(inst, lead, mensagemTexto, histMsgs, apiKey) {
     if ((intent.tipo==='agendamento_com_data'||intent.tipo==='escolha_horario')&&intent.data_hora) {
         const dh=normalizarDH(intent.data_hora), ds=dh.slice(0,10), hs=dh.slice(11,16);
         if (agSlotDisponivel(cfg,ags,ds,hs)) {
-            const dtF=fmtDT(ds,hs);
-            agendaContexto=`SISTEMA DE AGENDA:\nHorário ${dtF}: ✅ DISPONÍVEL.\nAÇÃO: Confirme o agendamento de forma amigável.\nSINALIZAÇÃO: coloque ##AGENDA_CONFIRMADA## ao final da resposta.`;
-            agendaAcaoPendente={tipo:'agendar',dataHora:dh,descricao:`Agendamento — ${leadName}`};
-            log(inst,'info',`[Agenda] ✅ Slot ${dh} disponível — pendente`);
+            const dtF=agTextoLongo(ds,hs);
+            if (intent.tipo==='escolha_horario') {
+                agendaContexto=`SISTEMA DE AGENDA:\nO cliente escolheu ${dtF}, que está LIVRE. O sistema vai registrar e enviar a confirmação com data e hora logo após sua mensagem.\nAÇÃO: responda só uma frase curta e calorosa (ex: "Perfeito, vou reservar para você!"). Não repita data/hora e não fale em lembrete.`;
+                agendaAcaoPendente={tipo:'reservar',dataHora:dh};
+            } else {
+                agendaContexto=`SISTEMA DE AGENDA:\nO horário ${dtF} está LIVRE. ${'O sistema enviará logo abaixo da sua mensagem os botões de horário'} para o cliente confirmar com um toque.\nAÇÃO: diga em uma frase que o horário está disponível e peça para ele tocar em "Confirmar". NÃO diga que já está agendado.`;
+                agendaAcaoPendente={tipo:'confirmar',dataHora:dh};
+            }
+            log(inst,'info',`[Agenda] ✅ Slot ${dh} disponível — ${agendaAcaoPendente.tipo}`);
         } else {
-            const alts=agProximos(cfg,ags,new Date(),3);
-            const opts=alts.length?alts.map(a=>fmtDT(a.data,a.hora)).join(', '):'sem horários nos próximos dias';
-            agendaContexto=`SISTEMA DE AGENDA:\nHorário ${fmtDT(ds,hs)}: ❌ INDISPONÍVEL.\nAÇÃO: Informe e ofereça alternativas: ${opts}.\nNÃO use ##AGENDA_CONFIRMADA##.`;
-            log(inst,'info',`[Agenda] ❌ Slot ${dh} indisponível`);
+            agendaContexto=`SISTEMA DE AGENDA:\nO horário ${fmtDT(ds,hs)} NÃO está disponível. ${'O sistema enviará logo abaixo da sua mensagem os botões de horário'} (próximo horário livre e opção de escolher).\nAÇÃO: em uma frase, diga que esse horário não está livre e que separou as próximas opções. NÃO liste horários.`;
+            agendaAcaoPendente={tipo:'oferecer'};
+            log(inst,'info',`[Agenda] ❌ Slot ${dh} indisponível — oferecendo opções`);
         }
     } else if (intent.tipo==='agendamento_sem_data'||(intent.tipo==='agendamento_com_data'&&!intent.data_hora)) {
-        const prox=agProximos(cfg,ags,new Date(),5);
-        const opts=prox.length?prox.map(a=>fmtDT(a.data,a.hora)).join(', '):'Nenhum horário disponível';
-        agendaContexto=`SISTEMA DE AGENDA:\nCliente quer agendar. Horários disponíveis: ${opts}.\nAÇÃO: Apresente e pergunte qual prefere. NÃO use ##AGENDA_CONFIRMADA## ainda.`;
+        agendaContexto=`SISTEMA DE AGENDA:\nO cliente quer agendar. ${'O sistema enviará logo abaixo da sua mensagem os botões de horário'}: o próximo horário livre (um toque para reservar) e a opção de escolher outro dia.\nAÇÃO: responda com UMA frase curta e animada (ex: "Ótimo! Separei os horários disponíveis para você 👇"). NÃO liste horários, NÃO invente datas e NÃO diga que já está agendado.`;
+        agendaAcaoPendente={tipo:'oferecer'};
     } else if (intent.tipo==='cancelamento') {
         if (agsPend.length>0) {
             const ag=agsPend[0], dh=normalizarDH(ag.data_hora||ag.dataHora), dtF=fmtDT(dh.slice(0,10),dh.slice(11,16));
@@ -760,16 +755,16 @@ async function agendaPreCheck(inst, lead, mensagemTexto, histMsgs, apiKey) {
         const novaDH=normalizarDH(intent.nova_data_hora), nDs=novaDH.slice(0,10), nHs=novaDH.slice(11,16);
         if (agsPend.length>0) {
             const agR=agsPend[0], dhAnt=normalizarDH(agR.data_hora||agR.dataHora), dtAF=fmtDT(dhAnt.slice(0,10),dhAnt.slice(11,16));
-            if (agSlotDisponivel(cfg,ags,nDs,nHs)) {
-                agendaContexto=`SISTEMA DE AGENDA:\nReagendamento de ${dtAF} para ${fmtDT(nDs,nHs)}: ✅ DISPONÍVEL.\nAÇÃO: Confirme.\nSINALIZAÇÃO: coloque ##AGENDA_CONFIRMADA## ao final.`;
-                agendaAcaoPendente={tipo:'reagendar',ag:agR,novaDataHora:novaDH};
+            if (agSlotDisponivel(cfg,ags.filter(a=>a.id!==agR.id),nDs,nHs)) {
+                agendaContexto=`SISTEMA DE AGENDA:\nRemarcar de ${dtAF} para ${agTextoLongo(nDs,nHs)}: LIVRE. ${'O sistema enviará logo abaixo da sua mensagem os botões de horário'} para o cliente confirmar.\nAÇÃO: diga em uma frase que o novo horário está livre e peça para tocar em "Confirmar". NÃO diga que já remarcou.`;
+                agendaAcaoPendente={tipo:'confirmar',dataHora:novaDH};
             } else {
-                const alts=agProximos(cfg,ags,new Date(),3);
-                const opts=alts.length?alts.map(a=>fmtDT(a.data,a.hora)).join(', '):'sem horários';
-                agendaContexto=`SISTEMA DE AGENDA:\nNovo horário ${fmtDT(nDs,nHs)}: ❌ INDISPONÍVEL.\nAÇÃO: Ofereça: ${opts}. NÃO use ##AGENDA_CONFIRMADA##.`;
+                agendaContexto=`SISTEMA DE AGENDA:\nNovo horário ${fmtDT(nDs,nHs)}: NÃO está livre. ${'O sistema enviará logo abaixo da sua mensagem os botões de horário'}.\nAÇÃO: em uma frase, diga que esse horário não está livre e que separou opções. NÃO liste horários.`;
+                agendaAcaoPendente={tipo:'oferecer'};
             }
         } else {
-            agendaContexto=`SISTEMA DE AGENDA:\nNenhum agendamento para reagendar. Pergunte se quer novo agendamento.`;
+            agendaContexto=`SISTEMA DE AGENDA:\nO cliente não tem horário marcado. ${'O sistema enviará logo abaixo da sua mensagem os botões de horário'}.\nAÇÃO: diga em uma frase que separou os horários disponíveis. NÃO liste horários.`;
+            agendaAcaoPendente={tipo:'oferecer'};
         }
     }
 
@@ -777,6 +772,15 @@ async function agendaPreCheck(inst, lead, mensagemTexto, histMsgs, apiKey) {
 }
 
 async function agendaExecutar(inst, lead, pendente, iaTexto) {
+    const pediuOferta = /##OFERECER_AGENDA##/.test(iaTexto || '');
+    if (pendente?.tipo === 'reservar') { await delay(1200); return agReservar(inst, lead, pendente.dataHora); }
+    if (pendente?.tipo === 'confirmar') {
+        await delay(1200);
+        const ds = pendente.dataHora.slice(0, 10), hs = pendente.dataHora.slice(11, 16);
+        return agEnviarOpcoes(inst, lead, `📅 *${agTextoLongo(ds, hs)}*`, [
+            { id: `ag:h:${ds}T${hs}`, titulo: '✅ Confirmar' }, { id: 'ag:dias', titulo: '📅 Outro horário' }]);
+    }
+    if (pendente?.tipo === 'oferecer' || pediuOferta) { await delay(1200); return agOferecer(inst, lead, { forcar: pendente?.tipo === 'oferecer' }); }
     if (!pendente) return;
     const confirmou   = iaTexto.includes('##AGENDA_CONFIRMADA##');
     const cancelouTag = iaTexto.includes('##AGENDA_CANCELADA##');
@@ -810,6 +814,211 @@ async function agendaExecutar(inst, lead, pendente, iaTexto) {
             log(inst,'ok',`[Agenda] 🔄 Reagendado — ${leadName}: → ${pendente.novaDataHora}`);
         }
     } catch(e) { log(inst,'warn',`[Agenda] Falha ação: ${e.message}`); }
+}
+
+// ─── AGENDAMENTO COM BOTÕES (sem depender da IA escrever uma tag) ────────────
+// "⚡ Quero esse horário" agenda o próximo horário livre na hora.
+// "📅 Escolher outro" mostra os dias livres → horários livres → agenda.
+// Os ids dos botões carregam a data (ag:h:2026-11-12T15:00), então não há estado a perder.
+const _agOpcoes = new Map();   // lead.id -> { opcoes:[{id,titulo}], at } (para respostas "1", "2"...)
+const _agOfertaEm = new Map(); // lead.id -> quando os botões de horário foram enviados (evita repetir)
+const DIAS_CURTOS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+async function agCarregarCfg(inst) {
+    if (!temFeature(inst, 'agenda')) return null;
+    try {
+        const { data } = await db.from('agenda_config').select('*').eq('instance_name', inst).single();
+        if (!data || !data.ia_verificar) return null;
+        let dias = data.dias_semana;
+        if (typeof dias === 'string') { try { dias = JSON.parse(dias); } catch (e) { dias = null; } }
+        return {
+            dias_semana:    dias || {'1':true,'2':true,'3':true,'4':true,'5':true},
+            horario_inicio: data.horario_inicio || '08:00',
+            horario_fim:    data.horario_fim    || '18:00',
+            duracao_slot:   parseInt(data.duracao_slot) || 60,
+            almoco_ativo:   data.almoco_ativo ?? false,
+            almoco_inicio:  data.almoco_inicio || '12:00',
+            almoco_fim:     data.almoco_fim    || '13:00',
+            max_por_dia:    parseInt(data.max_por_dia) || 8,
+            antecedencia_min: data.antecedencia_min ?? 60,
+            compromisso:    String(data.compromisso_nome || '').trim() || 'atendimento',
+        };
+    } catch (e) { return null; }
+}
+
+async function agCarregarAgs(inst) {
+    try { const { data } = await db.from('agendamentos_crm').select('*').eq('instance_name', inst).eq('sent', false).eq('status', 'ativo'); return data || []; }
+    catch (e) { return []; }
+}
+
+const _pad2 = n => String(n).padStart(2, '0');
+function agRotuloCurto(ds, hs) { const d = new Date(ds + 'T12:00:00'); return `${DIAS_CURTOS[d.getDay()]} ${ds.slice(8, 10)}/${ds.slice(5, 7)} · ${hs}`; }
+function agRotuloDia(ds) { const d = new Date(ds + 'T12:00:00'); const hoje = new Date(); const am = new Date(); am.setDate(am.getDate() + 1);
+    const iso = x => `${x.getFullYear()}-${_pad2(x.getMonth() + 1)}-${_pad2(x.getDate())}`;
+    const pre = ds === iso(hoje) ? 'Hoje' : ds === iso(am) ? 'Amanhã' : DIAS_CURTOS[d.getDay()];
+    return `${pre}, ${ds.slice(8, 10)}/${ds.slice(5, 7)}`; }
+function agTextoLongo(ds, hs) {
+    const d = new Date(ds + 'T12:00:00');
+    const dia = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+    return `${dia}, às ${hs}`;
+}
+function agFoneBonito(numero) {
+    const n = String(numero || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+    if (n.length === 11) return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
+    if (n.length === 10) return `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}`;
+    return String(numero || '');
+}
+
+// Envia opções como botões (blocos de 3) e cai para texto numerado se o WhatsApp recusar
+async function agEnviarOpcoes(inst, lead, texto, opcoes, rodape = '') {
+    _agOpcoes.set(lead.id, { opcoes, at: Date.now() });
+    if (_agOpcoes.size > 2000) _agOpcoes.delete(_agOpcoes.keys().next().value);
+    try {
+        for (let i = 0; i < opcoes.length; i += 3) {
+            const bloco = opcoes.slice(i, i + 3);
+            const corpo = i === 0 ? texto : 'Mais opções:';
+            const id = await _fluxoPost(inst, 'sendButtons', { number: lead.numero, title: '', description: corpo, footer: rodape,
+                buttons: bloco.map(o => ({ type: 'reply', displayText: o.titulo, id: o.id })) });
+            await _fluxoSalvar(inst, lead.id, id, `${corpo}\n\n${bloco.map(o => `[ ${o.titulo} ]`).join('  ')}`, 'text');
+            if (i + 3 < opcoes.length) await delay(700);
+        }
+    } catch (e) {
+        log(inst, 'warn', `[Agenda] Botões não enviados (${e.message}) — enviando texto numerado`);
+        const txt = `${texto}\n\n${opcoes.map((o, i) => `*${i + 1}.* ${o.titulo}`).join('\n')}\n\n_Responda com o número da opção._`;
+        const id = await _fluxoPost(inst, 'sendText', { number: lead.numero, text: txt });
+        await _fluxoSalvar(inst, lead.id, id, txt, 'text');
+    }
+}
+
+async function agTexto(inst, lead, texto) {
+    const id = await _fluxoPost(inst, 'sendText', { number: lead.numero, text: texto, delay: 900 });
+    await _fluxoSalvar(inst, lead.id, id, texto, 'text');
+}
+
+function agDoLead(ags, lead) {
+    return ags.filter(a => a.lead_id === lead.id && new Date(a.data_hora).getTime() > Date.now())
+              .sort((a, b) => new Date(a.data_hora) - new Date(b.data_hora))[0] || null;
+}
+
+// Convite com o próximo horário livre + "escolher outro"
+async function agOferecer(inst, lead, { intro = '', forcar = false } = {}) {
+    const cfg = await agCarregarCfg(inst);
+    if (!cfg) return false;
+    if (!forcar && Date.now() - (_agOfertaEm.get(lead.id) || 0) < 90000) return false;
+    _agOfertaEm.set(lead.id, Date.now());
+    const ags = await agCarregarAgs(inst);
+    const atual = agDoLead(ags, lead);
+    if (atual) {
+        const dh = normalizarDH(atual.data_hora);
+        await agEnviarOpcoes(inst, lead, `Você já tem um horário marcado (${cfg.compromisso}) para *${agTextoLongo(dh.slice(0, 10), dh.slice(11, 16))}*. Quer manter ou remarcar?`,
+            [{ id: 'ag:manter', titulo: '👍 Manter horário' }, { id: 'ag:dias', titulo: '🔄 Remarcar' }]);
+        return true;
+    }
+    const prox = agProximos(cfg, ags, new Date(), 1)[0];
+    if (!prox) {
+        await agTexto(inst, lead, 'No momento a agenda está completa para os próximos dias. Já avisei a equipe para te retornar com um horário. 🙏');
+        db.from('dash_notifs').insert({ instance_name: inst, title: `📅 Sem horário livre — ${getLeadName(lead)}`, body: `O cliente quer agendar, mas a agenda está cheia. WhatsApp: ${agFoneBonito(lead.numero)}`, type: 'warning', read: false, criado_por_ia: true, lead_id: lead.id }).catch(() => {});
+        return true;
+    }
+    const texto = [intro, `⚡ O próximo horário livre é *${agTextoLongo(prox.data, prox.hora)}*.`, 'Posso reservar para você?'].filter(Boolean).join('\n\n');
+    await agEnviarOpcoes(inst, lead, texto, [
+        { id: `ag:h:${prox.data}T${prox.hora}`, titulo: '✅ Quero esse horário' },
+        { id: 'ag:dias', titulo: '📅 Escolher outro' },
+    ]);
+    log(inst, 'ok', `[Agenda] 📨 Botões de horário enviados para ${getLeadName(lead)} (próximo: ${prox.data} ${prox.hora})`);
+    return true;
+}
+
+async function agMostrarDias(inst, lead, cfg, ags, aPartirDe = null) {
+    const vistos = []; const livres = agProximos(cfg, ags, new Date(), 80);
+    for (const l of livres) if (!vistos.includes(l.data) && (!aPartirDe || l.data > aPartirDe)) vistos.push(l.data);
+    const dias = vistos.slice(0, 5);
+    if (!dias.length) { await agTexto(inst, lead, 'Não encontrei horários livres nos próximos dias. Já avisei a equipe para te retornar. 🙏'); return; }
+    const opcoes = dias.map(ds => ({ id: `ag:d:${ds}`, titulo: agRotuloDia(ds) }));
+    if (vistos.length > 5) opcoes.push({ id: `ag:mais:${dias[dias.length - 1]}`, titulo: '➡️ Mais dias' });
+    await agEnviarOpcoes(inst, lead, 'Qual dia fica melhor para você? 📅', opcoes);
+}
+
+async function agMostrarHoras(inst, lead, cfg, ags, ds) {
+    const horas = agSlotsLivres(cfg, ds).filter(h => agSlotDisponivel(cfg, ags, ds, h));
+    if (!horas.length) { await agTexto(inst, lead, 'Esse dia acabou de lotar. Escolha outro, por favor:'); return agMostrarDias(inst, lead, cfg, ags); }
+    const opcoes = horas.slice(0, 8).map(h => ({ id: `ag:h:${ds}T${h}`, titulo: `🕐 ${h}` }));
+    opcoes.push({ id: 'ag:dias', titulo: '↩️ Outro dia' });
+    await agEnviarOpcoes(inst, lead, `Horários livres em *${agRotuloDia(ds)}*. Qual você prefere?`, opcoes);
+}
+
+// Grava o agendamento (ou remarca o que já existe), confirma ao cliente e avisa o CRM
+async function agReservar(inst, lead, dh) {
+    const cfg = await agCarregarCfg(inst);
+    if (!cfg) return;
+    const ags = await agCarregarAgs(inst);
+    const ds = dh.slice(0, 10), hs = dh.slice(11, 16);
+    const atual = agDoLead(ags, lead);
+    const outros = atual ? ags.filter(a => a.id !== atual.id) : ags;
+    if (!agSlotDisponivel(cfg, outros, ds, hs)) {
+        await agTexto(inst, lead, `Poxa, o horário de ${agTextoLongo(ds, hs)} acabou de ser preenchido. 😕`);
+        return agMostrarDias(inst, lead, cfg, ags);
+    }
+    const leadName = getLeadName(lead);
+    const primeiro = /^\d+$|@lid$|^Contato/.test(leadName) ? '' : String(leadName).split(' ')[0];
+    const quando = agTextoLongo(ds, hs);
+    const fone = agFoneBonito(lead.numero);
+    const textoNaHora = `Olá${primeiro ? ', ' + primeiro : ''}! Chegou o horário do seu ${cfg.compromisso}. Já já falamos com você por aqui. 😊`;
+    try {
+        if (atual) {
+            const r = await db.from('agendamentos_crm').update({ data_hora: comFuso(dh), data_hora_anterior: atual.data_hora, lembrete_enviado: false, reagendado_em: new Date().toISOString(), alterado_por: 'ia' }).eq('id', atual.id);
+            if (r?.error) throw new Error(r.error.message || r.error);
+        } else {
+            const r = await db.from('agendamentos_crm').insert({
+                instance_name: inst, lead_id: lead.id, numero: lead.numero, avulso_name: leadName,
+                tipo: 'simples', texto: textoNaHora, data_hora: comFuso(dh),
+                sent: false, criado_por_ia: true, status: 'ativo', alterado_por: 'ia',
+            });
+            if (r?.error) throw new Error(r.error.message || r.error);
+        }
+    } catch (e) {
+        log(inst, 'erro', `[Agenda] Falha ao gravar agendamento: ${e.message}`);
+        await agTexto(inst, lead, 'Tive um problema para registrar o horário. Já avisei a equipe, que vai confirmar com você por aqui. 🙏');
+        return;
+    }
+    _agOpcoes.delete(lead.id);
+    await agTexto(inst, lead, `✅ ${atual ? 'Remarcado' : 'Agendado'}${primeiro ? ', ' + primeiro : ''}!\n\n📅 *${quando}*\n📌 ${cfg.compromisso.charAt(0).toUpperCase() + cfg.compromisso.slice(1)}\n\nVocê vai receber um lembrete 1 hora antes. Se precisar remarcar, é só me avisar por aqui.`);
+    const titulo = `${atual ? '🔄 Remarcado' : '📅 Novo agendamento'} — ${leadName}`;
+    const corpo = `${cfg.compromisso} em ${quando}.\nWhatsApp do cliente: ${fone}\nLigar/videochamada: https://wa.me/${String(lead.numero).replace(/\D/g, '')}`;
+    await db.from('dash_notifs').insert({ instance_name: inst, title: titulo, body: corpo, type: 'success', read: false, criado_por_ia: true, lead_id: lead.id }).catch(() => {});
+    await db.from('dash_tasks').insert({ instance_name: inst, title: `${cfg.compromisso}: ${leadName} — ${agRotuloCurto(ds, hs)}`, "desc": corpo, priority: 'alta', tag: 'agenda', due: comFuso(dh), done: false, criado_por_ia: true, lead_id: lead.id }).catch(() => {});
+    try {
+        const { data: l } = await db.from('leads').select('etiquetas').eq('id', lead.id).single();
+        const tags = String(l?.etiquetas || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (!tags.includes('agendado')) await db.from('leads').update({ etiquetas: [...tags, 'agendado'].join(',') }).eq('id', lead.id);
+    } catch (e) {}
+    wsEmit(inst, { type: 'agenda', event: 'novo', lead_id: lead.id, titulo, corpo });
+    log(inst, 'ok', `[Agenda] ✅ ${atual ? 'Remarcado' : 'Agendado'} — ${leadName}: ${dh}`);
+}
+
+// Trata cliques/respostas das opções de agenda. Retorna true se a mensagem foi usada.
+async function agProcessarResposta(inst, lead, msg) {
+    if (msg.type !== 'text') return false;
+    let id = msg.id ? _respostaBotaoId.get(msg.id) : null;
+    if (!id || !String(id).startsWith('ag:')) {
+        const ult = _agOpcoes.get(lead.id);
+        if (!ult || Date.now() - ult.at > 2 * 3600 * 1000) return false;
+        const t = _normTxt(msg.content);
+        const n = t.match(/^(\d{1,2})$/);
+        const op = (n && ult.opcoes[parseInt(n[1]) - 1]) || ult.opcoes.find(o => _normTxt(o.titulo) === t);
+        if (!op) return false;
+        id = op.id;
+    }
+    const cfg = await agCarregarCfg(inst);
+    if (!cfg) return false;
+    const ags = await agCarregarAgs(inst);
+    log(inst, 'info', `[Agenda] 👆 ${getLeadName(lead)} → ${id}`);
+    if (id === 'ag:manter') { _agOpcoes.delete(lead.id); await agTexto(inst, lead, 'Perfeito, seu horário está mantido! 👍'); return true; }
+    if (id === 'ag:dias') { await agMostrarDias(inst, lead, cfg, ags); return true; }
+    if (id.startsWith('ag:mais:')) { await agMostrarDias(inst, lead, cfg, ags, id.slice(8)); return true; }
+    if (id.startsWith('ag:d:')) { await agMostrarHoras(inst, lead, cfg, ags, id.slice(5, 15)); return true; }
+    if (id.startsWith('ag:h:')) { await agReservar(inst, lead, id.slice(5, 21)); return true; }
+    return false;
 }
 
 // ─── LOG ─────────────────────────────────────────────────────────────────────
@@ -1057,9 +1266,15 @@ async function enviarAgendamento(inst, ag) {
             const texto = ag.texto || '';
             if (!texto.trim()) { log(inst, 'warn', `[Agenda] Texto vazio ${ag.id}`); return; }
             await enviarTexto(inst, numero, texto);
-            // Salva no histórico de mensagens se tiver lead_id
+            // Salva no histórico (sent_by_ia: true → mensagem automática não pausa a IA)
             if (ag.lead_id) {
-                await salvarMensagemDB(inst, ag.lead_id, texto, 'text', { sent_by_ia: false });
+                await salvarMensagemDB(inst, ag.lead_id, texto, 'text', { sent_by_ia: true });
+            }
+            if (ag.criado_por_ia) {
+                const nomeAg = ag.avulso_name || (ag.lead_id && getState(inst).leads[ag.lead_id] ? getLeadName(getState(inst).leads[ag.lead_id]) : numero);
+                db.from('dash_notifs').insert({ instance_name: inst, title: `🎥 Agora: ${nomeAg}`,
+                    body: `Horário marcado chegou. WhatsApp do cliente: ${agFoneBonito(numero)}\nLigar/videochamada: https://wa.me/${String(numero).replace(/\D/g, '')}`,
+                    type: 'warning', read: false, criado_por_ia: true, lead_id: ag.lead_id || null }).catch(() => {});
             }
             log(inst, 'ok', `[Agenda] ✅ Msg simples enviada para ${numero}`);
 
@@ -1074,7 +1289,7 @@ async function enviarAgendamento(inst, ag) {
                 if (bloco.delay && bloco.delay > 0) await delay(bloco.delay * 1000);
                 if (bloco.type === 'text' && bloco.content) {
                     await enviarTexto(inst, numero, bloco.content);
-                    if (ag.lead_id) await salvarMensagemDB(inst, ag.lead_id, bloco.content, 'text', { sent_by_ia: false });
+                    if (ag.lead_id) await salvarMensagemDB(inst, ag.lead_id, bloco.content, 'text', { sent_by_ia: true });
                 } else if ((bloco.type === 'image' || bloco.type === 'video' || bloco.type === 'audio') && bloco.url) {
                     await fetch(`${EVO_URL}/message/sendMedia/${inst}`, {
                         method: 'POST',
@@ -1123,11 +1338,19 @@ async function checkLembretesServidor(inst) {
 
             const agDt = new Date(ag.data_hora);
             const horaFmt = agDt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const msgLembrete = `Olá! Só um lembrete: você tem um agendamento hoje às ${horaFmt}. Te esperamos! 😊`;
+            const cfgAg = await agCarregarCfg(inst).catch(() => null);
+            const nomeCompromisso = cfgAg?.compromisso || 'agendamento';
+            const msgLembrete = `Olá! Só um lembrete: seu ${nomeCompromisso} é hoje às ${horaFmt}. Até já! 😊`;
 
             try {
                 await enviarTexto(inst, numero, msgLembrete);
-                if (ag.lead_id) await salvarMensagemDB(inst, ag.lead_id, msgLembrete, 'text', { sent_by_ia: false });
+                if (ag.lead_id) await salvarMensagemDB(inst, ag.lead_id, msgLembrete, 'text', { sent_by_ia: true });
+                if (ag.criado_por_ia) {
+                    const nomeAg = ag.avulso_name || numero;
+                    db.from('dash_notifs').insert({ instance_name: inst, title: `⏰ Em 1 hora: ${nomeAg}`,
+                        body: `${nomeCompromisso} às ${horaFmt}. WhatsApp do cliente: ${agFoneBonito(numero)}\nLigar/videochamada: https://wa.me/${String(numero).replace(/\D/g, '')}`,
+                        type: 'info', read: false, criado_por_ia: true, lead_id: ag.lead_id || null }).catch(() => {});
+                }
                 await db.from('agendamentos_crm').update({ lembrete_enviado: true }).eq('id', ag.id);
                 log(inst, 'ok', `[Agenda] Lembrete enviado para ${numero} (agendamento às ${horaFmt})`);
             } catch (e) {
@@ -1330,6 +1553,257 @@ async function chatbotChecarMensagem(inst, msgContent, lead) {
     }
 }
 
+// ─── MENU INTERATIVO COM BOTÕES (roda no servidor, sem precisar do CRM aberto) ─
+// Primeira mensagem do contato → áudio de boas-vindas + texto + botões.
+// Clique no botão → próxima etapa, IA (com contexto), atendente humano ou resposta final.
+// Se o cliente digitar em vez de tocar, a conversa segue com a IA (ou repete o menu).
+const _fluxoCache = {};                 // inst -> { cfg, at }
+const _respostaBotaoId = new Map();     // id da mensagem recebida -> id do botão/linha escolhido
+
+function fluxoPadrao() {
+    return { ativo: false, audio_url: '', texto_boas_vindas: '', delay_seg: 2, formato: 'botoes', rodape: '',
+             ao_digitar: 'ia', palavra_menu: 'menu', etapa_inicial: 'inicio', etapas: [] };
+}
+
+async function carregarFluxo(inst, forcar = false) {
+    const c = _fluxoCache[inst];
+    if (!forcar && c && Date.now() - c.at < 30000) return c.cfg;
+    let cfg = fluxoPadrao();
+    try {
+        const { data } = await db.from('fluxo_botoes').select('config').eq('instance_name', inst).single();
+        if (data?.config) cfg = { ...cfg, ...JSON.parse(data.config) };
+    } catch (e) {}
+    _fluxoCache[inst] = { cfg, at: Date.now() };
+    return cfg;
+}
+
+function _normTxt(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+        .replace(/[^\p{L}\p{N} ]/gu, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Envia pelo adaptador e devolve o id da mensagem (para o eco do WhatsApp não pausar a IA)
+async function _fluxoPost(inst, endpoint, body) {
+    const r = await fetch(`${EVO_URL}/message/${endpoint}/${inst}`, {
+        method: 'POST', headers: { 'apikey': EVO_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data?.response?.message || data?.message || data?.error || `HTTP ${r.status}`);
+    return data?.key?.id || null;
+}
+
+async function _fluxoSalvar(inst, leadId, id, content, type) {
+    await db.from('messages').insert({
+        ...(id ? { id } : {}), instance_name: inst, lead_id: leadId, content, type,
+        from_me: true, status: 'sent', sent_by_ia: true,
+        timestamp: new Date().toISOString(), created_at: new Date().toISOString(),
+    }).catch(() => {});
+}
+
+function _fluxoTexto(t, lead) {
+    const nome = (lead?.nome && !/^\d+$/.test(lead.nome) && !/@lid$/.test(lead.nome) && lead.nome !== 'Contato WhatsApp')
+        ? String(lead.nome).split(' ')[0] : '';
+    return String(t || '').replace(/,\s*\{nome\}/gi, nome ? `, ${nome}` : '').replace(/\{nome\}/gi, nome).replace(/ +([,!?.])/g, '$1').replace(/  +/g, ' ').trim();
+}
+
+async function fluxoEnviarEtapa(inst, lead, cfg, etapa, prefixo) {
+    const opcoes = (etapa.opcoes || []).filter(o => o && String(o.titulo || '').trim());
+    const texto = _fluxoTexto([prefixo, etapa.texto].filter(Boolean).join('\n\n'), lead) || 'Escolha uma opção:';
+    const rodape = cfg.rodape || '';
+    const numerado = `${texto}\n\n${opcoes.map((o, i) => `*${i + 1}.* ${o.titulo}`).join('\n')}\n\n_Responda com o número da opção._`;
+    let formato = opcoes.length ? (cfg.formato || 'botoes') : 'texto';
+
+    if (formato === 'lista') {
+        try {
+            const id = await _fluxoPost(inst, 'sendList', {
+                number: lead.numero, title: '', description: texto, footerText: rodape,
+                buttonText: etapa.botao_lista || 'Ver opções',
+                sections: [{ title: etapa.titulo_lista || 'Opções', rows: opcoes.map(o => ({ title: o.titulo, description: o.descricao || '', rowId: o.id })) }],
+            });
+            await _fluxoSalvar(inst, lead.id, id, `${texto}\n\n${opcoes.map(o => `▸ ${o.titulo}`).join('\n')}`, 'text');
+            return;
+        } catch (e) { log(inst, 'warn', `[Fluxo] Lista não enviada (${e.message}) — enviando texto numerado`); formato = 'texto'; }
+    }
+    if (formato === 'botoes') {
+        try {
+            // WhatsApp mostra até 3 botões por mensagem → divide em blocos de 3
+            for (let i = 0; i < opcoes.length; i += 3) {
+                const bloco = opcoes.slice(i, i + 3);
+                const corpo = i === 0 ? texto : 'Mais opções:';
+                const id = await _fluxoPost(inst, 'sendButtons', {
+                    number: lead.numero, title: '', description: corpo, footer: rodape,
+                    buttons: bloco.map(o => ({ type: 'reply', displayText: o.titulo, id: o.id })),
+                });
+                await _fluxoSalvar(inst, lead.id, id, `${corpo}\n\n${bloco.map(o => `[ ${o.titulo} ]`).join('  ')}`, 'text');
+                if (i + 3 < opcoes.length) await delay(800);
+            }
+            return;
+        } catch (e) { log(inst, 'warn', `[Fluxo] Botões não enviados (${e.message}) — enviando texto numerado`); }
+    }
+    const id = await _fluxoPost(inst, 'sendText', { number: lead.numero, text: opcoes.length ? numerado : texto, delay: 800 });
+    await _fluxoSalvar(inst, lead.id, id, opcoes.length ? numerado : texto, 'text');
+}
+
+async function _fluxoSetEtapa(inst, lead, etapaId) {
+    const upd = { fluxo_etapa: etapaId || null, fluxo_em: new Date().toISOString(), fluxo_feito: 1 };
+    Object.assign(lead, upd);
+    const s = getState(inst);
+    if (s.leads[lead.id]) Object.assign(s.leads[lead.id], upd);
+    await db.from('leads').update(upd).eq('id', lead.id).catch(() => {});
+}
+// Janela em que o menu de boas-vindas está sendo enviado (evita disparar 2x e
+// evita que "Oi" + "boa tarde" encerrem o menu). lead.id -> até quando (ms)
+const _fluxoInicio = new Map();
+const _fluxoPendente = new Map(); // lead.id -> mensagem longa recebida enquanto o menu era enviado
+function _fluxoNaJanela(leadId) { return Date.now() < (_fluxoInicio.get(leadId) || 0); }
+function _fluxoGuardarPendente(lead, msg) {
+    if (msg.type !== 'text' || String(msg.content || '').trim().length >= 25) _fluxoPendente.set(lead.id, msg);
+}
+
+async function fluxoIniciar(inst, lead, cfg, { comBoasVindas = true } = {}) {
+    const etapa = (cfg.etapas || []).find(e => e.id === cfg.etapa_inicial) || (cfg.etapas || [])[0];
+    await _fluxoSetEtapa(inst, lead, etapa ? etapa.id : null);
+    const pausa = Math.min(Math.max(parseFloat(cfg.delay_seg) || 0, 0), 15) * 1000;
+    if (comBoasVindas && cfg.audio_url) {
+        try {
+            await _fluxoPost(inst, 'sendPresence', { number: lead.numero, presence: 'recording', delay: Math.max(pausa, 1500) }).catch(() => {});
+            const id = await _fluxoPost(inst, 'sendWhatsAppAudio', { number: lead.numero, audio: cfg.audio_url });
+            await _fluxoSalvar(inst, lead.id, id, cfg.audio_url, 'audio');
+        } catch (e) { log(inst, 'erro', `[Fluxo] Áudio de boas-vindas não enviado: ${e.message}`); }
+    }
+    if (comBoasVindas && String(cfg.texto_boas_vindas || '').trim()) {
+        if (pausa) await delay(pausa);
+        const txt = _fluxoTexto(cfg.texto_boas_vindas, lead);
+        try {
+            const id = await _fluxoPost(inst, 'sendText', { number: lead.numero, text: txt, delay: 1200 });
+            await _fluxoSalvar(inst, lead.id, id, txt, 'text');
+        } catch (e) { log(inst, 'erro', `[Fluxo] Boas-vindas não enviada: ${e.message}`); }
+    }
+    if (etapa) {
+        if (pausa) await delay(pausa);
+        await fluxoEnviarEtapa(inst, lead, cfg, etapa).catch(e => log(inst, 'erro', `[Fluxo] Menu não enviado: ${e.message}`));
+    }
+    log(inst, 'ok', `[Fluxo] ▶️ Menu de boas-vindas enviado para ${getLeadName(lead)}`);
+}
+
+function _fluxoAcharOpcao(etapa, msg) {
+    const opcoes = (etapa.opcoes || []).filter(o => o && String(o.titulo || '').trim());
+    const idEscolhido = msg.id ? _respostaBotaoId.get(msg.id) : null;
+    if (idEscolhido) { const o = opcoes.find(x => String(x.id) === String(idEscolhido)); if (o) return o; }
+    const t = _normTxt(msg.content);
+    if (!t) return null;
+    const n = t.match(/^(\d{1,2})$/);
+    if (n && opcoes[parseInt(n[1]) - 1]) return opcoes[parseInt(n[1]) - 1];
+    return opcoes.find(o => _normTxt(o.titulo) === t)
+        || (t.length <= 40 ? opcoes.find(o => _normTxt(o.titulo).length >= 3 && t.includes(_normTxt(o.titulo))) : null)
+        || null;
+}
+
+const FLUXO_NOTA_IA = '(Observação interna: a mensagem de boas-vindas e o menu já foram enviados automaticamente. Não se apresente de novo; continue o atendimento a partir daqui.)';
+
+// Retorna { consumida: true } quando o fluxo tratou a mensagem (a IA não responde),
+// ou { consumida: false, contexto } para seguir para a IA com um contexto extra.
+async function fluxoProcessar(inst, lead, msg) {
+    const cfg = await carregarFluxo(inst);
+    if (!cfg.ativo || !lead || String(lead.numero || '').includes('@g.us')) return { consumida: false };
+    const s = getState(inst);
+    if (s.humanoAtivo?.[lead.id]) return { consumida: false };
+    const etapas = cfg.etapas || [];
+    const texto = String(msg.content || '').trim();
+
+    // Palavra para reabrir o menu (ex: "menu")
+    const palavra = _normTxt(cfg.palavra_menu);
+    if (palavra && msg.type === 'text' && _normTxt(texto) === palavra && etapas.length) {
+        await fluxoIniciar(inst, lead, cfg, { comBoasVindas: false });
+        return { consumida: true };
+    }
+
+    // Está no meio do menu → trata o clique
+    if (lead.fluxo_etapa) {
+        const etapa = etapas.find(e => e.id === lead.fluxo_etapa);
+        if (!etapa) { await _fluxoSetEtapa(inst, lead, null); return { consumida: false }; }
+        const op = msg.type === 'text' ? _fluxoAcharOpcao(etapa, msg) : null;
+        // Mensagens que o cliente mandou junto com a 1ª (ex: "Oi" + "boa tarde") não encerram o menu
+        if (!op && _fluxoNaJanela(lead.id)) { _fluxoGuardarPendente(lead, msg); return { consumida: true }; }
+        if (!op) {
+            if (cfg.ao_digitar === 'repetir' && (lead._fluxoRepeticoes || 0) < 1) {
+                lead._fluxoRepeticoes = (lead._fluxoRepeticoes || 0) + 1;
+                await fluxoEnviarEtapa(inst, lead, cfg, etapa, 'Por favor, toque em uma das opções abaixo 👇');
+                return { consumida: true };
+            }
+            await _fluxoSetEtapa(inst, lead, null);
+            log(inst, 'info', `[Fluxo] ${getLeadName(lead)} escreveu em vez de tocar no botão → IA assume`);
+            return { consumida: false, contexto: FLUXO_NOTA_IA };
+        }
+        log(inst, 'ok', `[Fluxo] 👆 ${getLeadName(lead)} escolheu "${op.titulo}"`);
+        const acao = op.acao || 'ia';
+        const proxima = acao === 'etapa' ? etapas.find(e => e.id === op.destino) : null;
+        await _fluxoSetEtapa(inst, lead, proxima ? proxima.id : null);
+        if (String(op.resposta || '').trim()) {
+            const txt = _fluxoTexto(op.resposta, lead);
+            try {
+                const id = await _fluxoPost(inst, 'sendText', { number: lead.numero, text: txt, delay: 1200 });
+                await _fluxoSalvar(inst, lead.id, id, txt, 'text');
+            } catch (e) { log(inst, 'erro', `[Fluxo] Resposta não enviada: ${e.message}`); }
+        }
+        if (proxima) {
+            await delay(800);
+            await fluxoEnviarEtapa(inst, lead, cfg, proxima).catch(e => log(inst, 'erro', `[Fluxo] Etapa não enviada: ${e.message}`));
+            return { consumida: true };
+        }
+        if (acao === 'humano') {
+            s.humanoAtivo[lead.id] = true;
+            salvarPausaDB(inst, lead.id, true, 'Fluxo: atendente');
+            db.from('dash_notifs').insert({
+                instance_name: inst, title: `🙋 ${getLeadName(lead)} pediu atendimento humano`,
+                body: `Escolheu "${op.titulo}" no menu. A IA foi pausada para este contato.`,
+                type: 'warning', read: false, criado_por_ia: true, lead_id: lead.id,
+            }).catch(() => {});
+            wsEmit(inst, { type: 'dept_route', departamento: lead.departamento || 'ADM Principal', lead_id: lead.id,
+                lead_nome: getLeadName(lead), lead_numero: lead.numero, motivo: `Pediu atendimento: ${op.titulo}`, de: 'Menu' });
+            return { consumida: true };
+        }
+        if (acao === 'fim') return { consumida: true };
+        if (acao === 'agenda') {
+            const ok = await agOferecer(inst, lead, { forcar: true }).catch(e => { log(inst, 'warn', `[Fluxo] Agenda: ${e.message}`); return false; });
+            if (ok) return { consumida: true };
+            log(inst, 'warn', '[Fluxo] Botão de agenda clicado, mas a agenda da IA está desligada — IA assume');
+        }
+        // acao 'ia' (padrão): a IA responde já sabendo o que foi escolhido
+        const ctx = [`O cliente tocou no botão "${op.titulo}" do menu.`, op.contexto_ia, FLUXO_NOTA_IA].filter(Boolean).join(' ');
+        return { consumida: false, contexto: ctx };
+    }
+
+    // Primeira mensagem do contato → boas-vindas
+    if (_fluxoNaJanela(lead.id)) { _fluxoGuardarPendente(lead, msg); return { consumida: true }; }
+    if (lead.fluxo_feito) return { consumida: false };
+    _fluxoInicio.set(lead.id, Date.now() + 120000);
+    if (_fluxoInicio.size > 2000) _fluxoInicio.delete(_fluxoInicio.keys().next().value);
+    // Contato novo = nenhuma mensagem (de nenhum lado) com mais de 1 minuto. Quem já conversou
+    // ou recebeu um disparo não recebe o menu de boas-vindas.
+    let recebidas = 0;
+    try {
+        const { data } = await db.from('messages').select('id').eq('lead_id', lead.id)
+            .lt('created_at', new Date(Date.now() - 60000).toISOString()).limit(1);
+        recebidas = (data || []).length ? 2 : 0;
+    } catch (e) {}
+    if (recebidas > 1 || (!etapas.length && !cfg.audio_url && !String(cfg.texto_boas_vindas || '').trim())) {
+        _fluxoInicio.delete(lead.id);
+        if (recebidas > 1) await _fluxoSetEtapa(inst, lead, null); // contato antigo: não recebe o menu
+        return { consumida: false };
+    }
+    try { await fluxoIniciar(inst, lead, cfg); }
+    finally { _fluxoInicio.set(lead.id, Date.now() + 3000); }
+    // Se a 1ª mensagem já era o relato (ou chegou um relato enquanto o menu era enviado), a IA responde
+    const pend = _fluxoPendente.get(lead.id) || (String(msg.content || '').trim().length >= 25 ? msg : null);
+    _fluxoPendente.delete(lead.id);
+    if (pend) setTimeout(() => {
+        _fluxoInicio.delete(lead.id);
+        processarMensagem(inst, { new: pend }).catch(e => log(inst, 'warn', `[Fluxo] ${e.message}`));
+    }, 3500);
+    return { consumida: true };
+}
+
 // ─── PROTEÇÃO ANTI-BOT-LOOP ───────────────────────────────────────────────────
 
 // Caractere invisível (U+200B + U+200C) usado como assinatura nas mensagens saindo da IA.
@@ -1378,6 +1852,9 @@ function detectarBot(inst, msg, pushName) {
     const leadId        = msg.lead_id;
     const agora         = Date.now();
     const windowMs      = rateWindowSec * 1000;
+    // Toques em botões (menu/agenda) e respostas "1", "2"... são cliques de gente, não loop de bot
+    const ehClique = (msg.id && _respostaBotaoId.has(msg.id)) || /^\s*\d{1,2}\s*$/.test(String(msg.content || ''));
+    if (ehClique) return { bloqueado: false };
 
     if (!s.msgRateTracker[leadId]) s.msgRateTracker[leadId] = [];
     s.msgRateTracker[leadId] = s.msgRateTracker[leadId].filter(t => agora - t < windowMs);
@@ -1905,6 +2382,14 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
             try {
                 const { agendaContexto, agendaAcaoPendente: acao } = await agendaPreCheck(inst, lead, mensagemClienteTexto, histMsgs, cfg.apiKey);
                 agendaAcaoPendente = acao;
+                if (await agCarregarCfg(inst)) {
+                    const cfgAg = await agCarregarCfg(inst);
+                    openAIMsgs.splice(1, 0, { role: 'system', content:
+`AGENDAMENTO (regra do sistema — tem prioridade sobre o prompt):
+- Você NÃO escolhe nem lista horários. O sistema mostra ao cliente botões com o próximo horário livre ("✅ Quero esse horário") e a opção "📅 Escolher outro", consultando a agenda real do CRM.
+- Quando chegar o momento de marcar o ${cfgAg.compromisso} (o cliente pediu, aceitou o convite ou você vai convidá-lo), escreva o convite de forma curta e direta e coloque ##OFERECER_AGENDA## no final da mensagem. Os botões aparecem logo abaixo.
+- Nunca diga que algo está agendado: a confirmação com data e hora é enviada automaticamente quando o cliente toca no botão.` });
+                }
                 if (agendaContexto) {
                     openAIMsgs.push({ role: 'system', content: agendaContexto });
                     log(inst, 'info', `[Agenda] Contexto injetado (${agendaContexto.length} chars)`);
@@ -2006,7 +2491,7 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
 
         // Remove tags de sinalização antes de enviar ao cliente
         const arquivosPedidos = [];
-        const respostaLimpa = resposta.replace(/##AGENDA_CONFIRMADA##|##AGENDA_CANCELADA##/g, '')
+        const respostaLimpa = resposta.replace(/##AGENDA_CONFIRMADA##|##AGENDA_CANCELADA##|##OFERECER_AGENDA##/g, '')
             .replace(/\[ENVIAR_ARQUIVO:\s*([^\]]+)\]/gi, (_, n) => { arquivosPedidos.push(n.trim().replace(/^["']|["']$/g, '')); return ''; })
             .replace(/\n{3,}/g, '\n\n').trim();
 
@@ -2074,8 +2559,8 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
         // ── 7. Verificar mídias inteligentes ──
         await verificarEEnviarMidias(inst, lead, mensagemClienteTexto);
 
-        // ── 8. Executar ação de agenda (se IA confirmou com a tag) ──
-        if (agendaAcaoPendente) {
+        // ── 8. Ação de agenda (botões de horário / reserva / cancelamento) ──
+        if (agendaAcaoPendente || /##OFERECER_AGENDA##/.test(resposta)) {
             agendaExecutar(inst, lead, agendaAcaoPendente, resposta).catch(e => {
                 log(inst, 'warn', `[Agenda] Falha ao executar: ${e.message}`);
             });
@@ -2460,6 +2945,18 @@ async function processarMensagem(inst, payload) {
         return;
     }
 
+    // ── Botões de agendamento (próximo horário / escolher dia e hora) ───────
+    try { if (await agProcessarResposta(inst, leadAtual, msg)) return; }
+    catch (e) { log(inst, 'warn', `[Agenda] Erro no clique: ${e.message}`); }
+
+    // ── Menu interativo com botões (boas-vindas / cliques) ──────────────────
+    let msgParaIA = msg;
+    try {
+        const fx = await fluxoProcessar(inst, leadAtual, msg);
+        if (fx.consumida) return;
+        if (fx.contexto) msgParaIA = { ...msg, content: `${msg.content || ''}\n\n${fx.contexto}` };
+    } catch (e) { log(inst, 'warn', `[Fluxo] Erro: ${e.message}`); }
+
     const cfg = s.config;
 
     // ── Detecção de intenção — roda para QUALQUER mensagem se feature ia_atendimento ativa ──
@@ -2487,7 +2984,7 @@ async function processarMensagem(inst, payload) {
     }
 
     // Adicionar ao buffer (IA)
-    setTimeout(() => bufferAdicionarMsg(inst, leadAtual, msg), 500);
+    setTimeout(() => bufferAdicionarMsg(inst, leadAtual, msgParaIA), 500);
 
     // Chatbot por palavra-chave — roda independente da IA
     chatbotChecarMensagem(inst, msg.content, leadAtual).catch(e => {
@@ -3029,6 +3526,7 @@ function setupGlobalDbListener() {
         // ── agendamentos: verifica imediatamente ──────────────────────────
         if (table === 'agendamentos_crm') {
             checkAgendamentosServidor(inst);
+            wsEmit(inst, { type: 'agendamentos', event: eventType });
         }
 
         // ── chat_interno: notifica browser em tempo real ──────────────────
@@ -6130,6 +6628,69 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── API: MENU INTERATIVO COM BOTÕES ──────────────────────────────────────
+    if (req.url.startsWith('/api/fluxo-botoes')) {
+        const jsonRes = (st, o) => { res.writeHead(st, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+        const rota = req.url.split('?')[0];
+        if (rota === '/api/fluxo-botoes' && req.method === 'GET') {
+            const inst = new URL(req.url, 'http://x').searchParams.get('inst') || '';
+            if (!inst) return jsonRes(400, { error: 'inst obrigatório' });
+            return jsonRes(200, { ok: true, config: await carregarFluxo(inst, true) });
+        }
+        if (req.method === 'POST' && (rota === '/api/fluxo-botoes' || rota === '/api/fluxo-botoes/testar')) {
+            let body = '';
+            req.on('data', c => body += c);
+            req.on('end', async () => {
+                try {
+                    const b = JSON.parse(body || '{}');
+                    const inst = String(b.inst || '').trim();
+                    if (!inst) throw new Error('inst obrigatório');
+                    const { data: lic } = await db.from('licenses').select('id').eq('instance_name', inst).single();
+                    if (!lic) throw new Error('Conta não encontrada');
+                    if (rota === '/api/fluxo-botoes') {
+                        const c = { ...fluxoPadrao(), ...(b.config || {}) };
+                        c.etapas = (Array.isArray(c.etapas) ? c.etapas : []).map((e, i) => ({
+                            id: String(e.id || `etapa${i + 1}`), nome: String(e.nome || ''), texto: String(e.texto || ''),
+                            botao_lista: String(e.botao_lista || 'Ver opções').slice(0, 20),
+                            opcoes: (Array.isArray(e.opcoes) ? e.opcoes : []).filter(o => String(o.titulo || '').trim()).slice(0, 10).map((o, j) => ({
+                                id: String(o.id || `op${i + 1}_${j + 1}`), titulo: [...String(o.titulo).trim()].slice(0, 20).join(''),
+                                descricao: String(o.descricao || '').slice(0, 72),
+                                acao: ['ia', 'etapa', 'humano', 'fim', 'agenda'].includes(o.acao) ? o.acao : 'ia',
+                                destino: String(o.destino || ''), resposta: String(o.resposta || ''), contexto_ia: String(o.contexto_ia || ''),
+                            })),
+                        }));
+                        const up = await db.from('fluxo_botoes').upsert({ instance_name: inst, config: JSON.stringify(c), updated_at: new Date().toISOString() }, { onConflict: 'instance_name' });
+                        if (up?.error) throw new Error(up.error.message || String(up.error));
+                        delete _fluxoCache[inst];
+                        log(inst, 'ok', `[Fluxo] Menu interativo salvo (${c.ativo ? 'ativo' : 'desativado'}, ${c.etapas.length} etapa(s))`);
+                        return jsonRes(200, { ok: true, config: await carregarFluxo(inst, true) });
+                    }
+                    // Testar: manda o menu completo para um número (como se fosse o 1º contato)
+                    const numero = String(b.numero || '').replace(/\D/g, '');
+                    if (numero.length < 10) throw new Error('Informe o número com DDD');
+                    const cfg = await carregarFluxo(inst, true);
+                    let { data: lead } = await db.from('leads').select('*').eq('numero', numero).eq('instance_name', inst).single();
+                    if (!lead && !numero.startsWith('55')) ({ data: lead } = await db.from('leads').select('*').eq('numero', '55' + numero).eq('instance_name', inst).single());
+                    if (!lead) {
+                        const num = numero.startsWith('55') ? numero : '55' + numero;
+                        const { data: novo } = await db.from('leads').insert({
+                            instance_name: inst, numero: num, nome: 'Teste do menu', status: await getPrimeiraColuna(inst),
+                            departamento: 'ADM Principal', unread: 0, last_msg: '', last_interaction: new Date().toISOString(),
+                        });
+                        lead = Array.isArray(novo) ? novo[0] : novo;
+                    }
+                    if (!lead) throw new Error('Não foi possível criar o contato de teste');
+                    const s = getState(inst);
+                    if (s.humanoAtivo?.[lead.id]) { delete s.humanoAtivo[lead.id]; salvarPausaDB(inst, lead.id, false, 'Teste do menu'); }
+                    _fluxoInicio.set(lead.id, Date.now() + 120000);
+                    try { await fluxoIniciar(inst, lead, cfg); } finally { _fluxoInicio.set(lead.id, Date.now() + 3000); }
+                    jsonRes(200, { ok: true });
+                } catch (e) { jsonRes(400, { error: e.message }); }
+            });
+            return;
+        }
+    }
+
     // ── WEBHOOK: Evolution API → insere mensagens no SQLite ──────────────────
     // Configure na Evolution API:
     //   URL: https://SEU_DOMINIO/webhook/NOME_DA_INSTANCIA
@@ -6194,7 +6755,25 @@ const server = http.createServer(async (req, res) => {
                             m.message?.videoMessage?.caption ||
                             m.message?.documentMessage?.caption ||
                             m.message?.buttonsResponseMessage?.selectedDisplayText ||
-                            m.message?.listResponseMessage?.title || '';
+                            m.message?.templateButtonReplyMessage?.selectedDisplayText ||
+                            m.message?.listResponseMessage?.title ||
+                            m.message?.interactiveResponseMessage?.body?.text || '';
+
+                        // Clique em botão/lista: guarda o id escolhido para o menu interativo
+                        try {
+                            const mm = m.message || {};
+                            let bid = mm.buttonsResponseMessage?.selectedButtonID ?? mm.buttonsResponseMessage?.selectedButtonId
+                                ?? mm.templateButtonReplyMessage?.selectedID ?? mm.templateButtonReplyMessage?.selectedId
+                                ?? mm.listResponseMessage?.singleSelectReply?.selectedRowID ?? mm.listResponseMessage?.singleSelectReply?.selectedRowId;
+                            const pj = mm.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJSON
+                                ?? mm.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson;
+                            if (!bid && pj) { try { bid = JSON.parse(pj).id; } catch (e) {} }
+                            if (bid && m.key?.id) {
+                                _respostaBotaoId.set(m.key.id, String(bid));
+                                if (_respostaBotaoId.size > 500) _respostaBotaoId.delete(_respostaBotaoId.keys().next().value);
+                            }
+                            if (!content && bid) content = String(bid);
+                        } catch (e) {}
 
                         // Download de mídia — salva localmente
                         if (type !== 'text' && EVO_URL) {

@@ -82,3 +82,26 @@ storage.html     → gerenciador de arquivos
   O sistema confere o Mercado Pago a cada 15 minutos e também recebe o aviso em `/api/mp/webhook`
   (configurado sozinho quando `SERVER_PUBLIC_URL` é https).
 - Em **Painel → Cobranças** você vê quem vence, quem já foi cobrado e pode clicar em **Cobrar agora**.
+
+## Menu com Botões (boas-vindas + botões)
+
+Em **Automação → Menu com Botões**:
+- **Áudio de boas-vindas**: vai como mensagem de voz no primeiro contato.
+- **Mensagem de boas-vindas** (opcional, aceita `{nome}`).
+- **Etapas** com até 10 botões cada. Cada botão pode: passar para a IA (com uma instrução que o cliente não vê), abrir outra etapa, chamar um atendente (pausa a IA e avisa no painel) ou só responder e encerrar.
+- Formatos: botões (até 3 por mensagem), lista ou texto numerado. Se o WhatsApp recusar botões/lista, o sistema manda o texto numerado automaticamente.
+- Se o cliente digitar em vez de tocar, a IA continua a conversa (ou o menu é repetido uma vez).
+- Só recebe as boas-vindas quem nunca conversou antes (contatos antigos e de disparos não recebem).
+- A palavra configurada (padrão `menu`) reabre o menu a qualquer momento.
+- Tudo roda no servidor: funciona com o CRM fechado.
+
+## Agendamento pela IA com botões
+
+Em **Agenda → Disponibilidade**, ligue **IA verifica disponibilidade** e preencha o **Nome do compromisso** (ex.: "videochamada com o Dr. Levi") e a **Antecedência mínima**.
+- A IA não escolhe horários: quando chega a hora de marcar, ela coloca `##OFERECER_AGENDA##` no fim da mensagem e o sistema manda os botões **✅ Quero esse horário** (próximo horário livre) e **📅 Escolher outro** (dias → horários).
+- Os horários vêm da disponibilidade configurada **e** dos agendamentos já existentes no CRM (inclusive os manuais). Um horário ocupado nunca é oferecido.
+- Ao tocar no botão, o agendamento é gravado na Agenda, o cliente recebe a confirmação, e o CRM recebe uma notificação + tarefa com o WhatsApp do cliente e o link para ligar/videochamada.
+- O cliente recebe um lembrete 1 hora antes; o CRM também recebe "⏰ Em 1 hora" e "🎥 Agora" com o número.
+- Se o cliente já tem horário marcado, ele pode manter ou remarcar.
+- No Menu com Botões, a ação **📅 Mostrar horários para agendar** abre os horários direto.
+- Precisa do recurso "agenda" no plano do cliente.

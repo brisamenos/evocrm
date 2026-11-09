@@ -107,6 +107,8 @@ function agendaMixin() {
                         almoco_ativo: data.almoco_ativo ?? true,
                         max_por_dia: data.max_por_dia || 8,
                         ia_verificar: data.ia_verificar ?? true,
+                        compromisso_nome: data.compromisso_nome || '',
+                        antecedencia_min: data.antecedencia_min ?? 60,
                         confirmacao_ativa: data.confirmacao_ativa ?? false,
                         confirmacao_horas_antes: data.confirmacao_horas_antes || 24,
                         confirmacao_msg: data.confirmacao_msg || this.agendaDisp.confirmacao_msg
@@ -129,6 +131,8 @@ function agendaMixin() {
                     almoco_ativo: this.agendaDisp.almoco_ativo,
                     max_por_dia: this.agendaDisp.max_por_dia,
                     ia_verificar: this.agendaDisp.ia_verificar,
+                    compromisso_nome: this.agendaDisp.compromisso_nome || '',
+                    antecedencia_min: parseInt(this.agendaDisp.antecedencia_min) || 60,
                     confirmacao_ativa: this.agendaDisp.confirmacao_ativa,
                     confirmacao_horas_antes: this.agendaDisp.confirmacao_horas_antes,
                     confirmacao_msg: this.agendaDisp.confirmacao_msg,

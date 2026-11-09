@@ -42,6 +42,9 @@ async function initDb() {
 }
 
 // Salva banco em disco (debounce 800ms — evita gravar a cada msg)
+// Ao encerrar (redeploy/restart), grava o que ainda estava esperando os 300 ms
+process.on('exit', () => { if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; _persistir(true); } });
+
 function _persistir(imediato = false) {
     if (!_db) return;
     if (imediato) {
@@ -499,6 +502,16 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
     try { _db.run("ALTER TABLE leads ADD COLUMN ultimo_departamento TEXT"); } catch(e) {}
     try { _db.run("ALTER TABLE leads ADD COLUMN transfer_motivo TEXT"); } catch(e) {}
     try { _db.run("ALTER TABLE leads ADD COLUMN transfer_de TEXT"); } catch(e) {}
+    // Menu interativo com botões (fluxo de boas-vindas)
+    try { _db.run("CREATE TABLE IF NOT EXISTS fluxo_botoes (instance_name TEXT PRIMARY KEY, config TEXT, updated_at TEXT)"); } catch(e) {}
+    try { _db.run("ALTER TABLE fluxo_botoes ADD COLUMN created_at TEXT"); } catch(e) {}
+    try { _db.run("ALTER TABLE fluxo_botoes ADD COLUMN id TEXT"); } catch(e) {}
+    // Agenda: nome do compromisso e antecedência mínima (botões de horário da IA)
+    try { _db.run("ALTER TABLE agenda_config ADD COLUMN compromisso_nome TEXT"); } catch(e) {}
+    try { _db.run("ALTER TABLE agenda_config ADD COLUMN antecedencia_min INTEGER DEFAULT 60"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_etapa TEXT"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_em TEXT"); } catch(e) {}
+    try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_feito INTEGER DEFAULT 0"); } catch(e) {}
 
     // Copia dados de colunas antigas para novas (crm_tags e departments)
     try { _db.run("UPDATE crm_tags SET name = nome WHERE name IS NULL AND nome IS NOT NULL"); } catch(e) {}
@@ -808,6 +821,7 @@ class QueryBuilder {
     }
 
     then(resolve, reject) { return this._execute().then(resolve, reject); }
+    catch(reject) { return this._execute().catch(reject); }
 }
 
 const pool   = { on: () => {}, end: () => {} };
