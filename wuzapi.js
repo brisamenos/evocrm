@@ -837,16 +837,43 @@ function createWuzapi(opts = {}) {
         return true;
     }
 
-    function pickJid(info) {
-        const chat = String(pick(info, 'Chat') || '');
-        if (chat.endsWith('@g.us') || chat.endsWith('@s.whatsapp.net')) return chat;
-        // Contas com LID (@lid): procura o número real nos campos "Alt"
-        const cands = [pick(info, 'SenderAlt'), pick(info, 'RecipientAlt'), pick(info, 'ChatAlt'), pick(info, 'Sender')];
-        for (const c of cands) {
-            const s = String(c || '');
-            if (s.endsWith('@s.whatsapp.net')) return s.replace(/:\d+@/, '@');
+    // ── LID (@lid): ID que o WhatsApp usa para esconder o número ──────────────
+    // Muitos contatos (principalmente de anúncios) chegam como "123456789012345@lid".
+    // Quando o WhatsApp manda o número junto (campos *Alt), guardamos o par
+    // LID → número para reconhecer o contato nas próximas mensagens.
+    const LID_FILE = pathMod.join(DATA_DIR, 'wuzapi_lids.json');
+    let lidMap = {};
+    try { lidMap = JSON.parse(fs.readFileSync(LID_FILE, 'utf8')) || {}; } catch (e) { lidMap = {}; }
+    let lidSaveTimer = null;
+    const semDevice = j => String(j || '').replace(/:\d+@/, '@');
+    function aprenderLid(lid, pn) {
+        lid = semDevice(lid); pn = semDevice(pn);
+        if (!lid.endsWith('@lid') || !pn.endsWith('@s.whatsapp.net') || lidMap[lid] === pn) return;
+        lidMap[lid] = pn;
+        clearTimeout(lidSaveTimer);
+        lidSaveTimer = setTimeout(() => { try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(LID_FILE, JSON.stringify(lidMap)); } catch (e) {} }, 1500);
+    }
+
+    // Devolve { jid, lid } — jid é o número real quando der para descobrir
+    function pickJid(info, fromMe) {
+        const chat = semDevice(pick(info, 'Chat'));
+        if (chat.endsWith('@g.us') || chat.endsWith('@s.whatsapp.net')) {
+            // Aproveita para aprender o LID do contato, se vier junto
+            const altLid = [pick(info, 'ChatAlt'), fromMe ? pick(info, 'RecipientAlt') : pick(info, 'SenderAlt')].map(semDevice).find(x => x.endsWith('@lid'));
+            if (altLid && chat.endsWith('@s.whatsapp.net')) aprenderLid(altLid, chat);
+            return { jid: chat, lid: null };
         }
-        return chat;
+        if (!chat.endsWith('@lid')) return { jid: chat, lid: null };
+        // Mensagem minha → o contato é o destinatário; recebida → o contato é o remetente
+        const cands = fromMe
+            ? [pick(info, 'RecipientAlt'), pick(info, 'ChatAlt')]
+            : [pick(info, 'SenderAlt'), pick(info, 'ChatAlt'), pick(info, 'Sender')];
+        for (const c of cands) {
+            const s = semDevice(c);
+            if (s.endsWith('@s.whatsapp.net')) { aprenderLid(chat, s); return { jid: s, lid: chat }; }
+        }
+        if (lidMap[chat]) return { jid: lidMap[chat], lid: chat };
+        return { jid: chat, lid: chat };   // número oculto pelo WhatsApp — responde pelo próprio LID
     }
 
     function cleanMessage(msg) {
@@ -884,7 +911,8 @@ function createWuzapi(opts = {}) {
 
         if (type === 'Message') {
             const info = pick(ev, 'Info') || {};
-            const jid = pickJid(info);
+            const fromMeInfo = !!pick(info, 'IsFromMe');
+            const { jid, lid } = pickJid(info, fromMeInfo);
             if (!jid || jid === 'status@broadcast' || jid.endsWith('@broadcast') || jid.endsWith('@newsletter')) return null;
             const cleaned = cleanMessage(pick(ev, 'Message') || {});
             if (!cleaned) return null;
@@ -902,7 +930,7 @@ function createWuzapi(opts = {}) {
             return {
                 event: 'messages.upsert', instance: inst, source: 'wuzapi',
                 data: {
-                    key: { remoteJid: jid, fromMe, id, ...(isGroup ? { participant: pick(info, 'Sender') || undefined } : {}) },
+                    key: { remoteJid: jid, fromMe, id, ...(isGroup ? { participant: pick(info, 'Sender') || undefined } : {}), ...(lid ? { lid } : {}) },
                     pushName: fromMe ? '' : (pick(info, 'PushName') || null),
                     message: cleaned.message, messageType: cleaned.type, messageTimestamp: ts,
                 },
@@ -968,11 +996,27 @@ function createWuzapi(opts = {}) {
         return Promise.all(users.map(async u => {
             const tk = pick(u, 'token');
             const s = tk ? await sessionStatus(tk).catch(() => ({})) : {};
-            return { nome: pick(u, 'name'), conectado: !!(s.connected && s.loggedIn) };
+            let webhook = pick(u, 'webhook') || '';
+            if (tk) {
+                const w = await call(tk, 'GET', '/webhook', null, 8000).catch(() => null);
+                if (w?.ok) webhook = pick(w.data || {}, 'webhook', 'webhookURL', 'url') || '';   // valor atual vale mais que o da lista
+            }
+            const ev = pick(u, 'events');
+            return { nome: pick(u, 'name'), conectado: !!(s.connected && s.loggedIn), webhook: String(webhook || ''), eventos: Array.isArray(ev) ? ev.join(',') : String(ev || '') };
         }));
     }
+    // Tira o webhook do CRM de um usuário que não é do CRM (devolve o controle ao outro sistema)
+    async function limparWebhook(nome) {
+        const token = await tokenQualquer(nome);
+        if (!token) throw new Error(`Usuário "${nome}" não encontrado`);
+        let r = await call(token, 'DELETE', '/webhook', null, 10000).catch(() => null);
+        if (!r?.ok) r = await call(token, 'POST', '/webhook', { webhookURL: '', webhook: '' }, 10000);
+        if (!r?.ok) throw new Error(String(r?.error || 'Falha ao limpar webhook'));
+        webhookChecked.delete(nome);
+        return true;
+    }
 
-    return { handle, parseWebhookBody, isWuzapiPayload, normalizeWebhook, isConfigured, hasFfmpeg, ffmpegPath, enviarTextoDireto, listarUsuarios };
+    return { handle, parseWebhookBody, isWuzapiPayload, normalizeWebhook, isConfigured, hasFfmpeg, ffmpegPath, enviarTextoDireto, listarUsuarios, limparWebhook };
 }
 
 module.exports = { createWuzapi };

@@ -326,6 +326,35 @@
                     </div>
                 </div>
 
+                <!-- DIAGNÓSTICO DA WUZAPI -->
+                <div class="glass rounded-[2rem] p-5 md:p-6 mb-6">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                            <p class="text-sm font-black text-white">Diagnóstico da Wuzapi</p>
+                            <p class="text-[11px] text-slate-400">Todos os WhatsApps da sua Wuzapi e para onde cada um manda as mensagens recebidas (webhook).</p>
+                        </div>
+                        <button @click="loadCobrancas()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-black">Atualizar</button>
+                    </div>
+                    <div x-show="whatsappsWuzapi.some(w => w.problema)" class="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/40 text-[12px] text-red-300 font-bold">
+                        ⚠️ Há WhatsApp de fora do CRM (ex: loja do EstimaFood) mandando as mensagens para o CRM. Por isso o outro sistema não recebe nada. Clique em <b>Devolver</b> e depois reconecte a loja no EstimaFood (Robô → WhatsApp → Conectar) para ele gravar o endereço dele de novo.
+                    </div>
+                    <div class="space-y-1.5 max-h-80 overflow-y-auto">
+                        <template x-for="w in whatsappsWuzapi" :key="w.nome">
+                            <div class="flex items-center gap-3 p-2.5 rounded-xl" :class="w.problema ? 'bg-red-500/10 border border-red-500/30' : 'bg-slate-900/60'">
+                                <span class="text-sm" x-text="w.conectado ? '✅' : '⚪'"></span>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-xs font-black text-white truncate">
+                                        <span x-text="w.nome"></span>
+                                        <span x-show="w.do_crm" class="ml-1 text-[9px] text-brand-300">(cliente do CRM)</span>
+                                    </p>
+                                    <p class="text-[10px] truncate" :class="w.problema ? 'text-red-300' : 'text-slate-500'" x-text="w.webhook ? ('→ ' + w.webhook) : '→ sem webhook próprio (usa o global da Wuzapi)'"></p>
+                                </div>
+                                <button x-show="w.problema" @click="soltarWhatsapp(w)" class="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[10px] font-black shrink-0">Devolver</button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
                 <div class="flex gap-2 mb-4 flex-wrap">
                     <template x-for="f in [{id:'proximos',l:'Vencem em 7 dias'},{id:'vencidos',l:'Vencidos'},{id:'todos',l:'Todos'},{id:'sem_dados',l:'Faltando dados'}]" :key="f.id">
                         <button @click="cobrancaFiltro = f.id" :class="cobrancaFiltro === f.id ? 'bg-brand-600 text-white' : 'bg-slate-800 text-slate-400'" class="px-4 py-2 rounded-xl text-xs font-black transition-all" x-text="f.l"></button>
@@ -2616,6 +2645,16 @@
                         await this.loadCobrancas();
                     } catch(e) { this.addNotification('Não enviado', e.message, 'error'); }
                     this.cobrancaEnviando = { ...this.cobrancaEnviando, [c.instance_name]: false };
+                },
+                async soltarWhatsapp(w) {
+                    if (!confirm(`Tirar o webhook do CRM de "${w.nome}"?\n\nDepois, reconecte essa loja no EstimaFood para ele voltar a receber as mensagens.`)) return;
+                    try {
+                        const r = await fetch('/api/wuzapi/soltar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nome: w.nome, admin_secret: 'evocrm-admin-2024' }) });
+                        const d = await r.json();
+                        if (!r.ok) throw new Error(d.error || 'Falha');
+                        this.addNotification('Pronto', `"${w.nome}" não manda mais nada para o CRM. Reconecte no EstimaFood.`, 'success');
+                        await this.loadCobrancas();
+                    } catch (e) { this.addNotification('Erro', e.message, 'error'); }
                 },
                 async salvarInstanciaCobranca() {
                     const valor = (this.instanciaCobranca || '').trim();

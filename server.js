@@ -5350,8 +5350,35 @@ const server = http.createServer(async (req, res) => {
             const u = new URL(req.url, 'http://x');
             if (u.searchParams.get('admin_secret') !== (process.env.ADMIN_SECRET || 'evocrm-admin-2024')) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Acesso negado' })); return; }
             const lista = await wuz.listarUsuarios();
-            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ data: lista }));
+            // Marca quem é do CRM e quem está com o webhook apontando para o CRM sem ser dele
+            const { data: lics } = await db.from('licenses').select('instance_name');
+            const doCrm = new Set((lics || []).map(l => String(l.instance_name || '').toLowerCase()));
+            const baseCrm = String(process.env.WEBHOOK_BASE_URL || SERVER_PUBLIC_URL || '').replace(/\/+$/, '').toLowerCase();
+            for (const u of lista) {
+                u.do_crm = doCrm.has(String(u.nome || '').toLowerCase());
+                const wh = u.webhook.toLowerCase();
+                u.webhook_no_crm = !!wh && ((baseCrm && wh.startsWith(baseCrm + '/webhook/')) || /\/webhook\/[^/]+$/.test(wh) && wh.includes(String(u.nome || '').toLowerCase()) && !wh.includes('/webhook/wuz/'));
+                u.problema = !u.do_crm && u.webhook_no_crm;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ data: lista, crm_url: baseCrm }));
         } catch (e) { res.writeHead(500, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
+        return;
+    }
+    // Solta do CRM um usuário da Wuzapi que não é do CRM (ex: loja do EstimaFood)
+    if (req.url === '/api/wuzapi/soltar' && req.method === 'POST') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+            try {
+                const { nome, admin_secret } = JSON.parse(body || '{}');
+                if (admin_secret !== (process.env.ADMIN_SECRET || 'evocrm-admin-2024')) { res.writeHead(403, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: 'Acesso negado' })); return; }
+                const { data: lic } = await db.from('licenses').select('id').eq('instance_name', String(nome || '').toLowerCase()).single();
+                if (lic) throw new Error('Este WhatsApp é de um cliente do CRM');
+                await wuz.limparWebhook(nome);
+                log('sistema', 'ok', `[Wuzapi] Webhook do CRM removido de "${nome}"`);
+                res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ok: true }));
+            } catch (e) { res.writeHead(400, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ error: e.message })); }
+        });
         return;
     }
     if (req.url === '/api/cobrancas/enviar' && req.method === 'POST') {
@@ -6119,6 +6146,18 @@ const server = http.createServer(async (req, res) => {
             res.end(JSON.stringify({ ok: true }));
 
             try {
+                // Instância que não é cliente do CRM (ex: loja do EstimaFood com webhook
+                // apontando para cá por engano) → ignora e avisa no log
+                const { data: licWh } = await db.from('licenses').select('id').eq('instance_name', inst).single();
+                if (!licWh) {
+                    const agoraWh = Date.now();
+                    if (!global._avisoWebhookAlheio) global._avisoWebhookAlheio = {};
+                    if (!global._avisoWebhookAlheio[inst] || agoraWh - global._avisoWebhookAlheio[inst] > 600000) {
+                        global._avisoWebhookAlheio[inst] = agoraWh;
+                        log('sistema', 'warn', `[Webhook] Recebido para "${inst}", que NÃO é cliente do CRM — o webhook desse WhatsApp está apontando para o CRM. Corrija em Painel → Cobranças → Diagnóstico da Wuzapi.`);
+                    }
+                    return;
+                }
                 // Wuzapi envia { type, event } (JSON ou form com jsonData) →
                 // convertemos para o formato Evolution que o código abaixo já entende.
                 let evt = wuz.parseWebhookBody(body, req.headers['content-type']);
@@ -6194,10 +6233,24 @@ const server = http.createServer(async (req, res) => {
                             lead = found;
                         } catch(e) {}
 
+                        // Contato que antes veio com número oculto (@lid) e agora veio com o número real:
+                        // aproveita o mesmo lead (conversa e histórico) e grava o número verdadeiro
+                        const lidDoContato = m.key.lid || null;
+                        if (!lead && lidDoContato && !numero.endsWith('@lid')) {
+                            try {
+                                const { data: porLid } = await db.from('leads').select('*').eq('numero', lidDoContato).eq('instance_name', inst).single();
+                                if (porLid) {
+                                    await db.from('leads').update({ numero }).eq('id', porLid.id);
+                                    lead = { ...porLid, numero };
+                                    log(inst, 'ok', `[Webhook] Número revelado: ${lidDoContato} → ${numero}`);
+                                }
+                            } catch(e) {}
+                        }
+
                         if (!lead) {
                             const { data: novo } = await db.from('leads').insert({
                                 instance_name: inst, numero,
-                                nome: pushName || numero,
+                                nome: pushName || (numero.endsWith('@lid') ? 'Contato WhatsApp' : numero),
                                 status: (await getPrimeiraColuna(inst)), departamento: 'ADM Principal',
                                 unread: 0, // o contador é incrementado logo abaixo (antes contava 2 na 1ª mensagem)
                                 last_msg: content || `[${type}]`,
@@ -6216,7 +6269,7 @@ const server = http.createServer(async (req, res) => {
                                 push_name: pushName || lead.push_name,
                                 followup_count: 0,
                                 // Lead sem nome (só número / genérico) → usa o nome do perfil do WhatsApp
-                                ...((pushName && !isGroup && (!lead.nome || lead.nome === numero || ['Lead Avulso','Lead Importado','Desconhecido','Contato'].includes(lead.nome))
+                                ...((pushName && !isGroup && (!lead.nome || lead.nome === numero || /@lid$/.test(lead.nome) || ['Lead Avulso','Lead Importado','Desconhecido','Contato','Contato WhatsApp'].includes(lead.nome))
                                      && !(getState(inst).operatorNames?.has?.(pushName.trim()))) ? { nome: pushName } : {}),
                                 followup_last_at: null,
                             };

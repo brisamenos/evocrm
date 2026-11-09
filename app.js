@@ -2015,9 +2015,11 @@ function crmApp() {
 
                 getLeadName(lead) {
                     if(!lead) return 'Desconhecido';
-                    const _generico = !lead.nome || lead.nome === lead.numero || ['Lead Avulso','Lead Importado','Desconhecido','Contato'].includes(lead.nome);
+                    const _generico = !lead.nome || lead.nome === lead.numero || /@lid$/.test(lead.nome) || ['Lead Avulso','Lead Importado','Desconhecido','Contato','Contato WhatsApp'].includes(lead.nome);
                     if(!_generico) return lead.nome;
                     if(lead.push_name && lead.push_name !== lead.numero) return lead.push_name;
+                    // Número escondido pelo WhatsApp (@lid): não é telefone, não mostra como se fosse
+                    if(String(lead.numero || '').endsWith('@lid')) return 'Contato (número oculto)';
                     if(lead.name) return lead.name;
                     if(lead.pushName) return lead.pushName;
                     return lead.nome || lead.numero || 'Desconhecido';
