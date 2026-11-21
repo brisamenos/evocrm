@@ -91,6 +91,7 @@
     <script src="app-disparo.js"></script>
     <script src="app-autoreply.js"></script>
     <script src="app-fluxo-botoes.js"></script>
+    <script src="app-inscricoes.js"></script>
     <script src="app-ia-atend.js"></script>
     <script src="app.js"></script>
 
@@ -3637,6 +3638,375 @@
                     </div>
 
                     </div><!-- end botTab fluxos wrapper -->
+                </div>
+
+                <!-- ════════════════════════════════════════════════════════════
+                     TELA: INSCRIÇÕES DO SITE
+                ════════════════════════════════════════════════════════════ -->
+                <div x-show="screen === 'inscricoes'" x-cloak
+                     x-init="$watch('screen', v => { if (v === 'inscricoes') insAbrir(); })"
+                     class="absolute inset-0 overflow-y-auto no-scrollbar scroll-elegant"
+                     style="padding-bottom:max(calc(env(safe-area-inset-bottom) + 80px),100px);">
+
+                    <!-- Cabeçalho -->
+                    <div class="px-4 pt-4">
+                        <div class="bg-gradient-to-br from-[#6366f1] to-[#4338ca] rounded-[1.75rem] p-5 text-white shadow-xl">
+                            <div class="flex items-start justify-between gap-3 flex-wrap">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center"><i data-lucide="globe" class="w-5 h-5"></i></div>
+                                    <div>
+                                        <h3 class="font-black text-xl">Inscrições do site</h3>
+                                        <p class="text-white/80 text-xs font-medium">Cada inscrição vira contato no CRM e recebe o fluxo no WhatsApp automaticamente.</p>
+                                    </div>
+                                </div>
+                                <button @click="insCriarFonte()" class="bg-white/15 hover:bg-white/25 text-white text-xs font-black px-4 py-2 rounded-xl">+ Conectar site</button>
+                            </div>
+                            <div x-show="insFontes.length" class="mt-4 flex flex-wrap items-center gap-2">
+                                <select :value="insFonteId" @change="insTrocarFonte($event.target.value)" class="bg-white/15 text-white text-sm font-bold rounded-xl px-3 py-2 border border-white/20 [&>option]:text-slate-800">
+                                    <template x-for="f in insFontes" :key="f.id"><option :value="f.id" x-text="f.nome + (f.ativo ? '' : ' (desativado)')" :selected="f.id === insFonteId"></option></template>
+                                </select>
+                                <span x-show="insFonte && !insFonte.ativo" class="text-[10px] font-black uppercase bg-amber-400 text-amber-950 px-2 py-1 rounded-lg">Desativado</span>
+                            </div>
+                            <div x-show="insFonte" class="grid grid-cols-4 gap-2 mt-4">
+                                <div class="bg-white/10 rounded-xl p-2 text-center"><div class="text-lg font-black" x-text="insFonte?.total ?? 0"></div><div class="text-[10px] uppercase font-bold text-white/70">Total</div></div>
+                                <div class="bg-white/10 rounded-xl p-2 text-center"><div class="text-lg font-black" x-text="insFonte?.hoje ?? 0"></div><div class="text-[10px] uppercase font-bold text-white/70">Hoje</div></div>
+                                <div class="bg-white/10 rounded-xl p-2 text-center"><div class="text-lg font-black" x-text="insFonte?.na_fila ?? 0"></div><div class="text-[10px] uppercase font-bold text-white/70">Na fila</div></div>
+                                <div class="bg-white/10 rounded-xl p-2 text-center"><div class="text-lg font-black" x-text="insFonte?.erros ?? 0"></div><div class="text-[10px] uppercase font-bold text-white/70">Erros</div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sem site conectado -->
+                    <div x-show="!insCarregando && !insFontes.length" class="px-4 mt-6">
+                        <div class="bg-white dark:bg-[#161b22] rounded-[1.5rem] border border-dashed border-slate-300 dark:border-[#30363d] p-8 text-center">
+                            <div class="text-4xl mb-2">🌐</div>
+                            <h4 class="font-black text-slate-800 dark:text-white">Nenhum site conectado</h4>
+                            <p class="text-sm text-slate-500 mt-1 mb-4">Conecte o formulário do seu site: cada inscrição chega aqui e recebe o fluxo no WhatsApp.</p>
+                            <button @click="insCriarFonte()" class="bg-[#6366f1] hover:bg-[#4f46e5] text-white text-sm font-black px-5 py-3 rounded-xl">Conectar meu primeiro site</button>
+                        </div>
+                    </div>
+
+                    <template x-if="insFonte">
+                    <div>
+                        <!-- Abas -->
+                        <div class="wa-tab-bar sticky top-0 z-30 bg-white dark:bg-[#161b22] mt-4">
+                            <button @click="insAba='inscritos'; insCarregarLista(); _insIcons()" :class="insAba==='inscritos'?'wa-tab active':'wa-tab'" class="flex-1 flex items-center justify-center gap-1.5"><i data-lucide="users" class="w-4 h-4"></i> Inscritos</button>
+                            <button @click="insAba='fluxo'; _insIcons()" :class="insAba==='fluxo'?'wa-tab active':'wa-tab'" class="flex-1 flex items-center justify-center gap-1.5"><i data-lucide="send" class="w-4 h-4"></i> Fluxo <span x-show="insAlterado" class="w-2 h-2 rounded-full bg-amber-500"></span></button>
+                            <button @click="insAba='conexao'; _insIcons()" :class="insAba==='conexao'?'wa-tab active':'wa-tab'" class="flex-1 flex items-center justify-center gap-1.5"><i data-lucide="link" class="w-4 h-4"></i> Conexão</button>
+                        </div>
+
+                        <!-- ── ABA INSCRITOS ── -->
+                        <div x-show="insAba==='inscritos'" class="px-4 mt-4 space-y-3">
+                            <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] p-3 space-y-2">
+                                <div class="flex gap-2">
+                                    <input x-model="insFiltro.q" @input="insBuscar()" placeholder="Buscar nome, telefone, cidade..." class="flex-1 rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                    <button @click="insExportar()" title="Exportar planilha (CSV)" class="px-3 rounded-xl bg-slate-100 dark:bg-[#21262d] text-slate-600 dark:text-slate-300"><i data-lucide="download" class="w-4 h-4"></i></button>
+                                    <button @click="insCarregarLista()" title="Atualizar" class="px-3 rounded-xl bg-slate-100 dark:bg-[#21262d] text-slate-600 dark:text-slate-300"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                    <select x-model="insFiltro.status" @change="insCarregarLista(1)" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-2 text-xs dark:text-white">
+                                        <option value="">Todos os status</option>
+                                        <template x-for="o in insStatusOpcoes" :key="o.v"><option :value="o.v" x-text="o.l"></option></template>
+                                    </select>
+                                    <select x-model="insFiltro.fluxo" @change="insCarregarLista(1)" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-2 text-xs dark:text-white">
+                                        <option value="">Fluxo: todos</option>
+                                        <template x-for="o in insFluxoOpcoes" :key="o.v"><option :value="o.v" x-text="o.l"></option></template>
+                                    </select>
+                                    <input type="date" x-model="insFiltro.de" @change="insCarregarLista(1)" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-2 text-xs dark:text-white">
+                                    <input type="date" x-model="insFiltro.ate" @change="insCarregarLista(1)" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-2 text-xs dark:text-white">
+                                </div>
+                                <div class="flex justify-between items-center text-[11px] text-slate-500">
+                                    <span x-text="insTotal + ' inscrição(ões)'"></span>
+                                    <button x-show="insFiltro.q || insFiltro.status || insFiltro.fluxo || insFiltro.de || insFiltro.ate" @click="insLimparFiltros()" class="font-bold text-[#6366f1]">Limpar filtros</button>
+                                </div>
+                            </div>
+
+                            <p x-show="!insItens.length" class="text-center text-sm text-slate-400 py-10">Nenhuma inscrição por aqui ainda.</p>
+
+                            <template x-for="it in insItens" :key="it.id">
+                                <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] overflow-hidden">
+                                    <button @click="insAberto = insAberto === it.id ? null : it.id; _insIcons()" class="w-full text-left p-3 flex items-start gap-3">
+                                        <div class="w-10 h-10 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-[#6366f1] flex items-center justify-center font-black shrink-0" x-text="(it.nome || '?').trim().charAt(0).toUpperCase()"></div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="font-black text-sm text-slate-800 dark:text-white truncate" x-text="it.nome || 'Sem nome'"></span>
+                                                <span x-show="it.simulacao" class="text-[9px] font-black uppercase bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">teste</span>
+                                            </div>
+                                            <div class="text-xs text-slate-500 truncate"><span x-text="insFmtFone(it.numero)"></span><span x-show="it.cidade"> • </span><span x-text="it.cidade"></span></div>
+                                            <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                                <span class="text-[10px] font-black px-2 py-0.5 rounded-lg" :class="insCorFluxo(it.fluxo_status)" x-text="it.fluxo_rotulo"></span>
+                                                <span x-show="it.total_etapas && ['agendado','enviando'].includes(it.fluxo_status)" class="text-[10px] text-slate-400" x-text="insProgresso(it)"></span>
+                                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-[#21262d] text-slate-600 dark:text-slate-300" x-text="(insStatusOpcoes.find(o => o.v === it.status) || {}).l || it.status"></span>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] text-slate-400 shrink-0" x-text="insFmtData(it.created_at)"></span>
+                                    </button>
+
+                                    <div x-show="insAberto === it.id" class="border-t border-slate-100 dark:border-[#21262d] p-3 space-y-3 bg-slate-50/60 dark:bg-[#0d1117]/40">
+                                        <div class="flex flex-wrap gap-2">
+                                            <button @click="insAbrirConversa(it)" class="text-xs font-black bg-[#6366f1] text-white px-3 py-2 rounded-xl flex items-center gap-1"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> Abrir conversa</button>
+                                            <a :href="'https://wa.me/' + it.numero" target="_blank" rel="noopener" class="text-xs font-black bg-emerald-600 text-white px-3 py-2 rounded-xl">WhatsApp</a>
+                                            <button @click="insAcao(it, 'reenviar')" class="text-xs font-black bg-slate-200 dark:bg-[#21262d] text-slate-700 dark:text-slate-200 px-3 py-2 rounded-xl">↻ Reenviar fluxo</button>
+                                            <button x-show="['agendado','enviando'].includes(it.fluxo_status)" @click="insAcao(it, 'cancelar')" class="text-xs font-black bg-amber-100 text-amber-800 px-3 py-2 rounded-xl">Cancelar envio</button>
+                                            <button @click="insAcao(it, 'excluir')" class="text-xs font-black text-red-500 px-3 py-2">Excluir</button>
+                                        </div>
+                                        <div x-show="it.fluxo_erro" class="text-xs bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300 rounded-xl p-2" x-text="'⚠️ ' + it.fluxo_erro"></div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                            <div><span class="text-slate-400">Telefone digitado:</span> <span class="font-bold dark:text-white" x-text="it.telefone"></span></div>
+                                            <div x-show="it.email"><span class="text-slate-400">E-mail:</span> <span class="font-bold dark:text-white" x-text="it.email"></span></div>
+                                            <div x-show="it.escolha"><span class="text-slate-400">Escolheu no fluxo:</span> <span class="font-bold dark:text-white" x-text="it.escolha"></span></div>
+                                            <template x-for="(v, k) in it.campos" :key="k"><div><span class="text-slate-400" x-text="k + ':'"></span> <span class="font-bold dark:text-white" x-text="v"></span></div></template>
+                                            <template x-for="(v, k) in it.utm" :key="'u' + k"><div><span class="text-slate-400" x-text="k + ':'"></span> <span class="font-bold dark:text-white" x-text="v"></span></div></template>
+                                            <div x-show="it.origem_url" class="sm:col-span-2 truncate"><span class="text-slate-400">Página:</span> <span class="dark:text-white" x-text="it.origem_url"></span></div>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <div>
+                                                <label class="text-[10px] font-black uppercase text-slate-500">Status do atendimento</label>
+                                                <select :value="it.status" @change="insAcao(it, 'status', $event.target.value)" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] px-2 py-2 text-xs dark:text-white">
+                                                    <template x-for="o in insStatusOpcoes" :key="o.v"><option :value="o.v" x-text="o.l" :selected="o.v === it.status"></option></template>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="text-[10px] font-black uppercase text-slate-500">Observação interna</label>
+                                                <textarea x-model="it.observacao" @blur="insAcao(it, 'observacao', it.observacao)" rows="2" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] px-2 py-1.5 text-xs dark:text-white" placeholder="Anotações da equipe"></textarea>
+                                            </div>
+                                        </div>
+                                        <div x-show="(it.fluxo_log || []).length">
+                                            <label class="text-[10px] font-black uppercase text-slate-500">Histórico do fluxo</label>
+                                            <div class="mt-1 space-y-0.5 max-h-36 overflow-y-auto">
+                                                <template x-for="(l, li) in [...(it.fluxo_log || [])].reverse()" :key="li">
+                                                    <div class="text-[11px] text-slate-600 dark:text-slate-300"><span class="text-slate-400" x-text="insFmtData(l.em)"></span> — <span x-text="l.t"></span></div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <div x-show="insPaginas > 1" class="flex items-center justify-center gap-3 py-2">
+                                <button :disabled="insPagina <= 1" @click="insCarregarLista(insPagina - 1)" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#21262d] text-sm font-bold disabled:opacity-40 dark:text-white">‹</button>
+                                <span class="text-xs text-slate-500" x-text="insPagina + ' de ' + insPaginas"></span>
+                                <button :disabled="insPagina >= insPaginas" @click="insCarregarLista(insPagina + 1)" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-[#21262d] text-sm font-bold disabled:opacity-40 dark:text-white">›</button>
+                            </div>
+
+                            <!-- Simular -->
+                            <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] p-4 space-y-2">
+                                <h4 class="font-black text-sm text-slate-800 dark:text-white">🧪 Simular uma inscrição</h4>
+                                <p class="text-[11px] text-slate-500">Cria uma inscrição de teste (marcada como "teste") e envia o fluxo de verdade para o WhatsApp informado.</p>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <input x-model="insSim.nome" placeholder="Nome" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                    <input x-model="insSim.telefone" inputmode="tel" placeholder="WhatsApp com DDD" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                    <input x-model="insSim.cidade" placeholder="Cidade / UF" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                </div>
+                                <button @click="insSimular()" :disabled="insSimulando" class="bg-slate-800 dark:bg-[#21262d] text-white text-xs font-black px-4 py-2.5 rounded-xl disabled:opacity-60" x-text="insSimulando ? 'Enviando...' : 'Simular inscrição'"></button>
+                            </div>
+                        </div>
+
+                        <!-- ── ABA FLUXO ── -->
+                        <div x-show="insAba==='fluxo'" class="px-4 mt-4 space-y-4">
+                            <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] p-4 space-y-3">
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
+                                    <h4 class="font-black text-slate-800 dark:text-white">Mensagens que o inscrito recebe</h4>
+                                    <span class="text-[11px] text-slate-500">Variáveis: {primeiro_nome} {nome} {cidade} {telefone} {site}</span>
+                                </div>
+                                <div class="flex items-center gap-2 text-sm flex-wrap">
+                                    <span class="text-slate-600 dark:text-slate-300">A 1ª mensagem sai</span>
+                                    <select x-model.number="insFonte.config.atraso_seg" @change="insMarcar()" class="rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-1.5 text-sm dark:text-white">
+                                        <option value="0">na hora</option><option value="10">10 s</option><option value="20">20 s</option><option value="60">1 min</option>
+                                        <option value="180">3 min</option><option value="300">5 min</option><option value="900">15 min</option><option value="3600">1 hora</option>
+                                    </select>
+                                    <span class="text-slate-600 dark:text-slate-300">depois da inscrição.</span>
+                                </div>
+                            </div>
+
+                            <p x-show="!insFonte.config.etapas.length" class="text-sm text-amber-600 bg-amber-50 dark:bg-amber-950/30 rounded-xl p-3">Nenhuma mensagem: os inscritos não vão receber nada no WhatsApp.</p>
+
+                            <template x-for="(e, i) in insFonte.config.etapas" :key="e._uid">
+                                <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] p-4 space-y-3">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="w-6 h-6 rounded-full bg-[#6366f1] text-white text-xs font-black flex items-center justify-center" x-text="i + 1"></span>
+                                        <span class="font-black text-sm text-slate-800 dark:text-white flex-1" x-text="(insTiposEtapa.find(t => t.v === e.tipo) || {}).l"></span>
+                                        <button @click="insMoverEtapa(i, -1)" class="text-slate-400 hover:text-slate-700 dark:hover:text-white px-1" title="Subir">↑</button>
+                                        <button @click="insMoverEtapa(i, 1)" class="text-slate-400 hover:text-slate-700 dark:hover:text-white px-1" title="Descer">↓</button>
+                                        <button @click="insRemoverEtapa(i)" class="text-slate-400 hover:text-red-500" title="Remover"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                                    </div>
+                                    <div x-show="i > 0" class="flex items-center gap-2 text-xs flex-wrap">
+                                        <span class="text-slate-500">Enviar</span>
+                                        <input type="number" min="0" step="1" :value="insEsperaValor(e)" @change="insSetEspera(e, $event.target.value, insEsperaUnidade(e))" class="w-20 rounded-lg border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-1 dark:text-white">
+                                        <select :value="insEsperaUnidade(e)" @change="insSetEspera(e, insEsperaValor(e), $event.target.value)" class="rounded-lg border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-1 dark:text-white">
+                                            <option value="s">segundos</option><option value="m">minutos</option><option value="h">horas</option><option value="d">dias</option>
+                                        </select>
+                                        <span class="text-slate-500">depois da mensagem anterior</span>
+                                    </div>
+
+                                    <template x-if="e.tipo === 'texto'">
+                                        <div>
+                                            <textarea x-model="e.texto" @input="insMarcar()" rows="4" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-3 text-sm dark:text-white" placeholder="Olá, {primeiro_nome}! ..."></textarea>
+                                            <div class="flex gap-1 flex-wrap mt-1">
+                                                <template x-for="v in ['{primeiro_nome}','{nome}','{cidade}','{site}']" :key="v"><button @click="insInserirVar(e, 'texto', v)" class="text-[10px] font-bold bg-slate-100 dark:bg-[#21262d] text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded" x-text="v"></button></template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="['audio','imagem','video','documento'].includes(e.tipo)">
+                                        <div class="space-y-2">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <label class="cursor-pointer bg-indigo-50 dark:bg-indigo-900/30 text-[#6366f1] text-xs font-black px-4 py-2 rounded-xl border border-indigo-200 dark:border-indigo-800">
+                                                    <span x-text="insUploadIdx === i ? 'Enviando...' : (e.url ? 'Trocar arquivo' : 'Enviar arquivo')"></span>
+                                                    <input type="file" class="hidden" @change="insUpload($event, e, i)"
+                                                           :accept="e.tipo === 'audio' ? 'audio/*,.ogg,.opus,.mp3,.m4a,.wav' : e.tipo === 'imagem' ? 'image/*' : e.tipo === 'video' ? 'video/*' : '*/*'">
+                                                </label>
+                                                <span x-show="e.url" class="text-[11px] text-emerald-600 font-bold">✓ arquivo pronto</span>
+                                            </div>
+                                            <template x-if="e.url && e.tipo === 'audio'"><audio :src="'/api/audio?src=' + encodeURIComponent(e.url)" controls preload="none" class="h-10 max-w-full"></audio></template>
+                                            <template x-if="e.url && e.tipo === 'imagem'"><img :src="e.url" class="max-h-40 rounded-xl"></template>
+                                            <input x-model="e.url" @input="insMarcar()" placeholder="...ou cole o link do arquivo (https://...)" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-xs dark:text-white">
+                                            <textarea x-show="e.tipo !== 'audio'" x-model="e.legenda" @input="insMarcar()" rows="2" placeholder="Legenda (opcional)" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-2 text-sm dark:text-white"></textarea>
+                                            <input x-show="e.tipo === 'documento'" x-model="e.nome_arquivo" @input="insMarcar()" placeholder="Nome do arquivo que o cliente vê (ex.: Guia Usucapião.pdf)" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-xs dark:text-white">
+                                        </div>
+                                    </template>
+
+                                    <template x-if="e.tipo === 'botoes'">
+                                        <div class="space-y-2">
+                                            <textarea x-model="e.texto" @input="insMarcar()" rows="2" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-3 text-sm dark:text-white" placeholder="Texto acima dos botões"></textarea>
+                                            <template x-for="(o, j) in e.opcoes" :key="j">
+                                                <div class="rounded-xl border border-slate-200 dark:border-[#30363d] p-2 space-y-2">
+                                                    <div class="flex items-center gap-2">
+                                                        <input x-model="o.titulo" @input="insLimitarTitulo(o)" placeholder="Texto do botão" class="flex-1 rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] px-2 py-1.5 text-sm font-bold dark:text-white">
+                                                        <span class="text-[10px] text-slate-400" x-text="insTamanho(o.titulo) + '/20'"></span>
+                                                        <button @click="insRemoverBotao(e, j)" class="text-slate-400 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button>
+                                                    </div>
+                                                    <select x-model="o.acao" @change="insMarcar()" class="w-full rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] px-2 py-1.5 text-xs dark:text-white">
+                                                        <option value="ia">🤖 A IA continua a conversa</option>
+                                                        <option value="agenda">📅 Mostrar horários para agendar</option>
+                                                        <option value="humano">🙋 Chamar atendente (pausa a IA)</option>
+                                                        <option value="texto">✅ Só responder com uma mensagem</option>
+                                                    </select>
+                                                    <textarea x-model="o.resposta" @input="insMarcar()" rows="2" class="w-full rounded-lg border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] p-2 text-xs dark:text-white" placeholder="Mensagem enviada ao tocar (opcional)"></textarea>
+                                                    <textarea x-show="o.acao === 'ia'" x-model="o.contexto_ia" @input="insMarcar()" rows="2" class="w-full rounded-lg border border-indigo-200 dark:border-indigo-900 bg-indigo-50/60 dark:bg-indigo-950/30 p-2 text-xs dark:text-white" placeholder="Instrução para a IA (o cliente não vê)"></textarea>
+                                                </div>
+                                            </template>
+                                            <button x-show="e.opcoes.length < 6" @click="insAddBotao(e)" class="text-xs font-black text-[#6366f1]">+ Botão</button>
+                                            <p class="text-[10px] text-slate-400">O WhatsApp mostra até 3 botões por mensagem; acima disso vão em mensagens separadas. O cliente também pode responder com o número (1, 2, 3).</p>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="e.tipo === 'agenda'">
+                                        <div class="space-y-1">
+                                            <textarea x-model="e.texto" @input="insMarcar()" rows="2" class="w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-3 text-sm dark:text-white" placeholder="Texto antes dos horários (opcional). Ex.: Que tal uma conversa rápida com o Dr. Levi?"></textarea>
+                                            <p class="text-[11px] text-slate-500">Envia o próximo horário livre da Agenda e a opção "Escolher outro". Configure os horários em Agenda → Disponibilidade.</p>
+                                        </div>
+                                    </template>
+                                    <template x-if="e.tipo === 'menu'">
+                                        <p class="text-[11px] text-slate-500">Envia o Menu com Botões configurado em Automação (áudio de boas-vindas + botões).</p>
+                                    </template>
+                                </div>
+                            </template>
+
+                            <div class="flex gap-2">
+                                <select x-model="insNovaEtapaTipo" class="flex-1 rounded-xl border border-slate-200 dark:border-[#30363d] bg-white dark:bg-[#161b22] px-3 py-2.5 text-sm dark:text-white">
+                                    <template x-for="t in insTiposEtapa" :key="t.v"><option :value="t.v" x-text="t.l"></option></template>
+                                </select>
+                                <button @click="insAddEtapa()" class="bg-[#6366f1] text-white text-sm font-black px-4 rounded-xl">+ Adicionar</button>
+                            </div>
+
+                            <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] p-4 space-y-3">
+                                <h4 class="font-black text-sm text-slate-800 dark:text-white">Depois do fluxo</h4>
+                                <label class="flex items-start gap-2 text-sm dark:text-slate-200">
+                                    <input type="checkbox" x-model="insFonte.config.parar_se_responder" @change="insMarcar()" class="mt-1">
+                                    <span>Se o cliente responder no meio, <b>não enviar</b> as mensagens que faltam (a conversa segue com a IA ou a equipe)</span>
+                                </label>
+                                <div>
+                                    <label class="text-[10px] font-black uppercase text-slate-500">Quando o fluxo terminar</label>
+                                    <select x-model="insFonte.config.apos_fluxo" @change="insMarcar()" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                        <option value="ia">A IA responde o que o cliente mandar</option>
+                                        <option value="pausar_ia">Pausar a IA e esperar um atendente</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-[10px] font-black uppercase text-slate-500">O que a IA sabe sobre o inscrito (o cliente não vê)</label>
+                                    <textarea x-model="insFonte.config.contexto_ia" @input="insMarcar()" rows="3" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] p-3 text-xs dark:text-white"></textarea>
+                                </div>
+                            </div>
+
+                            <button @click="insSalvarFonte()" :disabled="insSalvando" class="w-full bg-[#6366f1] hover:bg-[#4f46e5] text-white font-black py-3.5 rounded-xl shadow-md disabled:opacity-60" x-text="insSalvando ? 'Salvando...' : 'Salvar fluxo'"></button>
+                        </div>
+
+                        <!-- ── ABA CONEXÃO ── -->
+                        <div x-show="insAba==='conexao'" class="px-4 mt-4 space-y-4">
+                            <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] p-4 space-y-3">
+                                <div class="flex items-center justify-between gap-2">
+                                    <h4 class="font-black text-slate-800 dark:text-white">Código de conexão</h4>
+                                    <label class="flex items-center gap-2 text-xs font-bold dark:text-slate-200">
+                                        <span x-text="insFonte.ativo ? 'Recebendo inscrições' : 'Desativado'"></span>
+                                        <button @click="insFonte.ativo = !insFonte.ativo; insMarcar()" :class="insFonte.ativo ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'" class="relative w-11 h-6 rounded-full transition-all">
+                                            <div :class="insFonte.ativo ? 'translate-x-5' : 'translate-x-0.5'" class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform"></div>
+                                        </button>
+                                    </label>
+                                </div>
+                                <p class="text-xs text-slate-500">Copie e cole no <b>Admin do site → Conexão com o CRM</b>. É ele que liga o formulário a esta conta.</p>
+                                <div class="flex gap-2">
+                                    <input :type="insCodigoVisivel ? 'text' : 'password'" :value="insFonte.codigo" readonly class="flex-1 rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-xs font-mono dark:text-white">
+                                    <button @click="insCodigoVisivel = !insCodigoVisivel" class="px-3 rounded-xl bg-slate-100 dark:bg-[#21262d] text-slate-600 dark:text-slate-300 text-xs font-bold" x-text="insCodigoVisivel ? 'Ocultar' : 'Ver'"></button>
+                                    <button @click="insCopiarCodigo()" class="px-3 rounded-xl bg-[#6366f1] text-white text-xs font-black">Copiar</button>
+                                </div>
+                                <button @click="insTrocarCodigo()" class="text-[11px] font-bold text-amber-600 hover:underline">Gerar novo código (o atual para de funcionar)</button>
+                            </div>
+
+                            <div class="bg-white dark:bg-[#161b22] rounded-2xl border border-slate-200 dark:border-[#21262d] p-4 space-y-3">
+                                <h4 class="font-black text-slate-800 dark:text-white">Ajustes</h4>
+                                <div>
+                                    <label class="text-[10px] font-black uppercase text-slate-500">Nome do site / formulário</label>
+                                    <input x-model="insFonte.nome" @input="insMarcar()" maxlength="80" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase text-slate-500">Coluna do Kanban</label>
+                                        <select x-model="insFonte.config.coluna" @change="insMarcar()" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                            <option value="">Primeira coluna</option>
+                                            <template x-for="c in columns" :key="c.id"><option :value="c.id" x-text="c.name || c.title || c.id" :selected="c.id === insFonte.config.coluna"></option></template>
+                                        </select>
+                                        <label class="flex items-center gap-2 text-[11px] mt-1 dark:text-slate-300"><input type="checkbox" x-model="insFonte.config.mover_existente" @change="insMarcar()"> Mover também quem já era contato</label>
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase text-slate-500">Etiqueta no contato</label>
+                                        <input x-model="insFonte.config.etiqueta" @input="insMarcar()" maxlength="40" placeholder="site" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase text-slate-500">Inscrição repetida</label>
+                                        <select x-model.number="insFonte.config.reenvio_dias" @change="insMarcar()" class="mt-1 w-full rounded-xl border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-3 py-2 text-sm dark:text-white">
+                                            <option value="0">Sempre enviar o fluxo</option><option value="1">Não reenviar por 1 dia</option>
+                                            <option value="7">Não reenviar por 7 dias</option><option value="30">Não reenviar por 30 dias</option><option value="365">Enviar só uma vez</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-black uppercase text-slate-500">Aviso no CRM</label>
+                                        <label class="mt-2 flex items-center gap-2 text-sm dark:text-slate-200"><input type="checkbox" x-model="insFonte.config.notificar" @change="insMarcar()"> Notificar a cada nova inscrição</label>
+                                    </div>
+                                </div>
+                                <div class="rounded-xl border border-slate-200 dark:border-[#30363d] p-3 space-y-2">
+                                    <label class="flex items-center gap-2 text-sm font-bold dark:text-slate-200"><input type="checkbox" x-model="insFonte.config.horario.ativo" @change="insMarcar()"> Só enviar mensagens no horário comercial</label>
+                                    <div x-show="insFonte.config.horario.ativo" class="space-y-2">
+                                        <div class="flex items-center gap-2 text-sm dark:text-slate-200">
+                                            das <input type="time" x-model="insFonte.config.horario.inicio" @change="insMarcar()" class="rounded-lg border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-1 dark:text-white">
+                                            às <input type="time" x-model="insFonte.config.horario.fim" @change="insMarcar()" class="rounded-lg border border-slate-200 dark:border-[#30363d] bg-slate-50 dark:bg-[#0d1117] px-2 py-1 dark:text-white">
+                                        </div>
+                                        <div class="flex gap-1 flex-wrap">
+                                            <template x-for="(dn, di) in ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']" :key="di">
+                                                <button @click="insToggleDia(di)"
+                                                        :class="insFonte.config.horario.dias.includes(di) ? 'bg-[#6366f1] text-white' : 'bg-slate-100 dark:bg-[#21262d] text-slate-500'" class="text-xs font-black px-2.5 py-1.5 rounded-lg" x-text="dn"></button>
+                                            </template>
+                                        </div>
+                                        <p class="text-[11px] text-slate-500">Inscrições fora do horário recebem o fluxo no início do próximo horário permitido.</p>
+                                    </div>
+                                </div>
+                                <button @click="insSalvarFonte()" :disabled="insSalvando" class="w-full bg-[#6366f1] hover:bg-[#4f46e5] text-white font-black py-3 rounded-xl disabled:opacity-60" x-text="insSalvando ? 'Salvando...' : 'Salvar ajustes'"></button>
+                            </div>
+
+                            <button @click="insExcluirFonte()" class="w-full text-red-500 text-xs font-black py-2">Excluir esta conexão</button>
+                        </div>
+                    </div>
+                    </template>
                 </div>
 
                 <div x-show="screen === 'agenda'" x-cloak

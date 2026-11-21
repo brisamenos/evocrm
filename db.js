@@ -514,6 +514,22 @@ CREATE INDEX IF NOT EXISTS idx_lead_docs ON lead_documentos(instance_name, lead_
     try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_feito INTEGER DEFAULT 0"); } catch(e) {}
     try { _db.run("ALTER TABLE leads ADD COLUMN fluxo_reset_em TEXT"); } catch(e) {}
     try { _db.run("ALTER TABLE leads ADD COLUMN ia_hist_desde TEXT"); } catch(e) {}
+    // Inscrições do site (formulários conectados ao CRM)
+    try { _db.run(`CREATE TABLE IF NOT EXISTS inscricoes_fontes (
+        id TEXT PRIMARY KEY, instance_name TEXT, nome TEXT, token TEXT, ativo INTEGER DEFAULT 1,
+        config TEXT, created_at TEXT, updated_at TEXT)`); } catch(e) {}
+    try { _db.run(`CREATE TABLE IF NOT EXISTS inscricoes_site (
+        id TEXT PRIMARY KEY, instance_name TEXT, fonte_id TEXT, externo_id TEXT,
+        nome TEXT, telefone TEXT, numero TEXT, cidade TEXT, email TEXT, campos TEXT, utm TEXT, origem_url TEXT,
+        lead_id TEXT, status TEXT DEFAULT 'novo', observacao TEXT, escolha TEXT, simulacao INTEGER DEFAULT 0,
+        fluxo_status TEXT, fluxo_passo INTEGER DEFAULT 0, fluxo_proximo_em TEXT, fluxo_tentativas INTEGER DEFAULT 0,
+        fluxo_erro TEXT, fluxo_log TEXT, fluxo_snapshot TEXT, fluxo_iniciado_em TEXT, fluxo_concluido_em TEXT,
+        criado_no_site TEXT, created_at TEXT, updated_at TEXT)`); } catch(e) {}
+    try { _db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_insc_fonte_token ON inscricoes_fontes(token)"); } catch(e) {}
+    try { _db.run("CREATE INDEX IF NOT EXISTS idx_insc_fila ON inscricoes_site(fluxo_status, fluxo_proximo_em)"); } catch(e) {}
+    try { _db.run("CREATE INDEX IF NOT EXISTS idx_insc_inst ON inscricoes_site(instance_name, created_at)"); } catch(e) {}
+    try { _db.run("CREATE INDEX IF NOT EXISTS idx_insc_ext ON inscricoes_site(fonte_id, externo_id)"); } catch(e) {}
+    try { _db.run("CREATE INDEX IF NOT EXISTS idx_insc_lead ON inscricoes_site(lead_id)"); } catch(e) {}
 
     // Copia dados de colunas antigas para novas (crm_tags e departments)
     try { _db.run("UPDATE crm_tags SET name = nome WHERE name IS NULL AND nome IS NOT NULL"); } catch(e) {}

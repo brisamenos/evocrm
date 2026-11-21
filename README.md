@@ -105,3 +105,13 @@ Em **Agenda → Disponibilidade**, ligue **IA verifica disponibilidade** e preen
 - Se o cliente já tem horário marcado, ele pode manter ou remarcar.
 - No Menu com Botões, a ação **📅 Mostrar horários para agendar** abre os horários direto.
 - Precisa do recurso "agenda" no plano do cliente.
+
+## Inscrições do site
+
+Menu **Inscrições do site** (admin). Liga formulários de sites ao CRM.
+- **+ Conectar site** cria uma conexão com um **código** (`EVO-...`) para colar no Admin do site.
+- Cada inscrição vira contato (com etiqueta e coluna do Kanban escolhidas), gera notificação e recebe o **fluxo**.
+- **Fluxo:** texto, áudio (nota de voz), imagem, vídeo, documento, botões (IA / agendar / atendente / resposta), horários da Agenda ou o Menu com Botões. Cada mensagem tem espera própria (segundos a dias). Variáveis: `{primeiro_nome}` `{nome}` `{cidade}` `{telefone}` `{site}` `{data}` `{campo:xxx}`.
+- **Fila no banco:** sobrevive a redeploy, respeita horário comercial, tenta de novo se o WhatsApp cair, para se o cliente responder e não reenvia para quem se inscreveu de novo no prazo escolhido.
+- A IA recebe os dados da inscrição como contexto (90 dias).
+- Rotas públicas (token no `Authorization: Bearer`): `GET /api/inscricoes/ping`, `POST /api/inscricoes/receber`, `POST /api/inscricoes/consultar`.

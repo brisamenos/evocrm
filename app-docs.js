@@ -61,6 +61,7 @@ function docsMixin() {
             { id: 'ia_atendimento',    label: 'Agentes de IA',   icon: 'sparkles',      requerFeature: true, roles: ['admin'] },
             { id: 'disparo',           label: 'Campanhas',       icon: 'send',          requerFeature: true, roles: ['admin'] },
             { id: 'agenda',            label: 'Agenda',          icon: 'calendar',      requerFeature: true, roles: ['admin','atendente'] },
+            { id: 'inscricoes',        label: 'Inscrições do site', icon: 'globe',                             roles: ['admin'] },
             { id: 'setores',           label: 'Departamentos',   icon: 'shield',        requerFeature: true, roles: ['admin','supervisor'] },
             { id: 'atendimento',       label: 'Atendimento',     icon: 'activity',                           roles: ['admin','supervisor'] },
             { id: 'conexao',           label: 'Conexão',         icon: 'smartphone',                         roles: ['admin'] },

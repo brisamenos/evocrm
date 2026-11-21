@@ -96,6 +96,7 @@ function crmApp() {
                 ...disparoMixin(),
                 ...autoReplyMixin(),
                 ...(typeof fluxoBotoesMixin === 'function' ? fluxoBotoesMixin() : {}),
+                ...(typeof inscricoesMixin === 'function' ? inscricoesMixin() : {}),
                 ...iaAtendMixin(),
                 screen: 'chats',
                 appState: 'login', 
@@ -3741,6 +3742,7 @@ alert('\u2705 '+contatos.length+' contato(s) enviados para o EvoCRM!\\n\\n'+prev
                             }
 
                             // ── Agenda: atualiza a lista e avisa quando a IA marca um horário ──
+                            if (msg.type === 'inscricoes') { if (typeof this.insOnWs === 'function') this.insOnWs(msg); return; }
                             if (msg.type === 'agendamentos') {
                                 clearTimeout(this._agReloadT);
                                 this._agReloadT = setTimeout(() => this.loadAgendamentos && this.loadAgendamentos(), 400);

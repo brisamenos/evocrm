@@ -230,6 +230,26 @@ const wuz = createWuzapi({
     })(),
 });
 
+// ─── INSCRIÇÕES DO SITE (formulários conectados ao CRM) ──────────────────────
+// As funções abaixo são lidas na hora do uso (várias são declaradas mais adiante).
+const inscricoes = require('./inscricoes.js')({
+    db, log: (i, t, m) => log(i, t, m),
+    publicUrl:          SERVER_PUBLIC_URL,
+    evoUrl:             () => EVO_URL,
+    evoKey:             () => EVO_KEY,
+    wsEmit:             (i, ev) => wsEmit(i, ev),
+    getState:           i => getState(i),
+    getPrimeiraColuna:  i => getPrimeiraColuna(i),
+    salvarPausaDB:      (i, l, p, m) => salvarPausaDB(i, l, p, m),
+    fluxoSalvar:        (i, l, id, c, t) => _fluxoSalvar(i, l, id, c, t),
+    enviarOpcoes:       (i, l, t, o) => agEnviarOpcoes(i, l, t, o),
+    oferecerAgenda:     (i, l, o) => agOferecer(i, l, o),
+    carregarMenu:       (i, f) => carregarFluxo(i, f),
+    iniciarMenu:        (i, l, c) => fluxoIniciar(i, l, c),
+    marcarMenuInicio:   (leadId, ligado) => _fluxoInicio.set(leadId, Date.now() + (ligado ? 120000 : 3000)),
+    botaoId:            msgId => _respostaBotaoId.get(msgId),
+});
+
 // ─── MERCADO PAGO: tokens armazenados no Supabase (admin_config) ─────────────
 const MP_DEFAULTS = {
     mp_access_token: process.env.MP_ACCESS_TOKEN || '',
@@ -2397,6 +2417,12 @@ async function iaResponderCliente(inst, mensagemClienteTexto, lead, msgObj) {
             openAIMsgs.push({ role, content });
         }
 
+        // ── 3a. Dados da inscrição no site (se o contato veio de um formulário) ──
+        try {
+            const ctxIns = await inscricoes.contextoIA(inst, lead);
+            if (ctxIns) openAIMsgs.splice(1, 0, { role: 'system', content: ctxIns });
+        } catch (e) {}
+
         // ── 3b. Pré-check de agenda (injeta contexto no prompt antes de chamar a IA) ──
         let agendaAcaoPendente = null;
         if (mensagemClienteTexto && temFeature(inst, 'agenda')) {
@@ -2966,13 +2992,22 @@ async function processarMensagem(inst, payload) {
         return;
     }
 
+    // ── Botões do fluxo das inscrições do site ──────────────────────────────
+    let ctxInscricao = '';
+    try {
+        const ri = await inscricoes.processarResposta(inst, leadAtual, msg);
+        if (ri?.consumida) return;
+        if (ri?.contexto) ctxInscricao = ri.contexto;
+    } catch (e) { log(inst, 'warn', `[Inscrições] Erro no clique: ${e.message}`); }
+
     // ── Botões de agendamento (próximo horário / escolher dia e hora) ───────
     try { if (await agProcessarResposta(inst, leadAtual, msg)) return; }
     catch (e) { log(inst, 'warn', `[Agenda] Erro no clique: ${e.message}`); }
 
     // ── Menu interativo com botões (boas-vindas / cliques) ──────────────────
-    let msgParaIA = msg;
-    try {
+    let msgParaIA = ctxInscricao ? { ...msg, content: `${msg.content || ''}\n\n(${ctxInscricao})` } : msg;
+    if (ctxInscricao) { /* clique já tratado: o menu de boas-vindas não deve interpretar de novo */ }
+    else try {
         const fx = await fluxoProcessar(inst, leadAtual, msg);
         if (fx.consumida) return;
         if (fx.contexto) msgParaIA = { ...msg, content: `${msg.content || ''}\n\n${fx.contexto}` };
@@ -6649,6 +6684,9 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // ── API: INSCRIÇÕES DO SITE ─────────────────────────────────────────────
+    if (req.url.startsWith('/api/inscricoes') && await inscricoes.handle(req, res)) return;
+
     // ── API: MENU INTERATIVO COM BOTÕES ──────────────────────────────────────
     if (req.url.startsWith('/api/fluxo-botoes')) {
         const jsonRes = (st, o) => { res.writeHead(st, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
@@ -7338,7 +7376,7 @@ ${contexto}`
     try { filePath = decodeURIComponent(filePath); } catch (e) {}
     const fullPath = path.resolve(__dirname, '.' + path.posix.normalize('/' + filePath));
     const relPath  = path.relative(__dirname, fullPath).replace(/\\/g, '/');
-    const BLOQUEADOS = /^(data|node_modules|uploads-v2|\.git)(\/|$)|(^|\/)\.|\.(db|db-shm|db-wal|sqlite|sql|env|toml|md|lock)$|^(server|db|routes|fila_manager|wuzapi)\.js$|^package(-lock)?\.json$|^Dockerfile$/i;
+    const BLOQUEADOS = /^(data|node_modules|uploads-v2|\.git)(\/|$)|(^|\/)\.|\.(db|db-shm|db-wal|sqlite|sql|env|toml|md|lock)$|^(server|db|routes|fila_manager|wuzapi|inscricoes)\.js$|^package(-lock)?\.json$|^Dockerfile$/i;
     if (relPath.startsWith('..') || path.isAbsolute(relPath) || BLOQUEADOS.test(relPath)) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not found');
@@ -7410,6 +7448,7 @@ server.listen(PORT, async () => {
 
     // ── Inicializa SQLite (WASM) antes de qualquer outra coisa ───────────────
     await initDb();
+    inscricoes.iniciar(); // fila do fluxo das inscrições do site (a cada 10 s)
 
     // ── AUTO-SEED: cria licença e config IA automaticamente pelas variáveis ──
     // Basta definir INSTANCE_NAME e LICENSE_KEY no EasyPanel — zero configuração manual.
