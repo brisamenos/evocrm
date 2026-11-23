@@ -258,6 +258,15 @@
         <div id="blocoVLink" class="oculto">
           <input class="campo" data-cfg="video_link" placeholder="https://www.youtube.com/watch?v=...">
         </div>
+        <div id="blocoVOpcoes" class="oculto" style="margin-bottom:14px;padding:12px 14px;border:1px solid rgba(212,175,55,.25);border-radius:10px">
+          <label class="opcao"><input type="checkbox" data-cfg="video_auto_inicio"> ▶️ Começar sozinho assim que a página abre</label>
+          <small style="display:block;opacity:.7;margin:4px 0 10px 26px">Os navegadores só deixam o vídeo começar sozinho <b>sem som</b>. Aparece o aviso abaixo e, quando a pessoa toca, o vídeo volta para o início com som.</small>
+          <div class="grade" style="grid-template-columns:1fr 1fr">
+            <div><label class="rotulo">Aviso em cima do vídeo</label><input class="campo" data-cfg="video_aviso_som" maxlength="60" placeholder="Seu vídeo já começou"></div>
+            <div><label class="rotulo">Texto menor do aviso</label><input class="campo" data-cfg="video_aviso_sub" maxlength="60" placeholder="Toque para ouvir"></div>
+          </div>
+          <label class="opcao" style="margin-top:10px"><input type="checkbox" data-cfg="video_cta_final"> 🎯 No fim do vídeo, mostrar o botão "Fale com o advogado" (só para vídeo enviado)</label>
+        </div>
         <div id="blocoVArquivo" class="oculto">
           <div id="zonaUpload" class="zona">
             <b>Arraste vídeos ou imagens aqui</b>
@@ -266,7 +275,6 @@
             <small>Qualquer formato e tamanho. O vídeo é convertido para tocar em todo celular. Se a internet cair, escolha o mesmo arquivo de novo para continuar de onde parou.</small>
           </div>
           <div id="filaUpload"></div>
-          <label class="opcao" style="margin-top:12px"><input type="checkbox" data-cfg="video_autoplay"> Começar sozinho, sem som e em repetição (o visitante toca para ouvir)</label>
           <h3 class="sub">Biblioteca</h3>
           <div id="biblioteca" class="biblio"></div>
         </div>
@@ -621,6 +629,7 @@
     const t = (document.querySelector('input[name=vtipo]:checked') || {}).value;
     $('blocoVLink').classList.toggle('oculto', t !== 'link');
     $('blocoVArquivo').classList.toggle('oculto', t !== 'arquivo');
+    $('blocoVOpcoes').classList.toggle('oculto', !t || t === 'nenhum');
   }
   document.querySelectorAll('input[name=vtipo]').forEach(r => r.onchange = () => { atualizarTipoVideo(); marcarAlterado(); });
   document.querySelector('[data-painel=site]').addEventListener('input', e => { if (e.target.dataset && e.target.dataset.cfg) marcarAlterado(); });

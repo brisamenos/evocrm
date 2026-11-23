@@ -25,7 +25,9 @@ const PADRAO = {
     subtitulo: 'A usucapião pode transformar sua posse em propriedade com escritura e registro. Assista ao vídeo e entenda, em poucos minutos, se o seu caso se encaixa.',
     video_tipo: 'nenhum',        // nenhum | arquivo | link
     video_midia: '', video_link: '', video_capa_midia: '',
-    video_autoplay: false,       // começa mudo e em loop; o visitante toca para ouvir
+    video_auto_inicio: true,     // começa sozinho e mudo (regra dos navegadores); o visitante toca para ouvir
+    video_aviso_som: 'Seu vídeo já começou', video_aviso_sub: 'Toque para ouvir',
+    video_cta_final: true,       // ao terminar mostra o botão de falar com o advogado
     botao_topo: 'Fale com nosso advogado especialista',
     secao_selo: 'Por que nos escolher',
     secao_titulo: 'Técnica, ética e proximidade em cada caso',
@@ -47,7 +49,7 @@ const PADRAO = {
     whatsapp_numero: '', whatsapp_mensagem: 'Olá! Vim pelo site e quero saber sobre usucapião.',
     pixel_meta: '', google_tag: '',
 };
-const LIMITES = { seo_descricao: 300, subtitulo: 600, form_subtitulo: 600, sucesso_texto: 400, whatsapp_mensagem: 500, video_link: 600 };
+const LIMITES = { video_aviso_som: 60, video_aviso_sub: 60, seo_descricao: 300, subtitulo: 600, form_subtitulo: 600, sucesso_texto: 400, whatsapp_mensagem: 500, video_link: 600 };
 const CHUNK = 8 * 1024 * 1024;
 const EXT_IMAGEM = /\.(png|jpe?g|webp|gif|svg|avif|bmp|ico|heic)$/i;
 
@@ -258,22 +260,222 @@ module.exports = function criarSiteConfig({ DATA_DIR, todos, um, exec, cfg, setC
         if (!tpl || st.mtimeMs !== tplMtime || TEMPLATE !== lerTemplate._ult) { tpl = fs.readFileSync(TEMPLATE, 'utf8'); tplMtime = st.mtimeMs; lerTemplate._ult = TEMPLATE; }
         return tpl;
     }
-    const ICONE_PLAY = '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" style="margin-left:4px"><path d="M8 5v14l11-7z"/></svg>';
+    // ===== Player de vídeo do site =====
+    // Navegadores só deixam um vídeo começar sozinho se estiver MUDO. Por isso o vídeo começa mudo,
+    // em repetição, com o aviso "Seu vídeo já começou — toque para ouvir". Ao tocar, ele volta pro início com som.
+    const IC = {
+        play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.52.85l10.6-6.86a1 1 0 0 0 0-1.7L9.52 4.29A1 1 0 0 0 8 5.14z"/></svg>',
+        pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4.5" width="4" height="15" rx="1.2"/><rect x="14" y="4.5" width="4" height="15" rx="1.2"/></svg>',
+        som: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>',
+        mudo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor"/><path d="m22 9-6 6"/><path d="m16 9 6 6"/></svg>',
+        tela: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>',
+        sair: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/></svg>',
+        denovo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>',
+        seta: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+    };
+
+    const CSS_PLAYER = `<style>
+.vp{position:relative;overflow:hidden;margin:0 auto;border-radius:14px;background:#000;isolation:isolate;
+ box-shadow:0 0 0 1px color-mix(in oklab,var(--primary) 45%,transparent),0 30px 80px -20px rgba(0,0,0,.85),0 0 60px -10px color-mix(in oklab,var(--primary) 35%,transparent);
+ -webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;outline:none;font-family:inherit}
+.vp:focus-visible{box-shadow:0 0 0 2px var(--primary),0 30px 80px -20px rgba(0,0,0,.85)}
+.vp video,.vp iframe{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;border:0}
+.vp button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer}
+.vp svg{width:100%;height:100%;display:block}
+.vp-cam{position:absolute;inset:0;z-index:1}
+/* aviso de som */
+.vp-som{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(0,0,0,.15),rgba(0,0,0,.55));transition:opacity .35s}
+.vp-som-card{display:flex;flex-direction:column;align-items:center;gap:12px;padding:22px 30px 20px;border-radius:16px;background:rgba(10,9,8,.72);
+ backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid color-mix(in oklab,var(--primary) 55%,transparent);box-shadow:0 18px 50px rgba(0,0,0,.6);
+ transform:translateY(0);animation:vpFlutua 3s ease-in-out infinite;max-width:86%}
+.vp-som-ic{width:62px;height:62px;border-radius:50%;padding:16px;background:var(--gradient-gold);color:#17130c;position:relative}
+.vp-som-ic::before,.vp-som-ic::after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--primary);animation:vpOnda 1.8s ease-out infinite}
+.vp-som-ic::after{animation-delay:.9s}
+.vp-som-t{font-family:"Libre Baskerville",Georgia,serif;font-size:clamp(15px,2.6vw,20px);color:#fff;text-align:center;line-height:1.25}
+.vp-som-s{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--primary);font-weight:600}
+/* play grande */
+.vp-grande{position:absolute;inset:0;z-index:4;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.45));transition:opacity .3s}
+.vp-grande span{width:clamp(66px,12vw,92px);height:clamp(66px,12vw,92px);border-radius:50%;padding:clamp(20px,3.6vw,28px);padding-left:clamp(24px,4.2vw,32px);
+ background:var(--gradient-gold);color:#17130c;box-shadow:0 10px 40px color-mix(in oklab,var(--primary) 55%,transparent);transition:transform .25s;position:relative}
+.vp-grande span::before{content:"";position:absolute;inset:-8px;border-radius:50%;border:2px solid color-mix(in oklab,var(--primary) 70%,transparent);animation:vpOnda 2s ease-out infinite}
+.vp-grande:hover span{transform:scale(1.07)}
+/* carregando */
+.vp-spin{position:absolute;left:50%;top:50%;width:48px;height:48px;margin:-24px 0 0 -24px;z-index:3;border-radius:50%;border:3px solid rgba(255,255,255,.18);border-top-color:var(--primary);
+ animation:vpGira .8s linear infinite;opacity:0;pointer-events:none;transition:opacity .2s}
+.vp.carregando .vp-spin{opacity:1}
+/* ícone que pisca no centro ao pausar/tocar */
+.vp-flash{position:absolute;left:50%;top:50%;width:70px;height:70px;margin:-35px 0 0 -35px;padding:20px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;z-index:3;opacity:0;pointer-events:none}
+.vp-flash.on{animation:vpFlash .55s ease-out}
+/* barra de controles */
+.vp-bar{position:absolute;left:0;right:0;bottom:0;z-index:5;padding:28px 14px 10px;background:linear-gradient(0deg,rgba(0,0,0,.85),rgba(0,0,0,.45) 55%,transparent);
+ color:#fff;transition:opacity .3s,transform .3s;opacity:0;transform:translateY(8px);pointer-events:none}
+.vp.com-som.ativo .vp-bar,.vp.com-som.pausado .vp-bar{opacity:1;transform:none;pointer-events:auto}
+.vp.com-som:not(.ativo):not(.pausado){cursor:none}
+.vp-prog{position:relative;height:18px;display:flex;align-items:center;cursor:pointer;touch-action:none}
+.vp-trilho{position:relative;width:100%;height:4px;border-radius:4px;background:rgba(255,255,255,.22);transition:height .15s}
+.vp-prog:hover .vp-trilho,.vp-prog.arrastando .vp-trilho{height:6px}
+.vp-buf,.vp-feito{position:absolute;left:0;top:0;bottom:0;border-radius:4px;width:0}
+.vp-buf{background:rgba(255,255,255,.3)}
+.vp-feito{background:var(--gradient-gold)}
+.vp-bola{position:absolute;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px color-mix(in oklab,var(--primary) 45%,transparent);left:0;transform:scale(0);transition:transform .15s}
+.vp-prog:hover .vp-bola,.vp-prog.arrastando .vp-bola{transform:scale(1)}
+.vp-dica{position:absolute;bottom:22px;padding:3px 7px;border-radius:5px;background:rgba(0,0,0,.8);font-size:12px;font-variant-numeric:tabular-nums;transform:translateX(-50%);opacity:0;pointer-events:none;transition:opacity .15s}
+.vp-prog:hover .vp-dica,.vp-prog.arrastando .vp-dica{opacity:1}
+.vp-ctrl{display:flex;align-items:center;gap:6px;margin-top:4px}
+.vp-b{width:38px;height:38px;padding:8px;border-radius:50%;flex:none;transition:background .15s,color .15s}
+.vp-b:hover{background:rgba(255,255,255,.12);color:var(--primary)}
+.vp-tempo{font-size:13px;font-variant-numeric:tabular-nums;opacity:.9;margin-left:4px;white-space:nowrap}
+.vp-esp{flex:1}
+.vp-vel{min-width:44px;height:28px;padding:0 9px;border-radius:14px;font-size:12px;font-weight:700;border:1px solid rgba(255,255,255,.3)!important;transition:all .15s}
+.vp-vel:hover{border-color:var(--primary)!important;color:var(--primary)}
+.vp-vol{width:0;opacity:0;transition:width .2s,opacity .2s;accent-color:var(--primary);height:4px;cursor:pointer}
+.vp-volw:hover .vp-vol,.vp-vol:focus{width:70px;opacity:1}
+.vp-volw{display:flex;align-items:center}
+@media (hover:none){.vp-volw .vp-vol{display:none}}
+@media (max-width:480px){.vp-tempo .vp-tot-sep,.vp-tempo .vp-tot{display:none}.vp-bar{padding:22px 8px 6px}.vp-b{width:36px;height:36px}}
+/* tela final */
+.vp-fim{position:absolute;inset:0;z-index:6;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:20px;text-align:center;
+ background:radial-gradient(ellipse at center,rgba(20,16,10,.82),rgba(0,0,0,.94));animation:vpSobe .4s ease-out}
+.vp.fim .vp-fim{display:flex}
+.vp-fim-t{font-family:"Libre Baskerville",Georgia,serif;color:#fff;font-size:clamp(17px,3vw,26px);line-height:1.25;max-width:520px}
+.vp-fim-cta{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:4px;background:var(--gradient-gold);color:#17130c;font-weight:700;font-size:13px;
+ letter-spacing:.12em;text-transform:uppercase;text-decoration:none;box-shadow:0 10px 30px color-mix(in oklab,var(--primary) 45%,transparent);transition:transform .2s}
+.vp-fim-cta:hover{transform:translateY(-2px)}
+.vp-fim-cta i{width:16px;height:16px;display:inline-block}
+.vp-fim-de{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.75)!important}
+.vp-fim-de i{width:16px;height:16px;display:inline-block}
+.vp-fim-de:hover{color:var(--primary)!important}
+.vp.fim .vp-bar,.vp.fim .vp-grande{display:none}
+.vp .esconde{opacity:0!important;pointer-events:none!important}
+.vp:fullscreen{border-radius:0;width:100%!important;height:100%!important;aspect-ratio:auto!important}
+.vp:-webkit-full-screen{border-radius:0;width:100%!important;height:100%!important;aspect-ratio:auto!important}
+@keyframes vpOnda{0%{transform:scale(1);opacity:.8}100%{transform:scale(1.7);opacity:0}}
+@keyframes vpFlutua{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes vpGira{to{transform:rotate(360deg)}}
+@keyframes vpFlash{0%{opacity:.9;transform:scale(.7)}100%{opacity:0;transform:scale(1.35)}}
+@keyframes vpSobe{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.vp *{animation:none!important}}
+</style>`;
+
+    const JS_PLAYER = `<script>(function(){
+function fmt(t){t=Math.max(0,Math.floor(t||0));var h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return(h?h+':'+(m<10?'0':''):'')+m+':'+(s<10?'0':'')+s}
+function ev(n,p){try{if(window.fbq)fbq('trackCustom',n,p||{});if(window.gtag)gtag('event',n==='AssistiuVideo'?'video_start':'video_progress',p||{})}catch(e){}}
+document.querySelectorAll('.vp[data-player="arquivo"]').forEach(function(c){
+ var v=c.querySelector('video'),q=function(s){return c.querySelector(s)};
+ var som=q('.vp-som'),grande=q('.vp-grande'),bar=q('.vp-bar'),prog=q('.vp-prog'),feito=q('.vp-feito'),buf=q('.vp-buf'),bola=q('.vp-bola'),dica=q('.vp-dica'),
+  bPlay=q('.vp-bplay'),bSom=q('.vp-bsom'),vol=q('.vp-vol'),bVel=q('.vp-vel'),bTela=q('.vp-btela'),tAt=q('.vp-at'),tTot=q('.vp-tot'),flash=q('.vp-flash'),cam=q('.vp-cam');
+ var IC=JSON.parse(c.getAttribute('data-ic'));
+ var auto=c.getAttribute('data-auto')==='1',cta=c.getAttribute('data-cta')==='1',comSom=false,inicio=false,marcos={},timer=null,velocidades=[1,1.25,1.5,2],vi=0;
+ function mostra(el,s){if(el)el.classList.toggle('esconde',!s)}
+ function estado(){var p=v.paused;c.classList.toggle('pausado',p&&comSom);bPlay.innerHTML=p?IC.play:IC.pause;bPlay.setAttribute('aria-label',p?'Reproduzir':'Pausar');
+  bSom.innerHTML=(v.muted||v.volume===0)?IC.mudo:IC.som}
+ function acorda(){c.classList.add('ativo');clearTimeout(timer);timer=setTimeout(function(){if(!v.paused)c.classList.remove('ativo')},2600)}
+ function pisca(ic){flash.innerHTML=ic;flash.classList.remove('on');void flash.offsetWidth;flash.classList.add('on')}
+ function tocar(){var p=v.play();if(p&&p.catch)p.catch(function(){c.classList.remove('carregando');if(!comSom){mostra(som,false);mostra(grande,true)}estado()})}
+ function ligarSom(){comSom=true;c.classList.add('com-som');c.classList.remove('fim');v.loop=false;v.muted=false;if(v.volume===0)v.volume=1;
+  try{v.currentTime=0}catch(e){}mostra(som,false);mostra(grande,false);tocar();acorda();
+  if(!inicio){inicio=true;ev('AssistiuVideo')}}
+ function alterna(){if(!comSom){ligarSom();return}if(c.classList.contains('fim'))return;if(v.paused){tocar();pisca(IC.play)}else{v.pause();pisca(IC.pause)}acorda()}
+ if(som)som.addEventListener('click',function(e){e.stopPropagation();ligarSom()});
+ grande.addEventListener('click',function(e){e.stopPropagation();ligarSom()});
+ var ultToque=0;
+ cam.addEventListener('pointerup',function(e){
+  if(!comSom){ligarSom();return}
+  if(e.pointerType!=='mouse'){if(!c.classList.contains('ativo')&&!v.paused){acorda();return}alterna();return}
+  var agora=Date.now();if(agora-ultToque<300){ultToque=0;telaCheia();return}ultToque=agora;
+  setTimeout(function(){if(ultToque===agora)alterna()},220)});
+ bPlay.addEventListener('click',function(e){e.stopPropagation();alterna()});
+ bSom.addEventListener('click',function(e){e.stopPropagation();v.muted=!v.muted;if(!v.muted&&v.volume===0)v.volume=1;estado();acorda()});
+ if(vol){vol.addEventListener('input',function(){v.volume=+vol.value;v.muted=v.volume===0;estado();acorda()})}
+ bVel.addEventListener('click',function(e){e.stopPropagation();vi=(vi+1)%velocidades.length;v.playbackRate=velocidades[vi];bVel.textContent=velocidades[vi]+'x';acorda()});
+ function emTela(){return document.fullscreenElement===c||document.webkitFullscreenElement===c}
+ function telaCheia(){try{if(emTela()){(document.exitFullscreen||document.webkitExitFullscreen).call(document)}
+  else if(c.requestFullscreen)c.requestFullscreen();else if(c.webkitRequestFullscreen)c.webkitRequestFullscreen();else if(v.webkitEnterFullscreen)v.webkitEnterFullscreen()}catch(e){}}
+ bTela.addEventListener('click',function(e){e.stopPropagation();telaCheia()});
+ function aoTela(){bTela.innerHTML=emTela()?IC.sair:IC.tela}
+ document.addEventListener('fullscreenchange',aoTela);document.addEventListener('webkitfullscreenchange',aoTela);
+ // barra de progresso (clicar e arrastar)
+ var arr=false;
+ function pos(e){var r=prog.getBoundingClientRect();return Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))}
+ function pinta(f){feito.style.width=(f*100)+'%';bola.style.left=(f*100)+'%'}
+ prog.addEventListener('pointerdown',function(e){if(!v.duration)return;e.stopPropagation();arr=true;prog.classList.add('arrastando');try{prog.setPointerCapture(e.pointerId)}catch(x){}var f=pos(e);pinta(f);v.currentTime=f*v.duration;acorda()});
+ prog.addEventListener('pointermove',function(e){var f=pos(e);if(v.duration){dica.textContent=fmt(f*v.duration);dica.style.left=(f*100)+'%'}if(arr){pinta(f);v.currentTime=f*v.duration;acorda()}});
+ function solta(){arr=false;prog.classList.remove('arrastando')}
+ prog.addEventListener('pointerup',function(e){e.stopPropagation();solta()});prog.addEventListener('pointercancel',solta);
+ bar.addEventListener('pointerup',function(e){e.stopPropagation()});
+ bar.addEventListener('pointermove',acorda);
+ c.addEventListener('pointermove',function(e){if(e.pointerType==='mouse'&&comSom)acorda()});
+ c.addEventListener('mouseleave',function(){if(!v.paused)c.classList.remove('ativo')});
+ // eventos do vídeo
+ v.addEventListener('timeupdate',function(){if(!v.duration)return;var f=v.currentTime/v.duration;if(!arr)pinta(f);tAt.textContent=fmt(v.currentTime);if(tTot.textContent==='0:00')tTot.textContent=fmt(v.duration);
+  if(comSom)[25,50,75].forEach(function(p){if(f*100>=p&&!marcos[p]){marcos[p]=1;ev('VideoProgresso',{percent:p})}})});
+ v.addEventListener('progress',function(){try{if(v.duration&&v.buffered.length)buf.style.width=(v.buffered.end(v.buffered.length-1)/v.duration*100)+'%'}catch(e){}});
+ v.addEventListener('loadedmetadata',function(){tTot.textContent=fmt(v.duration)});
+ v.addEventListener('durationchange',function(){tTot.textContent=fmt(v.duration)});
+ v.addEventListener('waiting',function(){c.classList.add('carregando')});
+ ['playing','canplay','pause','seeked'].forEach(function(n){v.addEventListener(n,function(){c.classList.remove('carregando')})});
+ v.addEventListener('play',estado);v.addEventListener('pause',function(){estado();c.classList.add('ativo')});v.addEventListener('volumechange',function(){estado();if(vol)vol.value=v.muted?0:v.volume});
+ v.addEventListener('ended',function(){if(!comSom)return;if(!marcos[100]){marcos[100]=1;ev('VideoProgresso',{percent:100})}
+  if(cta){c.classList.add('fim');try{if(emTela())(document.exitFullscreen||document.webkitExitFullscreen).call(document)}catch(e){}}else estado()});
+ var de=q('.vp-fim-de');if(de)de.addEventListener('click',function(e){e.stopPropagation();c.classList.remove('fim');try{v.currentTime=0}catch(x){}tocar()});
+ var ir=q('.vp-fim-cta');if(ir)ir.addEventListener('click',function(){try{if(window.fbq)fbq('trackCustom','CliqueVideoCTA')}catch(e){}});
+ // teclado
+ c.addEventListener('keydown',function(e){var k=e.key;if(k===' '||k==='k'||k==='K'){e.preventDefault();alterna()}else if(k==='m'||k==='M'){if(!comSom)ligarSom();else bSom.click()}
+  else if(k==='f'||k==='F'){telaCheia()}else if(k==='ArrowRight'){v.currentTime=Math.min(v.duration||0,v.currentTime+5);acorda()}else if(k==='ArrowLeft'){v.currentTime=Math.max(0,v.currentTime-5);acorda()}});
+ // pré-visualização muda pausa quando sai da tela (economiza internet do visitante)
+ if(auto&&'IntersectionObserver'in window){new IntersectionObserver(function(es){es.forEach(function(x){if(comSom)return;if(x.isIntersecting)tocar();else v.pause()})},{threshold:.25}).observe(c)}
+ if(auto){mostra(grande,false);c.classList.add('carregando');tocar()}else{mostra(som,false)}
+ if(v.readyState>=1&&v.duration)tTot.textContent=fmt(v.duration);
+ estado();
+});
+document.querySelectorAll('.vp[data-player="embed"]').forEach(function(c){
+ var f=c.querySelector('iframe'),b=c.querySelector('.vp-som'),tipo=c.getAttribute('data-tipo');if(!b||!f)return;
+ function manda(o){try{f.contentWindow.postMessage(JSON.stringify(o),'*')}catch(e){}}
+ b.addEventListener('click',function(){
+  if(tipo==='youtube'){manda({event:'command',func:'seekTo',args:[0,true]});manda({event:'command',func:'unMute',args:[]});manda({event:'command',func:'setVolume',args:[100]});manda({event:'command',func:'playVideo',args:[]})}
+  else{manda({method:'setCurrentTime',value:0});manda({method:'setMuted',value:false});manda({method:'setVolume',value:1});manda({method:'play'})}
+  b.classList.add('esconde');setTimeout(function(){b.remove()},400);ev('AssistiuVideo')});
+});
+})();</script>`;
+
+    function playerArquivo({ src, poster, auto, cta, estilo, s }) {
+        const ic = esc(JSON.stringify(IC));
+        return `${CSS_PLAYER}<div class="vp" data-player="arquivo" data-auto="${auto ? 1 : 0}" data-cta="${cta ? 1 : 0}" data-ic="${ic}" tabindex="0" style="${estilo}">
+<video src="${esc(src)}"${poster ? ` poster="${esc(poster)}"` : ''} playsinline webkit-playsinline preload="${auto ? 'auto' : 'metadata'}"${auto ? ' autoplay muted loop' : ''} disablepictureinpicture controlslist="nodownload"></video>
+<div class="vp-cam"></div><div class="vp-spin"></div><div class="vp-flash"></div>
+<button type="button" class="vp-som" aria-label="Ativar o som do vídeo"><span class="vp-som-card"><span class="vp-som-ic">${IC.mudo}</span><span class="vp-som-t">${esc(s.video_aviso_som || 'Seu vídeo já começou')}</span><span class="vp-som-s">${esc(s.video_aviso_sub || 'Toque para ouvir')}</span></span></button>
+<button type="button" class="vp-grande" aria-label="Assistir ao vídeo"><span>${IC.play}</span></button>
+<div class="vp-fim"><div class="vp-fim-t">Ficou com alguma dúvida sobre o seu caso?</div>
+<a class="vp-fim-cta" href="#contato">${esc(s.botao_topo || 'Fale com o advogado')}<i>${IC.seta}</i></a>
+<button type="button" class="vp-fim-de"><i>${IC.denovo}</i>Assistir de novo</button></div>
+<div class="vp-bar"><div class="vp-prog"><div class="vp-trilho"><div class="vp-buf"></div><div class="vp-feito"></div><div class="vp-bola"></div></div><div class="vp-dica">0:00</div></div>
+<div class="vp-ctrl"><button type="button" class="vp-b vp-bplay" aria-label="Reproduzir">${IC.play}</button>
+<span class="vp-volw"><button type="button" class="vp-b vp-bsom" aria-label="Som">${IC.som}</button><input class="vp-vol" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume"></span>
+<span class="vp-tempo"><span class="vp-at">0:00</span><span class="vp-tot-sep"> / </span><span class="vp-tot">0:00</span></span>
+<span class="vp-esp"></span><button type="button" class="vp-vel" aria-label="Velocidade">1x</button>
+<button type="button" class="vp-b vp-btela" aria-label="Tela cheia">${IC.tela}</button></div></div>
+</div>${JS_PLAYER}`;
+    }
 
     function blocoVideo(s) {
-        const caixa = (conteudo, estilo = '') => `<div class="relative overflow-hidden rounded-sm border border-primary/30 bg-ink-soft shadow-gold" style="${estilo || 'aspect-ratio:16/9'};margin:0 auto">${conteudo}</div>`;
+        const auto = s.video_auto_inicio !== false;
+        const cta = s.video_cta_final !== false;
         if (s.video_tipo === 'link' && s.video_link) {
             const u = s.video_link;
-            let emb = null;
+            let emb = null, tipo = '';
             let mm = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/i);
-            if (mm) emb = `https://www.youtube-nocookie.com/embed/${mm[1]}?rel=0&modestbranding=1&playsinline=1`;
-            if (!emb && (mm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i))) emb = `https://player.vimeo.com/video/${mm[1]}`;
+            if (mm) { tipo = 'youtube'; emb = `https://www.youtube-nocookie.com/embed/${mm[1]}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1${auto ? `&autoplay=1&mute=1&loop=1&playlist=${mm[1]}` : ''}`; }
+            if (!emb && (mm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i))) { tipo = 'vimeo'; emb = `https://player.vimeo.com/video/${mm[1]}?playsinline=1&title=0&byline=0&portrait=0${auto ? '&autoplay=1&muted=1&loop=1' : ''}`; }
             if (emb) {
                 const vertical = /shorts\//i.test(u);
-                return caixa(`<iframe src="${esc(emb)}" title="Vídeo" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen style="position:absolute;inset:0;width:100%;height:100%;border:0"></iframe>`,
-                    vertical ? 'aspect-ratio:9/16;width:min(100%,calc(78vh*9/16))' : '');
+                const estilo = vertical ? 'aspect-ratio:9/16;width:min(100%,calc(78vh*9/16))' : 'aspect-ratio:16/9';
+                return `${CSS_PLAYER}<div class="vp" data-player="embed" data-tipo="${tipo}" style="${estilo}">
+<iframe src="${esc(emb)}" title="Vídeo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>
+${auto ? `<button type="button" class="vp-som" aria-label="Ativar o som do vídeo"><span class="vp-som-card"><span class="vp-som-ic">${IC.mudo}</span><span class="vp-som-t">${esc(s.video_aviso_som || 'Seu vídeo já começou')}</span><span class="vp-som-s">${esc(s.video_aviso_sub || 'Toque para ouvir')}</span></span></button>` : ''}
+</div>${JS_PLAYER}`;
             }
-            return caixa(`<video src="${esc(u)}" controls playsinline preload="metadata" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000"></video>`);
+            // link direto para um arquivo de vídeo (.mp4 etc.)
+            return playerArquivo({ src: u, poster: '', auto, cta, estilo: 'aspect-ratio:16/9', s });
         }
         if (s.video_tipo === 'arquivo') {
             const m = midia(s.video_midia);
@@ -282,14 +484,7 @@ module.exports = function criarSiteConfig({ DATA_DIR, todos, um, exec, cfg, setC
             const capa = capaM && capaM.status === 'pronto' ? urlMidia(capaM) : urlCapa(m);
             const w = m.largura || 16, h = m.altura || 9;
             const estilo = h > w ? `aspect-ratio:${w}/${h};width:min(100%,calc(78vh*${w}/${h}))` : `aspect-ratio:${w}/${h}`;
-            const auto = s.video_autoplay;
-            return caixa(`<video id="videoSite" src="${urlMidia(m)}"${capa ? ` poster="${capa}"` : ''} playsinline preload="metadata" ${auto ? 'autoplay muted loop' : ''} style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000"></video>
-<button type="button" id="videoPlay" aria-label="${auto ? 'Ativar o som' : 'Assistir ao vídeo'}" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:${auto ? 'transparent' : 'rgba(0,0,0,.25)'};border:0;cursor:pointer;width:100%;height:100%">
-<span class="flex h-20 w-20 items-center justify-center rounded-full bg-gold text-primary-foreground animate-pulse-ring">${auto ? '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>' : ICONE_PLAY}</span>
-${auto ? '<span class="text-xs uppercase tracking-[0.25em]" style="color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.8)">Toque para ouvir</span>' : ''}</button>
-<script>(function(){var v=document.getElementById('videoSite'),b=document.getElementById('videoPlay');if(!v||!b)return;
-b.addEventListener('click',function(){${auto ? 'v.currentTime=0;v.loop=false;' : ''}v.muted=false;v.controls=true;b.style.display='none';var p=v.play();if(p&&p.catch)p.catch(function(){});
-try{if(window.fbq)fbq('trackCustom','AssistiuVideo');if(window.gtag)gtag('event','video_start');}catch(e){}});})();</script>`, estilo);
+            return playerArquivo({ src: urlMidia(m), poster: capa, auto, cta, estilo, s });
         }
         return '';
     }
