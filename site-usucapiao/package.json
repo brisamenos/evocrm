@@ -1,0 +1,9 @@
+{
+  "name": "site-usucapiao",
+  "version": "1.0.0",
+  "description": "Site de captura + Admin das inscrições, conectado ao EvoCRM",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "sql.js": "^1.11.0" }
+}

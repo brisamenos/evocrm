@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin — Inscrições do site</title>
+<style>
+  :root {
+    --bg: #0e1013; --card: #161a20; --card2: #1d222a; --linha: #2a303a; --txt: #e8e6e1; --sub: #9aa0a8;
+    --ouro: #c9a35a; --ouro2: #e3c27f; --verde: #3fb68b; --vermelho: #e5605b; --azul: #5b9be5; --ambar: #e0a94a;
+    --raio: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--txt); font: 14px/1.45 "IBM Plex Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  a { color: var(--ouro2); }
+  .oculto { display: none !important; }
+
+  /* login */
+  .tela-login { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+  .caixa-login { width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--linha); border-radius: 20px; padding: 28px; }
+  .marca { font-family: "Libre Baskerville", Georgia, serif; font-size: 20px; margin: 0 0 4px; }
+  .marca span { color: var(--ouro); }
+
+  /* layout */
+  header.topo { position: sticky; top: 0; z-index: 10; background: rgba(14,16,19,.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--linha); }
+  .topo-in { max-width: 1180px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .abas { display: flex; gap: 4px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+  .aba { background: none; border: 0; padding: 8px 12px; border-radius: 10px; color: var(--sub); cursor: pointer; white-space: nowrap; font-weight: 600; }
+  .aba.ativa { background: var(--card2); color: var(--ouro2); }
+  @media (max-width: 640px) { .abas { order: 3; flex-basis: 100%; } }
+  main { max-width: 1180px; margin: 0 auto; padding: 18px 16px 80px; }
+  .grade { display: grid; gap: 12px; }
+  @media (max-width: 760px) { #gradeGraf { grid-template-columns: 1fr !important; } }
+  .g4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 760px) { .g4 { grid-template-columns: repeat(2, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--linha); border-radius: var(--raio); padding: 16px; }
+  .num { font-size: 26px; font-weight: 700; }
+  .rot { color: var(--sub); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+  h2 { font-size: 16px; margin: 0 0 12px; }
+  .linha-flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  /* formulários */
+  .campo { width: 100%; background: var(--card2); border: 1px solid var(--linha); border-radius: 10px; padding: 10px 12px; outline: none; }
+  .campo:focus { border-color: var(--ouro); }
+  label.rotulo { display: block; font-size: 12px; color: var(--sub); margin: 0 0 6px; font-weight: 600; }
+  .btn { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; background: var(--card2); color: var(--txt); border: 1px solid var(--linha); }
+  .btn:disabled { opacity: .55; cursor: default; }
+  .btn.ouro { background: var(--ouro); color: #1b1610; border-color: var(--ouro); }
+  .btn.perigo { color: var(--vermelho); }
+  .btn.peq { padding: 6px 10px; font-size: 12px; }
+
+  /* gráfico */
+  .barras { display: flex; align-items: flex-end; gap: 6px; height: 140px; padding-top: 10px; }
+  .barra { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .barra i { display: block; width: 100%; background: linear-gradient(180deg, var(--ouro2), var(--ouro)); border-radius: 6px 6px 2px 2px; min-height: 2px; }
+  .barra small { font-size: 10px; color: var(--sub); }
+  .barra b { font-size: 10px; color: var(--txt); }
+
+  /* lista */
+  .filtros { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 8px; }
+  @media (max-width: 860px) { .filtros { grid-template-columns: 1fr 1fr; } .filtros .busca { grid-column: 1 / -1; } }
+  .item { background: var(--card); border: 1px solid var(--linha); border-radius: var(--raio); margin-top: 10px; overflow: hidden; }
+  .item-topo { display: flex; gap: 12px; padding: 12px 14px; cursor: pointer; align-items: flex-start; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: rgba(201,163,90,.15); color: var(--ouro2); display: grid; place-items: center; font-weight: 700; flex-shrink: 0; }
+  .item-meio { flex: 1; min-width: 0; }
+  .item-nome { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item-sub { color: var(--sub); font-size: 12px; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .chip { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--card2); color: var(--sub); border: 1px solid var(--linha); }
+  .chip.ok { color: var(--verde); border-color: rgba(63,182,139,.4); }
+  .chip.erro { color: var(--vermelho); border-color: rgba(229,96,91,.4); }
+  .chip.fila { color: var(--ambar); border-color: rgba(224,169,74,.4); }
+  .chip.info { color: var(--azul); border-color: rgba(91,155,229,.4); }
+  .item-det { border-top: 1px solid var(--linha); padding: 14px; background: #12161b; }
+  .det-grade { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 13px; }
+  @media (max-width: 640px) { .det-grade { grid-template-columns: 1fr; } }
+  .det-grade span { color: var(--sub); }
+  .data { color: var(--sub); font-size: 11px; white-space: nowrap; }
+  .paginacao { display: flex; justify-content: center; gap: 12px; align-items: center; margin-top: 14px; }
+
+  .alerta { border-radius: 12px; padding: 12px 14px; font-size: 13px; }
+  .alerta.ok { background: rgba(63,182,139,.1); border: 1px solid rgba(63,182,139,.35); }
+  .alerta.erro { background: rgba(229,96,91,.1); border: 1px solid rgba(229,96,91,.35); }
+  .alerta.aviso { background: rgba(224,169,74,.1); border: 1px solid rgba(224,169,74,.35); }
+  ol.passos { margin: 8px 0 0; padding-left: 20px; color: var(--sub); }
+  ol.passos li { margin: 4px 0; }
+
+  /* toast */
+  #toast { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); background: var(--card2); border: 1px solid var(--linha); padding: 10px 16px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.4); z-index: 50; max-width: 92vw; display: none; }
+  #toast.erro { border-color: rgba(229,96,91,.6); }
+  #toast.ok { border-color: rgba(63,182,139,.6); }
+  .opcao { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .dica { color: var(--sub); font-size: 12px; display: block; margin-top: 6px; }
+  h3.sub { font-size: 13px; color: var(--sub); text-transform: uppercase; letter-spacing: .08em; margin: 18px 0 10px; }
+  .zona { border: 2px dashed var(--linha); border-radius: var(--raio); padding: 22px; text-align: center; display: grid; gap: 8px; justify-items: center; }
+  .zona small { color: var(--sub); max-width: 520px; }
+  .zona.arrastando { border-color: var(--ouro); background: rgba(201,163,90,.06); }
+  .envio { background: var(--card2); border: 1px solid var(--linha); border-radius: 12px; padding: 10px 12px; margin-top: 10px; font-size: 13px; }
+  .envio.erro { border-color: rgba(229,96,91,.5); }
+  .env-st { color: var(--sub); font-size: 12px; text-align: right; }
+  .progresso { height: 8px; background: #0b0d10; border-radius: 99px; overflow: hidden; margin-top: 8px; }
+  .progresso i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ouro), var(--ouro2)); transition: width .2s; }
+  .biblio { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+  .midia { background: var(--card2); border: 1px solid var(--linha); border-radius: 12px; padding: 8px; }
+  .midia.escolhida { border-color: var(--ouro); box-shadow: 0 0 0 1px var(--ouro) inset; }
+  .thumb { position: relative; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: #000; display: grid; place-items: center; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .sem-capa { font-size: 28px; }
+  .selo-st { position: absolute; left: 6px; top: 6px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: rgba(0,0,0,.7); }
+  .selo-st.fila { color: var(--ambar); } .selo-st.erro { color: var(--vermelho); }
+  .dur { position: absolute; right: 6px; bottom: 6px; font-size: 11px; background: rgba(0,0,0,.75); padding: 1px 6px; border-radius: 6px; }
+  .midia-nome { font-weight: 600; font-size: 13px; margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .midia-info { color: var(--sub); font-size: 11px; }
+  .midia-erro { color: var(--vermelho); font-size: 11px; margin-top: 4px; }
+  details.grupo { border-top: 1px solid var(--linha); padding: 10px 0; }
+  details.grupo summary { cursor: pointer; font-weight: 700; color: var(--ouro2); }
+  .restaurar { background: none; border: 0; color: var(--sub); font-size: 11px; cursor: pointer; padding: 2px 0; }
+  .restaurar:hover { color: var(--ouro2); }
+  .barra-salvar { position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 140%); background: var(--card2); border: 1px solid var(--ouro); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: center; z-index: 40; box-shadow: 0 10px 30px rgba(0,0,0,.5); transition: transform .2s; max-width: 94vw; }
+  .barra-salvar.visivel { transform: translate(-50%, 0); }
+  @media (max-width: 640px) { [data-painel=site] .grade { grid-template-columns: 1fr !important; } }
+  .switch { position: relative; width: 44px; height: 24px; border-radius: 999px; background: #3a414d; border: 0; cursor: pointer; flex-shrink: 0; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; }
+  .switch.on { background: var(--verde); }
+  .switch.on::after { transform: translateX(20px); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ LOGIN ═══════════ -->
+<section id="telaLogin" class="tela-login oculto">
+  <form class="caixa-login" id="formLogin" autocomplete="on">
+    <p class="marca">Painel de <span>Inscrições</span></p>
+    <p id="loginSub" style="color:var(--sub);margin:0 0 18px">Entre com a senha do administrador.</p>
+    <label class="rotulo" for="senha">Senha</label>
+    <input class="campo" id="senha" type="password" autocomplete="current-password" required>
+    <div id="blocoConfirma" class="oculto" style="margin-top:12px">
+      <label class="rotulo" for="senha2">Repita a senha</label>
+      <input class="campo" id="senha2" type="password" autocomplete="new-password">
+    </div>
+    <p id="loginErro" class="oculto" style="color:var(--vermelho);margin:12px 0 0"></p>
+    <button class="btn ouro" style="width:100%;margin-top:16px" id="btnEntrar">Entrar</button>
+  </form>
+</section>
+
+<!-- ═══════════ PAINEL ═══════════ -->
+<section id="telaPainel" class="oculto">
+  <header class="topo">
+    <div class="topo-in">
+      <p class="marca" style="margin:0">Inscrições <span>do site</span></p>
+      <nav class="abas">
+        <button class="aba ativa" data-aba="resumo">Visão geral</button>
+        <button class="aba" data-aba="lista">Inscritos</button>
+        <button class="aba" data-aba="site">Site</button>
+        <button class="aba" data-aba="crm">Conexão com o CRM</button>
+        <button class="aba" data-aba="conta">Conta</button>
+      </nav>
+      <button class="btn peq" id="btnSair">Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Resumo -->
+    <div data-painel="resumo">
+      <div id="avisoConexao"></div>
+      <div class="grade g4">
+        <div class="card"><div class="rot">Hoje</div><div class="num" id="rHoje">–</div></div>
+        <div class="card"><div class="rot">7 dias</div><div class="num" id="rSemana">–</div></div>
+        <div class="card"><div class="rot">30 dias</div><div class="num" id="rMes">–</div></div>
+        <div class="card"><div class="rot">Total</div><div class="num" id="rTotal">–</div></div>
+      </div>
+      <div class="grade g4" style="margin-top:12px">
+        <div class="card"><div class="rot">No CRM</div><div class="num" id="rCrm" style="color:var(--verde)">–</div></div>
+        <div class="card"><div class="rot">Com pendência</div><div class="num" id="rProb" style="color:var(--ambar)">–</div></div>
+        <div class="card"><div class="rot">Viraram clientes</div><div class="num" id="rCli" style="color:var(--ouro2)">–</div></div>
+        <div class="card"><div class="rot">Conversão</div><div class="num" id="rConv">–</div></div>
+      </div>
+      <div class="grade" style="grid-template-columns:2fr 1fr;margin-top:12px" id="gradeGraf">
+        <div class="card"><h2>Inscrições nos últimos 14 dias</h2><div class="barras" id="grafico"></div></div>
+        <div class="card"><h2>De onde vieram</h2><div id="origens" style="display:grid;gap:8px"></div></div>
+      </div>
+    </div>
+
+    <!-- Lista -->
+    <div data-painel="lista" class="oculto">
+      <div class="card">
+        <div class="filtros">
+          <input class="campo busca" id="fBusca" placeholder="Buscar nome, telefone, cidade...">
+          <select class="campo" id="fStatus">
+            <option value="">Todos os status</option><option value="novo">Novo</option><option value="em_contato">Em contato</option>
+            <option value="agendado">Agendado</option><option value="cliente">Virou cliente</option><option value="descartado">Descartado</option>
+          </select>
+          <select class="campo" id="fCrm">
+            <option value="">Envio ao CRM: todos</option><option value="enviado">No CRM</option><option value="problema">Com pendência</option>
+          </select>
+          <input class="campo" id="fDe" type="date" title="De">
+          <input class="campo" id="fAte" type="date" title="Até">
+        </div>
+        <div class="linha-flex" style="justify-content:space-between;margin-top:10px">
+          <span id="lTotal" style="color:var(--sub);font-size:12px"></span>
+          <div class="linha-flex">
+            <button class="btn peq" id="btnSync" title="Atualiza a situação do fluxo vinda do CRM">↻ Atualizar status do CRM</button>
+            <button class="btn peq" id="btnCsv">⬇ Exportar planilha</button>
+          </div>
+        </div>
+      </div>
+      <div id="lista"></div>
+      <div class="paginacao" id="pag"></div>
+    </div>
+
+    <!-- CRM -->
+    <div data-painel="crm" class="oculto">
+      <div class="card">
+        <h2>Conexão com o CRM</h2>
+        <div id="crmStatus" style="margin-bottom:14px"></div>
+        <label class="rotulo" for="codigo">Código de conexão (gerado no CRM)</label>
+        <textarea class="campo" id="codigo" rows="3" placeholder="EVO-..." spellcheck="false" style="font-family:ui-monospace,monospace;font-size:12px"></textarea>
+        <div class="linha-flex" style="margin-top:10px">
+          <button class="btn ouro" id="btnConectar">Salvar e testar</button>
+          <button class="btn" id="btnTestar">Testar conexão</button>
+          <button class="btn perigo" id="btnDesconectar">Desconectar</button>
+        </div>
+        <ol class="passos">
+          <li>No CRM, abra <b>Inscrições do site</b> e clique em <b>+ Conectar site</b> (ou escolha o site).</li>
+          <li>Na aba <b>Conexão</b>, toque em <b>Copiar</b> no código de conexão.</li>
+          <li>Cole aqui e clique em <b>Salvar e testar</b>.</li>
+        </ol>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="linha-flex" style="justify-content:space-between">
+          <div>
+            <h2 style="margin:0">Enviar inscrições ao CRM</h2>
+            <p style="color:var(--sub);margin:4px 0 0;font-size:13px">Desligado, as inscrições continuam salvas aqui e vão ao CRM quando você ligar de novo.</p>
+          </div>
+          <button class="switch" id="swEnvio" aria-label="Enviar ao CRM"></button>
+        </div>
+        <div id="filaInfo" style="margin-top:12px;color:var(--sub);font-size:13px"></div>
+        <button class="btn" id="btnPendentes" style="margin-top:10px">Reenviar inscrições pendentes</button>
+      </div>
+    </div>
+
+    <!-- Site -->
+    <div data-painel="site" class="oculto">
+      <div id="avisoArmazenamento"></div>
+
+      <div class="card">
+        <div class="linha-flex" style="justify-content:space-between">
+          <h2 style="margin:0">Vídeo principal</h2>
+          <a class="btn peq" href="/" target="_blank" rel="noopener" style="text-decoration:none">Ver site ↗</a>
+        </div>
+        <div class="linha-flex" style="margin:12px 0">
+          <label class="opcao"><input type="radio" name="vtipo" value="nenhum"> Sem vídeo</label>
+          <label class="opcao"><input type="radio" name="vtipo" value="arquivo"> Vídeo enviado</label>
+          <label class="opcao"><input type="radio" name="vtipo" value="link"> Link do YouTube / Vimeo</label>
+        </div>
+        <div id="blocoVLink" class="oculto">
+          <input class="campo" data-cfg="video_link" placeholder="https://www.youtube.com/watch?v=...">
+        </div>
+        <div id="blocoVArquivo" class="oculto">
+          <div id="zonaUpload" class="zona">
+            <b>Arraste vídeos ou imagens aqui</b>
+            <span>ou</span>
+            <label class="btn ouro" style="cursor:pointer">Escolher arquivo<input type="file" id="arqUpload" multiple accept="video/*,image/*,.mov,.mkv,.avi,.wmv,.flv,.3gp,.mts,.m2ts,.webm,.mpg,.mpeg,.heic" class="oculto"></label>
+            <small>Qualquer formato e tamanho. O vídeo é convertido para tocar em todo celular. Se a internet cair, escolha o mesmo arquivo de novo para continuar de onde parou.</small>
+          </div>
+          <div id="filaUpload"></div>
+          <label class="opcao" style="margin-top:12px"><input type="checkbox" data-cfg="video_autoplay"> Começar sozinho, sem som e em repetição (o visitante toca para ouvir)</label>
+          <h3 class="sub">Biblioteca</h3>
+          <div id="biblioteca" class="biblio"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h2>Textos da página</h2>
+        <div id="camposTexto"></div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h2>Logo, WhatsApp e rastreamento</h2>
+        <div class="grade" style="grid-template-columns:1fr 1fr">
+          <div>
+            <label class="rotulo">Logo</label>
+            <div class="linha-flex"><img id="logoPrev" alt="" style="height:48px;max-width:180px;object-fit:contain;background:#000;border-radius:8px;padding:4px">
+              <select class="campo" data-cfg="logo_midia" id="selLogo" style="flex:1"></select></div>
+            <small class="dica">Envie a imagem na biblioteca (Vídeo enviado → arraste a imagem) e escolha aqui.</small>
+          </div>
+          <div>
+            <label class="rotulo">Capa do vídeo (imagem antes de dar play)</label>
+            <select class="campo" data-cfg="video_capa_midia" id="selCapa"></select>
+            <small class="dica">Vazio = a capa é gerada sozinha a partir do vídeo.</small>
+          </div>
+          <div><label class="rotulo">WhatsApp do botão flutuante (com DDD)</label><input class="campo" data-cfg="whatsapp_numero" inputmode="tel" placeholder="Vazio = sem botão"></div>
+          <div><label class="rotulo">Mensagem que já vem escrita</label><input class="campo" data-cfg="whatsapp_mensagem"></div>
+          <div><label class="rotulo">Pixel da Meta (ID, só números)</label><input class="campo" data-cfg="pixel_meta" inputmode="numeric" placeholder="ex.: 1234567890123456"></div>
+          <div><label class="rotulo">Google Analytics / Ads (G-... ou AW-...)</label><input class="campo" data-cfg="google_tag" placeholder="G-XXXXXXX"></div>
+        </div>
+        <small class="dica">O site envia o evento "Lead" ao Pixel e "generate_lead" ao Google quando alguém se inscreve.</small>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h2>Versões e backup</h2>
+        <p class="dica" style="margin-top:0">Cada vez que você salva, a versão anterior fica guardada (últimas 30). Baixe um backup antes de grandes mudanças.</p>
+        <div class="linha-flex">
+          <button class="btn" id="btnVersoes">Ver versões salvas</button>
+          <a class="btn" href="/admin/api/site/backup" style="text-decoration:none">⬇ Baixar backup</a>
+          <label class="btn" style="cursor:pointer">⬆ Restaurar backup<input type="file" id="arqBackup" accept=".json,application/json" class="oculto"></label>
+        </div>
+        <div id="listaVersoes" style="margin-top:10px"></div>
+      </div>
+
+      <div class="barra-salvar" id="barraSalvar">
+        <span id="txtAlterado">Alterações não salvas</span>
+        <button class="btn peq" id="btnDescartar">Descartar</button>
+        <button class="btn ouro" id="btnSalvarSite">Salvar site</button>
+      </div>
+    </div>
+
+    <!-- Conta -->
+    <div data-painel="conta" class="oculto">
+      <div class="card" style="max-width:460px">
+        <h2>Trocar senha</h2>
+        <label class="rotulo">Senha atual</label><input class="campo" id="sAtual" type="password" autocomplete="current-password">
+        <label class="rotulo" style="margin-top:10px">Nova senha (mínimo 8 caracteres)</label><input class="campo" id="sNova" type="password" autocomplete="new-password">
+        <label class="rotulo" style="margin-top:10px">Repita a nova senha</label><input class="campo" id="sNova2" type="password" autocomplete="new-password">
+        <button class="btn ouro" id="btnSenha" style="margin-top:14px">Salvar nova senha</button>
+        <p style="color:var(--sub);font-size:12px;margin-top:10px">Trocar a senha encerra o acesso em todos os outros aparelhos.</p>
+      </div>
+    </div>
+  </main>
+</section>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const STATUS = { novo: 'Novo', em_contato: 'Em contato', agendado: 'Agendado', cliente: 'Virou cliente', descartado: 'Descartado' };
+  const CLASSE_CRM = { enviado: 'ok', pendente: 'fila', tentando: 'fila', aguardando_conexao: 'fila', erro_codigo: 'erro', recusado: 'erro', falhou: 'erro' };
+  const CLASSE_FLUXO = { concluido: 'ok', respondeu: 'info', aguardando_clique: 'fila', agendado: 'fila', enviando: 'fila', erro: 'erro', sem_whatsapp: 'erro' };
+  let modoCriar = false, pagina = 1, aberto = null, buscaT = null;
+
+  function toast(msg, tipo) {
+    const t = $('toast'); t.textContent = msg; t.className = tipo || ''; t.style.display = 'block';
+    clearTimeout(toast._t); toast._t = setTimeout(() => (t.style.display = 'none'), 4200);
+  }
+  async function api(rota, opts = {}) {
+    const r = await fetch('/admin/api/' + rota, { credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, ...opts,
+      body: opts.body ? JSON.stringify(opts.body) : undefined });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401 && !rota.startsWith('login') && !rota.startsWith('senha')) { mostrarLogin(); throw new Error(d.error || 'Sessão expirada'); }
+    if (!r.ok || d.ok === false) throw new Error(d.error || 'Erro ' + r.status);
+    return d;
+  }
+  const fmtData = s => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }); };
+  const fmtFone = t => { const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''); return d.length === 11 ? `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}` : t; };
+  const linkZap = t => { const d = String(t || '').replace(/\D/g, ''); return 'https://wa.me/' + (d.length <= 11 ? '55' + d : d); };
+
+  // ── login ──
+  function mostrarLogin(criar) {
+    modoCriar = !!criar;
+    $('telaPainel').classList.add('oculto'); $('telaLogin').classList.remove('oculto');
+    $('loginSub').textContent = criar ? 'Primeiro acesso: crie a senha do administrador (mínimo 8 caracteres).' : 'Entre com a senha do administrador.';
+    $('blocoConfirma').classList.toggle('oculto', !criar);
+    $('btnEntrar').textContent = criar ? 'Criar senha e entrar' : 'Entrar';
+    $('senha').setAttribute('autocomplete', criar ? 'new-password' : 'current-password');
+    setTimeout(() => $('senha').focus(), 50);
+  }
+  $('formLogin').addEventListener('submit', async e => {
+    e.preventDefault();
+    const erro = $('loginErro'); erro.classList.add('oculto');
+    const senha = $('senha').value;
+    try {
+      if (modoCriar) {
+        if (senha.length < 8) throw new Error('Use pelo menos 8 caracteres.');
+        if (senha !== $('senha2').value) throw new Error('As senhas não conferem.');
+        await api('criar-senha', { method: 'POST', body: { senha } });
+      } else await api('login', { method: 'POST', body: { senha } });
+      $('senha').value = ''; $('senha2').value = '';
+      abrirPainel();
+    } catch (err) { erro.textContent = err.message; erro.classList.remove('oculto'); }
+  });
+  $('btnSair').onclick = async () => { await api('logout', { method: 'POST' }).catch(() => {}); mostrarLogin(false); };
+
+  // ── abas ──
+  document.querySelectorAll('.aba').forEach(b => b.onclick = () => irPara(b.dataset.aba));
+  function irPara(aba) {
+    document.querySelectorAll('.aba').forEach(b => b.classList.toggle('ativa', b.dataset.aba === aba));
+    document.querySelectorAll('[data-painel]').forEach(p => p.classList.toggle('oculto', p.dataset.painel !== aba));
+    if (aba === 'resumo') carregarResumo();
+    if (aba === 'lista') carregarLista();
+    if (aba === 'crm') carregarConfig();
+    if (aba === 'site') carregarSite();
+    history.replaceState(null, '', '#' + aba);
+  }
+  function abrirPainel() {
+    $('telaLogin').classList.add('oculto'); $('telaPainel').classList.remove('oculto');
+    irPara((location.hash || '#resumo').slice(1).replace(/[^a-z]/g, '') || 'resumo');
+  }
+
+  // ── resumo ──
+  async function carregarResumo() {
+    try {
+      const d = await api('resumo');
+      $('rHoje').textContent = d.hoje; $('rSemana').textContent = d.semana; $('rMes').textContent = d.mes; $('rTotal').textContent = d.total;
+      $('rCrm').textContent = d.no_crm; $('rProb').textContent = d.problemas; $('rCli').textContent = d.clientes;
+      $('rConv').textContent = d.total ? Math.round(d.clientes / d.total * 100) + '%' : '–';
+      const max = Math.max(1, ...d.dias.map(x => x.n));
+      $('grafico').innerHTML = d.dias.map(x => {
+        const dt = new Date(x.dia);
+        return `<div class="barra" title="${dt.toLocaleDateString('pt-BR')}: ${x.n}"><b>${x.n || ''}</b><i style="height:${Math.max(2, x.n / max * 100)}%"></i><small>${dt.getDate()}/${dt.getMonth() + 1}</small></div>`;
+      }).join('');
+      $('origens').innerHTML = d.origens.length ? d.origens.map(o => `<div class="linha-flex" style="justify-content:space-between"><span>${esc(o.origem)}</span><b>${o.n}</b></div>`).join('')
+        : '<span style="color:var(--sub)">Ainda sem inscrições.</span>';
+      let aviso = '';
+      if (!d.conectado) aviso = `<div class="alerta aviso" style="margin-bottom:12px">⚠️ O CRM ainda não está conectado. As inscrições ficam salvas aqui e vão para o CRM assim que você conectar. <a href="#crm" onclick="event.preventDefault();document.querySelector('[data-aba=crm]').click()">Conectar agora</a></div>`;
+      else if (!d.envio_ativo) aviso = `<div class="alerta aviso" style="margin-bottom:12px">⏸️ O envio ao CRM está desligado.</div>`;
+      else if (d.problemas) aviso = `<div class="alerta erro" style="margin-bottom:12px">${d.problemas} inscrição(ões) com pendência no envio ao CRM. <a href="#lista" onclick="event.preventDefault();document.getElementById('fCrm').value='problema';document.querySelector('[data-aba=lista]').click()">Ver</a></div>`;
+      if (d.armazenamento && d.armazenamento.persistente === false) aviso = `<div class="alerta erro" style="margin-bottom:12px">⚠️ <b>Os dados não estão num volume.</b> No próximo deploy você perde inscrições, configurações e vídeos. No EasyPanel, monte um volume em <b>${esc(d.armazenamento.pasta)}</b>.</div>` + aviso;
+      $('avisoConexao').innerHTML = aviso;
+    } catch (e) { toast(e.message, 'erro'); }
+  }
+
+  // ── lista ──
+  function params() {
+    const p = new URLSearchParams();
+    if ($('fBusca').value.trim()) p.set('q', $('fBusca').value.trim());
+    if ($('fStatus').value) p.set('status', $('fStatus').value);
+    if ($('fCrm').value) p.set('crm', $('fCrm').value);
+    if ($('fDe').value) p.set('de', $('fDe').value);
+    if ($('fAte').value) p.set('ate', $('fAte').value);
+    return p;
+  }
+  async function carregarLista(pg) {
+    if (pg) pagina = pg;
+    const p = params(); p.set('pagina', pagina);
+    try {
+      const d = await api('inscricoes?' + p);
+      $('lTotal').textContent = `${d.total} inscrição(ões)`;
+      $('lista').innerHTML = d.itens.length ? d.itens.map(itemHtml).join('') : '<p style="text-align:center;color:var(--sub);padding:40px 0">Nenhuma inscrição encontrada.</p>';
+      $('pag').innerHTML = d.paginas > 1 ? `<button class="btn peq" ${d.pagina <= 1 ? 'disabled' : ''} data-pg="${d.pagina - 1}">‹ Anterior</button><span style="color:var(--sub)">${d.pagina} de ${d.paginas}</span><button class="btn peq" ${d.pagina >= d.paginas ? 'disabled' : ''} data-pg="${d.pagina + 1}">Próxima ›</button>` : '';
+      $('pag').querySelectorAll('[data-pg]').forEach(b => b.onclick = () => carregarLista(+b.dataset.pg));
+      ligarItens(d.itens);
+    } catch (e) { toast(e.message, 'erro'); }
+  }
+  function itemHtml(it) {
+    const extras = [...Object.entries(it.campos || {}), ...Object.entries(it.utm || {})];
+    return `<div class="item" data-id="${it.id}">
+      <div class="item-topo" data-abrir>
+        <div class="avatar">${esc((it.nome || '?').trim().charAt(0).toUpperCase())}</div>
+        <div class="item-meio">
+          <div class="item-nome">${esc(it.nome)}</div>
+          <div class="item-sub">${esc(fmtFone(it.telefone))}${it.cidade ? ' • ' + esc(it.cidade) : ''}</div>
+          <div class="chips">
+            <span class="chip">${esc(STATUS[it.status] || it.status)}</span>
+            <span class="chip ${CLASSE_CRM[it.crm_status] || ''}">${esc(it.crm_rotulo)}</span>
+            ${it.crm_fluxo_rotulo ? `<span class="chip ${CLASSE_FLUXO[it.crm_fluxo] || ''}">WhatsApp: ${esc(it.crm_fluxo_rotulo)}</span>` : ''}
+            ${it.crm_escolha ? `<span class="chip info">Escolheu: ${esc(it.crm_escolha)}</span>` : ''}
+          </div>
+        </div>
+        <span class="data">${fmtData(it.created_at)}</span>
+      </div>
+      <div class="item-det ${aberto === it.id ? '' : 'oculto'}">
+        <div class="linha-flex" style="margin-bottom:12px">
+          <a class="btn peq ouro" href="${linkZap(it.telefone)}" target="_blank" rel="noopener" style="text-decoration:none">WhatsApp</a>
+          ${it.crm_status !== 'enviado' ? '<button class="btn peq" data-reenviar>Enviar ao CRM agora</button>' : ''}
+          <button class="btn peq" data-envios>Histórico de envio</button>
+          <button class="btn peq perigo" data-excluir>Excluir</button>
+        </div>
+        ${it.crm_erro && it.crm_status !== 'enviado' ? `<div class="alerta erro" style="margin-bottom:10px">⚠️ ${esc(it.crm_erro)}</div>` : ''}
+        <div class="det-grade">
+          <div><span>WhatsApp digitado:</span> ${esc(it.telefone)}</div>
+          ${it.email ? `<div><span>E-mail:</span> ${esc(it.email)}</div>` : ''}
+          ${it.crm_enviado_em ? `<div><span>Enviado ao CRM:</span> ${fmtData(it.crm_enviado_em)}</div>` : ''}
+          ${extras.map(([k, v]) => `<div><span>${esc(k)}:</span> ${esc(v)}</div>`).join('')}
+          ${it.pagina ? `<div style="grid-column:1/-1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span>Página:</span> ${esc(it.pagina)}</div>` : ''}
+        </div>
+        <div class="grade" style="grid-template-columns:1fr 2fr;margin-top:12px">
+          <div><label class="rotulo">Status</label>
+            <select class="campo" data-status>${Object.entries(STATUS).map(([v, l]) => `<option value="${v}" ${v === it.status ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+          <div><label class="rotulo">Observação</label><textarea class="campo" rows="2" data-obs placeholder="Anotações internas">${esc(it.observacao || '')}</textarea></div>
+        </div>
+        <div data-hist style="margin-top:10px"></div>
+      </div>
+    </div>`;
+  }
+  function ligarItens(itens) {
+    document.querySelectorAll('#lista .item').forEach(el => {
+      const id = el.dataset.id;
+      const it = itens.find(x => x.id === id);
+      el.querySelector('[data-abrir]').onclick = () => {
+        const det = el.querySelector('.item-det');
+        const abrir = det.classList.contains('oculto');
+        document.querySelectorAll('#lista .item-det').forEach(d => d.classList.add('oculto'));
+        det.classList.toggle('oculto', !abrir); aberto = abrir ? id : null;
+      };
+      const st = el.querySelector('[data-status]');
+      st.onchange = async () => { try { await api('inscricoes/' + id, { method: 'POST', body: { status: st.value } }); it.status = st.value; toast('Status atualizado', 'ok');
+        el.querySelector('.chips .chip').textContent = STATUS[st.value]; } catch (e) { toast(e.message, 'erro'); } };
+      const obs = el.querySelector('[data-obs]');
+      obs.onblur = async () => { if (obs.value === (it.observacao || '')) return; try { await api('inscricoes/' + id, { method: 'POST', body: { observacao: obs.value } }); it.observacao = obs.value; toast('Observação salva', 'ok'); } catch (e) { toast(e.message, 'erro'); } };
+      const re = el.querySelector('[data-reenviar]');
+      if (re) re.onclick = async () => { re.disabled = true; re.textContent = 'Enviando...';
+        try { await api(`inscricoes/${id}/reenviar`, { method: 'POST' }); toast('Enviado ao CRM ✅', 'ok'); carregarLista(); }
+        catch (e) { toast(e.message, 'erro'); re.disabled = false; re.textContent = 'Enviar ao CRM agora'; } };
+      el.querySelector('[data-envios]').onclick = async () => {
+        try { const d = await api(`inscricoes/${id}/envios`);
+          el.querySelector('[data-hist]').innerHTML = d.envios.length ? d.envios.map(x => `<div style="font-size:12px;color:${x.ok ? 'var(--verde)' : 'var(--vermelho)'}">${fmtData(x.em)} — ${esc(x.detalhe)}</div>`).join('') : '<span style="color:var(--sub);font-size:12px">Nenhuma tentativa de envio ainda.</span>';
+        } catch (e) { toast(e.message, 'erro'); } };
+      el.querySelector('[data-excluir]').onclick = async () => {
+        if (!confirm(`Excluir a inscrição de ${it.nome}? Isso não apaga o contato no CRM.`)) return;
+        try { await api('inscricoes/' + id, { method: 'DELETE' }); toast('Inscrição excluída', 'ok'); carregarLista(); } catch (e) { toast(e.message, 'erro'); } };
+    });
+  }
+  $('fBusca').oninput = () => { clearTimeout(buscaT); buscaT = setTimeout(() => carregarLista(1), 350); };
+  ['fStatus', 'fCrm', 'fDe', 'fAte'].forEach(id => $(id).onchange = () => carregarLista(1));
+  $('btnCsv').onclick = () => { window.location.href = '/admin/api/exportar.csv?' + params(); };
+  $('btnSync').onclick = async () => {
+    $('btnSync').disabled = true;
+    try { const d = await api('sincronizar', { method: 'POST' }); if (d.ok === false) throw new Error(d.erro); toast(`Status atualizado (${d.atualizadas || 0})`, 'ok'); carregarLista(); }
+    catch (e) { toast(e.message, 'erro'); }
+    $('btnSync').disabled = false;
+  };
+
+  // ── CRM ──
+  async function carregarConfig() {
+    try {
+      const d = await api('config');
+      $('swEnvio').classList.toggle('on', d.envio_ativo);
+      $('crmStatus').innerHTML = d.conectado
+        ? `<div class="alerta ok">✅ Conectado ao CRM <b>${esc(d.crm_url)}</b>${d.fonte ? ` — site <b>${esc(d.fonte)}</b>` : ''}${d.conta ? ` (conta ${esc(d.conta)})` : ''}.${d.testado_em ? `<br><small style="color:var(--sub)">Último teste: ${fmtData(d.testado_em)}</small>` : ''}</div>`
+        : `<div class="alerta aviso">Ainda não conectado. Cole abaixo o código gerado no CRM.</div>`;
+      $('filaInfo').innerHTML = `${d.na_fila} inscrição(ões) aguardando envio • ${d.com_erro} com erro`;
+    } catch (e) { toast(e.message, 'erro'); }
+  }
+  $('btnConectar').onclick = async () => {
+    const codigo = $('codigo').value.trim();
+    if (!codigo) return toast('Cole o código de conexão do CRM.', 'erro');
+    $('btnConectar').disabled = true; $('btnConectar').textContent = 'Testando...';
+    try {
+      const d = await api('config', { method: 'POST', body: { codigo } });
+      $('codigo').value = '';
+      toast(`Conectado ✅ Site "${d.fonte}"${d.ativo_no_crm === false ? ' (está desativado no CRM)' : ''}`, 'ok');
+      if (!d.etapas) toast('Conectado, mas o fluxo deste site no CRM ainda não tem mensagens.', '');
+      carregarConfig();
+    } catch (e) { toast(e.message, 'erro'); }
+    $('btnConectar').disabled = false; $('btnConectar').textContent = 'Salvar e testar';
+  };
+  $('btnTestar').onclick = async () => {
+    try { const d = await api('testar-crm', { method: 'POST' }); if (d.ok === false) throw new Error(d.error);
+      toast(`Conexão OK ✅ Site "${d.fonte}"${d.ativo ? '' : ' — desativado no CRM'}`, 'ok'); carregarConfig(); }
+    catch (e) { toast(e.message, 'erro'); }
+  };
+  $('btnDesconectar').onclick = async () => {
+    if (!confirm('Desconectar do CRM? As novas inscrições ficam salvas aqui e vão para o CRM quando você conectar de novo.')) return;
+    try { await api('config', { method: 'POST', body: { codigo: '' } }); toast('Desconectado', 'ok'); carregarConfig(); } catch (e) { toast(e.message, 'erro'); }
+  };
+  $('swEnvio').onclick = async () => {
+    const ligar = !$('swEnvio').classList.contains('on');
+    try { await api('config', { method: 'POST', body: { envio_ativo: ligar } }); $('swEnvio').classList.toggle('on', ligar); toast(ligar ? 'Envio ao CRM ligado' : 'Envio ao CRM desligado', 'ok'); }
+    catch (e) { toast(e.message, 'erro'); }
+  };
+  $('btnPendentes').onclick = async () => {
+    try { const d = await api('reenviar-pendentes', { method: 'POST' }); toast(`${d.n} inscrição(ões) colocadas na fila`, 'ok'); setTimeout(carregarConfig, 2500); }
+    catch (e) { toast(e.message, 'erro'); }
+  };
+
+  // ── conta ──
+  $('btnSenha').onclick = async () => {
+    const atual = $('sAtual').value, nova = $('sNova').value;
+    if (nova.length < 8) return toast('A nova senha precisa de 8 caracteres ou mais.', 'erro');
+    if (nova !== $('sNova2').value) return toast('As senhas novas não conferem.', 'erro');
+    try { await api('senha', { method: 'POST', body: { atual, nova } }); ['sAtual', 'sNova', 'sNova2'].forEach(i => $(i).value = ''); toast('Senha alterada ✅', 'ok'); }
+    catch (e) { toast(e.message, 'erro'); }
+  };
+
+  // ══════════════ SITE ══════════════
+  const CAMPOS = [
+    ['Topo', [['selo', 'Selo acima do título'], ['titulo', 'Título (parte branca)'], ['titulo_destaque', 'Título (parte dourada)'], ['subtitulo', 'Texto abaixo do título', 3], ['botao_topo', 'Botão do topo']]],
+    ['Por que nos escolher', [['secao_selo', 'Selo'], ['secao_titulo', 'Título'],
+      ['card1_titulo', 'Cartão 1 — título'], ['card1_texto', 'Cartão 1 — texto', 2], ['card2_titulo', 'Cartão 2 — título'], ['card2_texto', 'Cartão 2 — texto', 2],
+      ['card3_titulo', 'Cartão 3 — título'], ['card3_texto', 'Cartão 3 — texto', 2], ['card4_titulo', 'Cartão 4 — título'], ['card4_texto', 'Cartão 4 — texto', 2]]],
+    ['Formulário', [['form_selo', 'Selo'], ['form_titulo', 'Título (parte branca)'], ['form_titulo_destaque', 'Título (parte dourada)'], ['form_subtitulo', 'Texto', 2],
+      ['form_item1', 'Item 1'], ['form_item2', 'Item 2'], ['form_item3', 'Item 3'], ['form_botao', 'Botão de enviar'], ['form_seguranca', 'Aviso de segurança'],
+      ['sucesso_titulo', 'Depois de enviar — título ({nome} = primeiro nome)'], ['sucesso_texto', 'Depois de enviar — texto', 2]]],
+    ['Rodapé e Google', [['rodape', 'Rodapé ({ano} = ano atual)'], ['seo_titulo', 'Título da aba / Google'], ['seo_descricao', 'Descrição no Google e no WhatsApp', 2], ['logo_alt', 'Nome da empresa (texto do logo)']]],
+  ];
+  let siteAtual = null, sitePadrao = {}, siteAlterado = false, midias = [], pollMidia = null, enviosAtivos = 0;
+
+  (function montarCampos() {
+    $('camposTexto').innerHTML = CAMPOS.map(([grupo, campos]) => `<details class="grupo" ${grupo === 'Topo' ? 'open' : ''}><summary>${grupo}</summary><div class="grade" style="grid-template-columns:1fr 1fr;margin-top:10px">
+      ${campos.map(([k, rot, linhas]) => `<div style="${linhas ? 'grid-column:1/-1' : ''}"><label class="rotulo">${rot}</label>${linhas
+        ? `<textarea class="campo" rows="${linhas}" data-cfg="${k}"></textarea>` : `<input class="campo" data-cfg="${k}">`}<button type="button" class="restaurar" data-padrao="${k}" title="Voltar ao texto original">↺ original</button></div>`).join('')}
+    </div></details>`).join('');
+  })();
+
+  function marcarAlterado(v = true) {
+    siteAlterado = v;
+    $('barraSalvar').classList.toggle('visivel', v);
+  }
+  function preencherSite(s) {
+    document.querySelectorAll('[data-cfg]').forEach(el => {
+      const k = el.dataset.cfg;
+      if (el.type === 'checkbox') el.checked = !!s[k]; else if (el.tagName !== 'SELECT') el.value = s[k] ?? '';
+    });
+    document.querySelectorAll('input[name=vtipo]').forEach(r => r.checked = r.value === (s.video_tipo || 'nenhum'));
+    atualizarTipoVideo();
+    preencherSelects();
+  }
+  function coletarSite() {
+    const out = {};
+    document.querySelectorAll('[data-cfg]').forEach(el => { out[el.dataset.cfg] = el.type === 'checkbox' ? el.checked : el.value; });
+    out.video_tipo = (document.querySelector('input[name=vtipo]:checked') || {}).value || 'nenhum';
+    if (siteAtual) out.video_midia = siteAtual.video_midia || '';
+    return out;
+  }
+  function atualizarTipoVideo() {
+    const t = (document.querySelector('input[name=vtipo]:checked') || {}).value;
+    $('blocoVLink').classList.toggle('oculto', t !== 'link');
+    $('blocoVArquivo').classList.toggle('oculto', t !== 'arquivo');
+  }
+  document.querySelectorAll('input[name=vtipo]').forEach(r => r.onchange = () => { atualizarTipoVideo(); marcarAlterado(); });
+  document.querySelector('[data-painel=site]').addEventListener('input', e => { if (e.target.dataset && e.target.dataset.cfg) marcarAlterado(); });
+  document.querySelector('[data-painel=site]').addEventListener('change', e => { if (e.target.dataset && e.target.dataset.cfg) { marcarAlterado(); if (e.target.id === 'selLogo') prevLogo(); } });
+  document.querySelector('[data-painel=site]').addEventListener('click', e => {
+    const k = e.target.dataset && e.target.dataset.padrao;
+    if (!k) return;
+    const el = document.querySelector(`[data-cfg="${k}"]`);
+    if (el && el.value !== sitePadrao[k]) { el.value = sitePadrao[k] || ''; marcarAlterado(); }
+  });
+
+  function preencherSelects() {
+    const imgs = midias.filter(m => m.tipo === 'imagem' && m.status === 'pronto');
+    const opts = (vazio, sel) => `<option value="">${vazio}</option>` + imgs.map(m => `<option value="${m.id}" ${m.id === sel ? 'selected' : ''}>${esc(m.nome)}</option>`).join('');
+    $('selLogo').innerHTML = opts('Logo original', siteAtual?.logo_midia);
+    $('selCapa').innerHTML = opts('Automática (do próprio vídeo)', siteAtual?.video_capa_midia);
+    prevLogo();
+  }
+  function prevLogo() { const m = midias.find(x => x.id === $('selLogo').value); $('logoPrev').src = m ? m.url : '/logo-padrao.png'; }
+
+  const fmtTam = n => n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  const fmtDur = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}` : '';
+
+  function desenharBiblioteca() {
+    const sel = siteAtual?.video_midia;
+    $('biblioteca').innerHTML = midias.length ? midias.map(m => {
+      const st = m.status === 'pronto' ? '' : m.status === 'processando' ? `<div class="selo-st fila">Convertendo ${m.progresso || 0}%</div>` : m.status === 'enviando' ? `<div class="selo-st fila">Envio incompleto</div>` : `<div class="selo-st erro">Erro</div>`;
+      const thumb = m.capa_url ? `<img src="${m.capa_url}" alt="" loading="lazy">` : `<div class="sem-capa">${m.tipo === 'imagem' ? '🖼️' : '🎬'}</div>`;
+      return `<div class="midia ${m.id === sel ? 'escolhida' : ''}" data-id="${m.id}">
+        <div class="thumb">${thumb}${st}${m.tipo === 'video' && m.duracao ? `<span class="dur">${fmtDur(m.duracao)}</span>` : ''}</div>
+        <div class="midia-nome" title="${esc(m.nome)}">${esc(m.nome)}</div>
+        <div class="midia-info">${m.tipo === 'video' ? (m.largura ? `${m.largura}×${m.altura} • ` : '') : 'Imagem • '}${fmtTam(m.tamanho)}</div>
+        ${m.status === 'erro' ? `<div class="midia-erro">${esc(m.erro || '')}</div>` : ''}
+        <div class="linha-flex" style="gap:6px;margin-top:6px">
+          ${m.tipo === 'video' && m.status === 'pronto' ? `<button class="btn peq ${m.id === sel ? 'ouro' : ''}" data-usar>${m.id === sel ? '✓ No site' : 'Usar no site'}</button>` : ''}
+          ${m.status === 'pronto' ? `<a class="btn peq" href="${m.url}" target="_blank" rel="noopener" style="text-decoration:none">Abrir</a>` : ''}
+          ${m.status === 'erro' ? '<button class="btn peq" data-reproc>Tentar de novo</button>' : ''}
+          <button class="btn peq perigo" data-excluir>Excluir</button>
+        </div></div>`;
+    }).join('') : '<p class="dica">Nenhum arquivo enviado ainda.</p>';
+    $('biblioteca').querySelectorAll('.midia').forEach(el => {
+      const id = el.dataset.id;
+      const u = el.querySelector('[data-usar]');
+      if (u) u.onclick = () => { siteAtual.video_midia = id; document.querySelector('input[name=vtipo][value=arquivo]').checked = true; atualizarTipoVideo(); marcarAlterado(); desenharBiblioteca(); toast('Vídeo escolhido. Clique em "Salvar site" para publicar.', ''); };
+      const r = el.querySelector('[data-reproc]');
+      if (r) r.onclick = async () => { try { await api('midia/' + id, { method: 'POST', body: { reprocessar: true } }); carregarMidias(); } catch (e) { toast(e.message, 'erro'); } };
+      el.querySelector('[data-excluir]').onclick = async () => {
+        const m = midias.find(x => x.id === id);
+        if (!confirm(`Excluir "${m.nome}" do servidor?`)) return;
+        try { await api('midia/' + id, { method: 'DELETE' }); }
+        catch (e) {
+          if (!/em uso/i.test(e.message) || !confirm('Este arquivo está publicado no site. Excluir mesmo assim? (o site fica sem ele)')) return toast(e.message, 'erro');
+          try { await api('midia/' + id + '?forcar=1', { method: 'DELETE' }); await carregarSite(true); } catch (e2) { return toast(e2.message, 'erro'); }
+        }
+        toast('Arquivo excluído', 'ok'); carregarMidias();
+      };
+    });
+  }
+  async function carregarMidias() {
+    try {
+      const d = await api('midias');
+      midias = d.midias; desenharBiblioteca(); preencherSelects(); mostrarArmazenamento(d.armazenamento);
+      clearTimeout(pollMidia);
+      if (midias.some(m => m.status === 'processando')) pollMidia = setTimeout(carregarMidias, 3000);
+    } catch (e) { toast(e.message, 'erro'); }
+  }
+  function mostrarArmazenamento(a) {
+    if (!a) return;
+    let h = '';
+    if (a.persistente === false) h += `<div class="alerta erro" style="margin-bottom:12px">⚠️ <b>A pasta de dados (${esc(a.pasta)}) não está num volume.</b> No próximo deploy você perde inscrições, configurações e vídeos. No EasyPanel, crie um volume montado em <b>${esc(a.pasta)}</b> antes de usar.</div>`;
+    if (a.ffmpeg === false) h += `<div class="alerta aviso" style="margin-bottom:12px">O conversor de vídeo (ffmpeg) não está instalado: só vídeos MP4 vão funcionar. Use o Dockerfile do projeto, que já inclui o ffmpeg.</div>`;
+    if (a.livre !== null && a.livre !== undefined) h += `<p class="dica" style="margin:0 0 10px">Espaço livre no servidor: <b>${fmtTam(a.livre)}</b></p>`;
+    $('avisoArmazenamento').innerHTML = h;
+  }
+
+  async function carregarSite(silencioso) {
+    try {
+      const d = await api('site');
+      siteAtual = d.site; sitePadrao = d.padrao;
+      await carregarMidias();
+      preencherSite(siteAtual); marcarAlterado(false); desenharBiblioteca();
+      mostrarArmazenamento(d.armazenamento);
+    } catch (e) { if (!silencioso) toast(e.message, 'erro'); }
+  }
+  $('btnSalvarSite').onclick = async () => {
+    const dados = coletarSite();
+    if (dados.video_tipo === 'arquivo' && !dados.video_midia) return toast('Escolha um vídeo da biblioteca (botão "Usar no site") ou mude para "Sem vídeo".', 'erro');
+    if (dados.video_tipo === 'link' && !/^https:\/\//i.test(dados.video_link)) return toast('Cole o link completo do vídeo (começando com https://).', 'erro');
+    $('btnSalvarSite').disabled = true;
+    try { const d = await api('site', { method: 'POST', body: { site: dados } }); siteAtual = d.site; preencherSite(siteAtual); marcarAlterado(false); desenharBiblioteca(); toast('Site salvo e publicado ✅', 'ok'); }
+    catch (e) { toast(e.message, 'erro'); }
+    $('btnSalvarSite').disabled = false;
+  };
+  $('btnDescartar').onclick = () => { if (confirm('Descartar as alterações não salvas?')) { preencherSite(siteAtual); marcarAlterado(false); desenharBiblioteca(); } };
+  $('btnVersoes').onclick = async () => {
+    try {
+      const d = await api('site/versoes');
+      $('listaVersoes').innerHTML = d.versoes.length ? d.versoes.map((v, i) => `<div class="linha-flex" style="justify-content:space-between;border-top:1px solid var(--linha);padding:8px 0">
+        <span><b>${fmtData(v.em)}</b> — ${esc(v.nota)}${i === 0 ? ' <span class="chip ok">atual</span>' : ''}</span>${i === 0 ? '' : `<button class="btn peq" data-v="${v.id}">Restaurar</button>`}</div>`).join('') : '<p class="dica">Nenhuma versão salva ainda.</p>';
+      $('listaVersoes').querySelectorAll('[data-v]').forEach(b => b.onclick = async () => {
+        if (!confirm('Restaurar esta versão? A versão atual continua no histórico.')) return;
+        try { await api('site/restaurar', { method: 'POST', body: { id: +b.dataset.v } }); await carregarSite(); $('btnVersoes').click(); toast('Versão restaurada ✅', 'ok'); } catch (e) { toast(e.message, 'erro'); }
+      });
+    } catch (e) { toast(e.message, 'erro'); }
+  };
+  $('arqBackup').onchange = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      const dados = JSON.parse(await f.text());
+      if (!confirm('Substituir a configuração do site pela do backup? (a atual fica no histórico de versões)')) return;
+      await api('site/importar', { method: 'POST', body: dados }); await carregarSite(); toast('Backup restaurado ✅', 'ok');
+    } catch (err) { toast(err instanceof SyntaxError ? 'Arquivo de backup inválido' : err.message, 'erro'); }
+  };
+
+  // ── upload em partes, com retomada ──
+  function enviarParte(id, offset, blob, aoProgresso) {
+    return new Promise((resolve, reject) => {
+      const x = new XMLHttpRequest();
+      x.open('PUT', `/admin/api/midia/${id}/parte?offset=${offset}`);
+      x.setRequestHeader('Content-Type', 'application/octet-stream');
+      x.upload.onprogress = e => aoProgresso(e.loaded);
+      x.onload = () => { let d = {}; try { d = JSON.parse(x.responseText); } catch (e) {} resolve({ status: x.status, d }); };
+      x.onerror = () => reject(new Error('Falha de rede'));
+      x.ontimeout = () => reject(new Error('Tempo esgotado'));
+      x.timeout = 10 * 60000;
+      x.send(blob);
+    });
+  }
+  async function enviarArquivo(file) {
+    const linha = document.createElement('div');
+    linha.className = 'envio';
+    linha.innerHTML = `<div class="linha-flex" style="justify-content:space-between"><b class="env-nome"></b><span class="env-st">Preparando...</span></div><div class="progresso"><i></i></div>`;
+    linha.querySelector('.env-nome').textContent = file.name;
+    $('filaUpload').prepend(linha);
+    const st = linha.querySelector('.env-st'), barra = linha.querySelector('.progresso i');
+    enviosAtivos++;
+    try {
+      const chave = `${file.size}-${file.lastModified}`;
+      const ini = await api('midia/iniciar', { method: 'POST', body: { nome: file.name, tamanho: file.size, tipo: file.type, chave } });
+      let rec = ini.recebido || 0;
+      if (ini.retomado) toast(`Continuando "${file.name}" de ${Math.round(rec / file.size * 100)}%`, 'ok');
+      const t0 = Date.now(), rec0 = rec;
+      while (rec < file.size) {
+        const fim = Math.min(rec + ini.parte, file.size);
+        let tent = 0;
+        for (;;) {
+          try {
+            const r = await enviarParte(ini.id, rec, file.slice(rec, fim), loaded => {
+              const total = rec + loaded, pct = total / file.size * 100;
+              const vel = (total - rec0) / Math.max(1, (Date.now() - t0) / 1000);
+              const resta = vel > 0 ? (file.size - total) / vel : 0;
+              barra.style.width = pct.toFixed(1) + '%';
+              st.textContent = `${pct.toFixed(1)}% • ${fmtTam(total)} de ${fmtTam(file.size)} • ${fmtTam(vel)}/s${resta > 5 ? ` • falta ~${resta > 90 ? Math.round(resta / 60) + ' min' : Math.round(resta) + ' s'}` : ''}`;
+            });
+            if (r.status === 401) { mostrarLogin(); throw Object.assign(new Error('Sessão expirada. Entre e escolha o arquivo de novo: ele continua de onde parou.'), { fatal: true }); }
+            if (r.status === 409 && typeof r.d.recebido === 'number') { rec = r.d.recebido; break; }
+            if (r.status >= 400 && r.status < 500 && r.status !== 408 && r.status !== 429) throw Object.assign(new Error(r.d.error || 'Erro ' + r.status), { fatal: true });
+            if (r.status !== 200) throw new Error(r.d.error || 'Erro ' + r.status);
+            rec = r.d.recebido; break;
+          } catch (e) {
+            if (e.fatal || ++tent > 10) throw e;
+            const espera = Math.min(30, 2 ** tent);
+            st.textContent = `Conexão instável — tentando de novo em ${espera} s...`;
+            await new Promise(r => setTimeout(r, espera * 1000));
+          }
+        }
+      }
+      st.textContent = 'Recebido. Convertendo no servidor...';
+      barra.style.width = '100%';
+      await api(`midia/${ini.id}/concluir`, { method: 'POST' });
+      toast(`"${file.name}" enviado ✅`, 'ok');
+      setTimeout(() => linha.remove(), 4000);
+      await carregarMidias();
+    } catch (e) {
+      st.textContent = '⚠️ ' + e.message + ' — escolha o mesmo arquivo de novo para continuar.';
+      linha.classList.add('erro');
+    } finally { enviosAtivos--; }
+  }
+  async function enviarVarios(lista) { for (const f of lista) await enviarArquivo(f); }
+  $('arqUpload').onchange = e => { const l = [...e.target.files]; e.target.value = ''; enviarVarios(l); };
+  const zona = $('zonaUpload');
+  ['dragenter', 'dragover'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.add('arrastando'); }));
+  ['dragleave', 'drop'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove('arrastando'); }));
+  zona.addEventListener('drop', e => enviarVarios([...e.dataTransfer.files]));
+  window.addEventListener('beforeunload', e => { if (enviosAtivos > 0 || siteAlterado) { e.preventDefault(); e.returnValue = ''; } });
+
+  // Atualiza sozinho a cada 60 s na visão geral / lista
+  setInterval(() => {
+    if (document.hidden || $('telaPainel').classList.contains('oculto')) return;
+    const aba = document.querySelector('.aba.ativa')?.dataset.aba;
+    if (aba === 'resumo') carregarResumo();
+    if (aba === 'lista' && !aberto) carregarLista();
+  }, 60000);
+
+  // início
+  fetch('/admin/api/sessao', { credentials: 'same-origin' }).then(r => r.json()).then(s => {
+    if (s.logado) abrirPainel(); else mostrarLogin(s.precisa_criar_senha);
+  }).catch(() => mostrarLogin(false));
+})();
+</script>
+</body>
+</html>

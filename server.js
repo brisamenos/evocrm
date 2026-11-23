@@ -7376,7 +7376,7 @@ ${contexto}`
     try { filePath = decodeURIComponent(filePath); } catch (e) {}
     const fullPath = path.resolve(__dirname, '.' + path.posix.normalize('/' + filePath));
     const relPath  = path.relative(__dirname, fullPath).replace(/\\/g, '/');
-    const BLOQUEADOS = /^(data|node_modules|uploads-v2|\.git)(\/|$)|(^|\/)\.|\.(db|db-shm|db-wal|sqlite|sql|env|toml|md|lock)$|^(server|db|routes|fila_manager|wuzapi|inscricoes)\.js$|^package(-lock)?\.json$|^Dockerfile$/i;
+    const BLOQUEADOS = /^(data|node_modules|uploads-v2|\.git|site-usucapiao)(\/|$)|(^|\/)\.|\.(db|db-shm|db-wal|sqlite|sql|env|toml|md|lock)$|^(server|db|routes|fila_manager|wuzapi|inscricoes)\.js$|^package(-lock)?\.json$|^Dockerfile$/i;
     if (relPath.startsWith('..') || path.isAbsolute(relPath) || BLOQUEADOS.test(relPath)) {
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not found');
